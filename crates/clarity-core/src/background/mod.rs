@@ -364,10 +364,19 @@ impl BackgroundTaskManager {
             let task_result = match result {
                 Ok(mut r) => {
                     r.elapsed_ms = elapsed.as_millis() as u64;
-                    let _ = store.save_result(&task_id_clone, &r).await;
-                    let _ = store
+                    if let Err(e) = store.save_result(&task_id_clone, &r).await {
+                        tracing::error!("Failed to save result for task {}: {}", task_id_clone, e);
+                    }
+                    if let Err(e) = store
                         .update_status(&task_id_clone, TaskStatus::Completed)
-                        .await;
+                        .await
+                    {
+                        tracing::error!(
+                            "Failed to update task {} status to Completed: {}",
+                            task_id_clone,
+                            e
+                        );
+                    }
 
                     // 发送完成通知
                     if let Some(ref manager) = notification_manager {
@@ -686,7 +695,9 @@ impl BackgroundTaskManager {
         drop(guard);
 
         // Also remove from persistent store (best-effort)
-        let _ = self.store.remove_cron(task_id).await;
+        if let Err(e) = self.store.remove_cron(task_id).await {
+            tracing::error!("Failed to remove cron task {} from store: {}", task_id, e);
+        }
 
         info!("Cancelled cron task: {}", task_id);
         Ok(())

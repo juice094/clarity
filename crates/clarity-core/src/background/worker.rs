@@ -137,128 +137,136 @@ impl WorkerPool {
 
                 loop {
                     tokio::select! {
-                        // 接收工作项
-                        Some(work) = async {
-                            let mut rx = work_rx.lock().await;
-                            rx.recv().await
-                        } => {
-                            let start = std::time::Instant::now();
+                                            // 接收工作项
+                                            Some(work) = async {
+                                                let mut rx = work_rx.lock().await;
+                                                rx.recv().await
+                                            } => {
+                                                let start = std::time::Instant::now();
 
-                            // 更新统计
-                            stats.is_busy = true;
-                            stats.current_task = Some(work.task_id.clone());
-                            {
-                                let mut ws = worker_stats.write().await;
-                                if let Some(ref mut s) = ws[id] {
-                                    *s = stats.clone();
-                                }
-                            }
+                                                // 更新统计
+                                                stats.is_busy = true;
+                                                stats.current_task = Some(work.task_id.clone());
+                                                {
+                                                    let mut ws = worker_stats.write().await;
+                                                    if let Some(ref mut s) = ws[id] {
+                                                        *s = stats.clone();
+                                                    }
+                                                }
 
-                            debug!("Worker {} processing task {}", id, work.task_id);
+                                                debug!("Worker {} processing task {}", id, work.task_id);
 
-                            // 更新任务状态为运行中
-                            let _ = store_clone.update_status(&work.task_id, TaskStatus::Running).await;
+                                                // 更新任务状态为运行中
+                                                if let Err(e) = store_clone.update_status(&work.task_id, TaskStatus::Running).await {
+                                                    tracing::error!("Failed to update task {} status to Running: {}", work.task_id, e);
+                                                }
 
-                            // 发送通知
-                            if let Some(ref manager) = notif_clone {
-                                let notif = task_status_notification(
-                                    &work.task_id,
-                                    &work.spec.name,
-                                    "running"
-                                );
-                                manager.publish(notif);
-                            }
+                                                // 发送通知
+                                                if let Some(ref manager) = notif_clone {
+                                                    let notif = task_status_notification(
+                                                        &work.task_id,
+                                                        &work.spec.name,
+                                                        "running"
+                                                    );
+                                                    manager.publish(notif);
+                                                }
 
-                            // 执行任务处理逻辑
-                            let result = pool_clone.process_task(&work.spec).await;
+                                                // 执行任务处理逻辑
+                                                let result = pool_clone.process_task(&work.spec).await;
 
-                            let elapsed = start.elapsed();
-                            let elapsed_ms = elapsed.as_millis() as u64;
+                                                let elapsed = start.elapsed();
+                                                let elapsed_ms = elapsed.as_millis() as u64;
 
-                            // 构建任务结果
-                            let task_result = match result {
-                                Ok((output, steps)) => {
-                                    let _ = store_clone.update_status(&work.task_id, TaskStatus::Completed).await;
-
-                                    // 发送完成通知
-                                    if let Some(ref manager) = notif_clone {
-                                        let notif = task_status_notification(
-                                            &work.task_id,
-                                            &work.spec.name,
-                                            "completed"
-                                        );
-                                        manager.publish(notif);
-                                    }
-
-                                    TaskResult {
-                                        status: TaskStatus::Completed,
-                                        output,
-                                        elapsed_ms,
-                                        steps,
-                                    }
-                                }
-                                Err(e) => {
-                                    let _ = store_clone.update_status(&work.task_id, TaskStatus::Failed).await;
-
-                                    // 发送失败通知
-                                    if let Some(ref manager) = notif_clone {
-                                        let notif = task_status_notification(
-                                            &work.task_id,
-                                            &work.spec.name,
-                                            "failed"
-                                        );
-                                        manager.publish(notif);
-                                    }
-
-                                    error!("Worker {} task {} failed: {}", id, work.task_id, e);
-                                    TaskResult {
-                                        status: TaskStatus::Failed,
-                                        output: format!("Error: {}", e),
-                                        elapsed_ms,
-                                        steps: 0,
-                                    }
-                                }
-                            };
-
-                            // 保存结果
-                            let _ = store_clone.save_result(&work.task_id, &task_result).await;
-
-                            // 更新统计
-                            stats.tasks_processed += 1;
-                            stats.total_elapsed_ms += elapsed_ms;
-                            if task_result.status == TaskStatus::Failed {
-                                stats.tasks_failed += 1;
-                            }
-                            stats.is_busy = false;
-                            stats.current_task = None;
-                            {
-                                let mut ws = worker_stats.write().await;
-                                if let Some(ref mut s) = ws[id] {
-                                    *s = stats.clone();
-                                }
-                            }
-
-                            // 通知完成
-                            let _ = work.done_tx.send(task_result);
-
-                            debug!("Worker {} completed task {} in {:?}", id, work.task_id, elapsed);
-                        }
-
-                        // 接收关闭信号
-                        _ = async {
-                            let mut rx = shutdown_rx.lock().await;
-                            rx.recv().await
-                        } => {
-                            info!("Worker {} shutting down", id);
-                            break;
-                        }
-
-                        // 通道关闭
-                        else => {
-                            info!("Worker {} work channel closed", id);
-                            break;
-                        }
+                                                // 构建任务结果
+                                                let task_result = match result {
+                                                    Ok((output, steps)) => {
+                                                        if let Err(e) = store_clone.update_status(&work.task_id, TaskStatus::Completed).await {
+                        tracing::error!("Failed to update task {} status to Completed: {}", work.task_id, e);
                     }
+
+                                                        // 发送完成通知
+                                                        if let Some(ref manager) = notif_clone {
+                                                            let notif = task_status_notification(
+                                                                &work.task_id,
+                                                                &work.spec.name,
+                                                                "completed"
+                                                            );
+                                                            manager.publish(notif);
+                                                        }
+
+                                                        TaskResult {
+                                                            status: TaskStatus::Completed,
+                                                            output,
+                                                            elapsed_ms,
+                                                            steps,
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        if let Err(e) = store_clone.update_status(&work.task_id, TaskStatus::Failed).await {
+                                                            tracing::error!("Failed to update task {} status to Failed: {}", work.task_id, e);
+                                                        }
+
+                                                        // 发送失败通知
+                                                        if let Some(ref manager) = notif_clone {
+                                                            let notif = task_status_notification(
+                                                                &work.task_id,
+                                                                &work.spec.name,
+                                                                "failed"
+                                                            );
+                                                            manager.publish(notif);
+                                                        }
+
+                                                        error!("Worker {} task {} failed: {}", id, work.task_id, e);
+                                                        TaskResult {
+                                                            status: TaskStatus::Failed,
+                                                            output: format!("Error: {}", e),
+                                                            elapsed_ms,
+                                                            steps: 0,
+                                                        }
+                                                    }
+                                                };
+
+                                                // 保存结果
+                                                if let Err(e) = store_clone.save_result(&work.task_id, &task_result).await {
+                                                    tracing::error!("Failed to save result for task {}: {}", work.task_id, e);
+                                                }
+
+                                                // 更新统计
+                                                stats.tasks_processed += 1;
+                                                stats.total_elapsed_ms += elapsed_ms;
+                                                if task_result.status == TaskStatus::Failed {
+                                                    stats.tasks_failed += 1;
+                                                }
+                                                stats.is_busy = false;
+                                                stats.current_task = None;
+                                                {
+                                                    let mut ws = worker_stats.write().await;
+                                                    if let Some(ref mut s) = ws[id] {
+                                                        *s = stats.clone();
+                                                    }
+                                                }
+
+                                                // 通知完成
+                                                let _ = work.done_tx.send(task_result);
+
+                                                debug!("Worker {} completed task {} in {:?}", id, work.task_id, elapsed);
+                                            }
+
+                                            // 接收关闭信号
+                                            _ = async {
+                                                let mut rx = shutdown_rx.lock().await;
+                                                rx.recv().await
+                                            } => {
+                                                info!("Worker {} shutting down", id);
+                                                break;
+                                            }
+
+                                            // 通道关闭
+                                            else => {
+                                                info!("Worker {} work channel closed", id);
+                                                break;
+                                            }
+                                        }
                 }
 
                 info!("Worker {} stopped", id);
@@ -389,13 +397,37 @@ impl WorkerPool {
         // 发送关闭信号
         let tx = self.shutdown_tx.lock().await.take();
         if let Some(tx) = tx {
-            let _ = tx.send(()).await;
+            if let Err(e) = tx.send(()).await {
+                // Receiver dropped means all workers already exited — this is
+                // the expected fast-path, not an error.
+                tracing::debug!(
+                    "Shutdown signal channel closed (workers already exited): {}",
+                    e
+                );
+            }
         }
 
-        // 等待所有工作线程完成
+        // 等待所有工作线程完成，超时后强制 abort 避免任务泄漏
         let handles: Vec<_> = std::mem::take(&mut *self.handles.lock().await);
         for handle in handles {
-            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await;
+            // Capture the abort handle BEFORE moving the JoinHandle into timeout.
+            // timeout() consumes the JoinHandle; we need AbortHandle to cancel if
+            // the timeout fires.
+            let abort_handle = handle.abort_handle();
+            match tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await {
+                Ok(Ok(())) => {
+                    // Worker exited cleanly.
+                }
+                Ok(Err(join_err)) => {
+                    tracing::error!("Worker task panicked during shutdown: {}", join_err);
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        "Worker did not shut down within 5s, aborting task to prevent leak"
+                    );
+                    abort_handle.abort();
+                }
+            }
         }
 
         info!("Worker pool shut down complete");
