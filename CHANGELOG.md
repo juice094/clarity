@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **S6-E egui 交互体验与生产级能力提升（2026-06-29）**
+  - **崩溃恢复**：会话每 0.5s 自动保存（`updated_at > last_saved_at` 检测脏数据），保存失败推送 Error toast 通知用户，卡住轮次 5 分钟超时自动重置。
+  - **状态栏**：底部 24px 状态栏显示 git 分支（⎇）、agent 在线状态（● Ready/Busy/Offline）、当前模型名，clip_rect 裁剪防止窄窗口溢出。
+  - **会话内搜索**：`Ctrl+F` 打开查找栏，大小写不敏感全文搜索当前会话消息，▲▼ 导航匹配项，显示"2 of 5"计数，Esc 关闭。`find_last_query` 缓存避免空闲帧 O(n) 重复扫描。
+  - **主题过渡动画**：主题切换时 250ms 黑色覆盖层 cubic-ease-out 渐隐，消除即时切换的闪屏。字号调整不触发过渡动画（仅调色板变更才触发）。
+  - **系统主题检测**：`Theme::system()` 通过 Windows 注册表 / macOS `defaults` / Linux `gsettings` 自动检测 OS 深色/浅色偏好，首次启动自动匹配桌面环境。
+  - **窗口位置持久化**：每 5 秒保存 `outer_rect.min` 到 `GuiSettings`，下次启动通过 `ViewportBuilder::with_position()` 恢复。
+  - **键盘聚焦环**：`icon_button` 和 `toggle()` 获得焦点时绘制聚焦环，`interactive_row` 已有聚焦环。
+  - **会话关闭按钮**：历史会话列表每行右侧新增 × 按钮，点击归档会话并清除对应草稿。
+  - **WCAG 对比度 CI**：5 个单元测试（正文 ≥4.5:1、标题 ≥3.0:1、强调色 ≥2.5:1），覆盖全部 5 个 palette 派生主题。
+  - **右侧 IDE 面板可拖拽宽度**：用户拖拽边缘调整宽度（180–400px），实际渲染宽度写入 `ui_store.right_rail_width`，布局计算与之同步，关闭动画期间无抖动。
+  - **Markdown 流式增量渲染**：每 5 个 chunk 增量调用 `prepare()` 重新解析，代码块/列表/格式在流式传输期间实时呈现。
+
+### Changed
+
+- **`main.rs` 体积缩减 23%**：~430 行 Claw WebSocket 事件处理抽取到 `services/claw_events.rs`（新增 575 行），hot-path `update()` 从 2251 行降至 1723 行。
+- **模板面板 10× 性能优化**：避免模板列表每帧重建 + 增量加载渲染，减少 CPU 浪费。
+- **Claw 面板布局独立化**：ClawSettings/Workspace/Terminal/WebBridge 面板的 UI 逻辑完全独立渲染，与主面板渲染职责分离。
+- **交互组件视觉美化**：交互行/导航行增加 hover 渐变动画、文件浏览器禁用文件条目选择行为、设置/Provider 面板全局布局一致化。
+- **浅色主题阴影**：阴影 alpha 从 `overlay_base` 派生（深色保持 0.40–0.60，浅色 ×0.17 为 0.07–0.10），消除浅色主题下的生硬黑色投影。
+- **模态框遮罩**：模态框打开时渲染全屏半透明遮罩吸收背景点击，拦截 Tab 防止焦点逃逸到背景面板。
+- **快捷键发现性**：新增 Ctrl+/ 快捷键参考弹窗，Table→Rows 布局、按组分类（General/Panels/View）、等宽绑定+彩色强调。
+- **魔术字符串消除**：`"show-shortcuts"` 替换为 `ids::SHOW_SHORTCUTS` 常量。
+
+### Fixed
+
+- **会话切换查找栏残留**：`find_open`/`find_query`/`find_matches` 在会话切换时全部重置，旧会话查询不会泄漏到新会话。
+- **会话切换草稿泄漏**：归档会话时同步清除 `SessionStore.drafts` HashMap 中对应条目。
+- **状态栏布局错误**：模型名拼接在 git 分支后面而非右对齐，修复为弹性分隔符 + `allocate_new_ui` 精确定位。
+- **聊天区面板折叠抖动**：`compute_metrics_raw` 不再用 `right_rail_visible` 布尔门控清零宽度，改用 `ui_store.right_rail_width` 实际渲染值，关闭动画期间布局平滑收缩。
+- **Claw 设备连接状态残留**：`claw_device_token` 无配对流程时不保留 `Some` 状态，避免 UI 误认为已配对。
+
 - **可靠性基础设施 — syncthing-rust 生产模式融合（2026-06-29）**
   - `clarity-contract` 新增 `retry` 模块：`RetryConfig`（指数退避+抖动）、`ExponentialBackoff`、`RestartPolicy`、`RestartConfig`（任务监督）、`ConnectionState`（连接状态机）、`AddressType`（URL 风格序列化）、`HeartbeatConfig`（传输感知心跳）、`ConnectionMetrics`（无锁原子计数器）
   - `clarity-contract` 新增 `rollout_retention` 模块：`RetentionPolicy`（CountBased/AgeBased/Staggered/Unlimited）、`prune_files()`
