@@ -90,6 +90,9 @@ pub struct ChatStore {
     /// avoid an O(n) scan over all messages every frame when the query
     /// hasn't changed.
     pub find_last_query: String,
+    /// When the active turn's `in_flight` flag was set. Used to detect
+    /// stuck turns that never receive a Done or Error event.
+    pub in_flight_since: Option<std::time::Instant>,
 }
 
 impl Default for ChatStore {
@@ -121,6 +124,7 @@ impl Default for ChatStore {
             find_matches: Vec::new(),
             find_current: 0,
             find_last_query: String::new(),
+            in_flight_since: None,
         }
     }
 }

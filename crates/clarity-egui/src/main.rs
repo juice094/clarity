@@ -728,6 +728,9 @@ impl App {
                     egui::vec2(content_w, theme.size_statusbar),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
+                        // Clip content so long labels don't bleed into other
+                        // chrome elements on very narrow windows.
+                        ui.set_clip_rect(ui.max_rect());
                         // Left: git branch / shell prompt.
                         let prompt = &self.ui_store.shell_prompt;
                         if !prompt.is_empty() {
@@ -1712,6 +1715,25 @@ impl eframe::App for App {
                 .unwrap_or(false);
             if needs_save {
                 self.save_current_session();
+            }
+        }
+
+        // ── Stuck-turn guard: if a turn has been in_flight for > 5 min
+        //    without a Done or Error event, force-reset so the user isn't
+        //    permanently blocked. ──
+        if let Some(since) = self.chat_store.in_flight_since {
+            if since.elapsed() > std::time::Duration::from_secs(300) {
+                tracing::warn!("Turn stuck in_flight for > 5 min — force-resetting");
+                if let Some(session) = self.session_store.active_session_mut() {
+                    session.in_flight = false;
+                }
+                self.chat_store.in_flight_since = None;
+                self.view_state.turn = clarity_core::ui::TurnState::Idle;
+                self.chat_store.agent_status = AgentStatus::Online;
+                self.push_toast(
+                    "Agent turn timed out — you can retry your last message.",
+                    ToastLevel::Warn,
+                );
             }
         }
 

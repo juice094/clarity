@@ -272,6 +272,7 @@ impl App {
         }
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
         self.chat_store.agent_status = AgentStatus::Busy;
+        self.chat_store.in_flight_since = Some(std::time::Instant::now());
         self.chat_store.tool_calls.clear();
 
         let state = self.state.clone();
@@ -622,6 +623,7 @@ impl App {
             .remove(&self.session_store.active_session_id);
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
         self.chat_store.agent_status = AgentStatus::Busy;
+        self.chat_store.in_flight_since = Some(std::time::Instant::now());
         self.chat_store.tool_calls.clear();
         self.chat_store.claw_in_flight_session_id = Some(session_id.clone());
 

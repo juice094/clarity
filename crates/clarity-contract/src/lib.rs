@@ -54,6 +54,7 @@ pub mod llm;
 pub mod reliable_provider;
 pub mod retry;
 pub mod rollout;
+pub mod rollout_retention;
 pub mod subagent;
 pub mod thread;
 pub mod tool;

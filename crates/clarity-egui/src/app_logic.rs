@@ -333,6 +333,7 @@ impl App {
                 find_matches: Vec::new(),
                 find_current: 0,
                 find_last_query: String::new(),
+                in_flight_since: None,
                 draft_status: crate::ui::types::DraftStatus::None,
                 status_message: None,
                 claw_in_flight_session_id: None,
@@ -1168,20 +1169,21 @@ impl App {
     }
 
     /// Set the font scale to an explicit value and persist it.
+    ///
+    /// Applies the theme directly without a transition overlay because only
+    /// typography sizes change — the colour palette is unaffected.
     pub(crate) fn set_font_scale(&mut self, scale: f32) {
         self.settings_store.settings_edit.font_scale = Some(scale);
         let theme_name = self.settings_store.settings_edit.theme.clone();
-        self.set_theme_with_transition(
-            match theme_name.as_str() {
-                "light" => crate::theme::Theme::light(),
-                "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
-                "tokyo_night" => crate::theme::Theme::tokyo_night(),
-                "one_dark" => crate::theme::Theme::one_dark(),
-                "oled" => crate::theme::Theme::oled_black(),
-                _ => crate::theme::Theme::dark(),
-            }
-            .with_font_scale(scale),
-        );
+        self.ui_store.theme = match theme_name.as_str() {
+            "light" => crate::theme::Theme::light(),
+            "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
+            "tokyo_night" => crate::theme::Theme::tokyo_night(),
+            "one_dark" => crate::theme::Theme::one_dark(),
+            "oled" => crate::theme::Theme::oled_black(),
+            _ => crate::theme::Theme::dark(),
+        }
+        .with_font_scale(scale);
         self.auto_save_settings();
     }
 
@@ -1193,16 +1195,20 @@ impl App {
     }
 
     /// Set a session's archived flag.
-    #[allow(dead_code)]
     pub(crate) fn set_session_archived(&mut self, id: String, archived: bool) {
         // Event-driven archive update so backend ThreadUpdated wire messages use
         // the same centralized SessionStore mutation path.
         let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadUpdated {
-            thread_id: id,
+            thread_id: id.clone(),
             title: None,
             archived: Some(archived),
         });
         self.process_events();
+        // Clean up the draft buffer for archived sessions so the HashMap
+        // doesn't accumulate stale entries indefinitely.
+        if archived {
+            self.session_store.drafts.remove(&id);
+        }
     }
 }
 

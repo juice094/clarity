@@ -33,6 +33,7 @@ pub mod model_listing;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
+pub mod provider_race;
 pub mod providers;
 pub mod registry_table;
 pub mod runtime;

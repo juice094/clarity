@@ -323,6 +323,7 @@ pub struct SingleSubagentProgress {
 
 /// Live tracker for an executing plan.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct PlanExecutionTracker {
     pub title: String,
     pub steps: Vec<PlanStepTracker>,
@@ -330,6 +331,7 @@ pub struct PlanExecutionTracker {
 
 /// Holds plan step tracker state.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct PlanStepTracker {
     pub id: String,
     pub description: String,
@@ -338,6 +340,7 @@ pub struct PlanStepTracker {
 
 /// Lifecycle status variants for plan step.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)]
 pub enum PlanStepStatus {
     Pending,
     Running,

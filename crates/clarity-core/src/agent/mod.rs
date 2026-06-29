@@ -46,6 +46,7 @@ pub mod supervisor;
 pub mod tool_cache;
 mod tool_prompt_manager;
 mod turn_context;
+pub mod workspace_diff;
 mod yolo_guardrails;
 pub use clarity_contract::subagent::AgentExecutor;
 
@@ -161,6 +162,8 @@ struct AgentInner {
     tool_orchestrator: Option<Arc<ToolOrchestrator>>,
     /// Per-turn tool result cache (cleared at turn start).
     tool_cache: tool_cache::ToolResultCache,
+    /// Workspace change detector (updated at turn start).
+    workspace_diff: workspace_diff::WorkspaceDiff,
 }
 
 /// Simple mock LLM for testing
@@ -496,6 +499,12 @@ impl Agent {
         // 3. Project metadata
         let metadata = self.collect_project_metadata();
         self.set_project_metadata(metadata);
+
+        // 4. Workspace change detection
+        let change_report = self.inner.write().workspace_diff.diff();
+        if let Some(summary) = change_report.format_summary() {
+            tracing::info!("{}", summary);
+        }
     }
 
     /// Build a text description of active files for the system prompt.

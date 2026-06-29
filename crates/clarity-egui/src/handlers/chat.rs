@@ -174,6 +174,7 @@ pub fn on_done(app: &mut crate::App, session_id: &str) {
     if let Some(session) = app.session_store.session_mut(session_id) {
         session.in_flight = false;
     }
+    app.chat_store.in_flight_since = None;
 
     // The agent run has finished; reset global UI state. We keep a single
     // active run at a time, so this is safe even if the user switched to a
@@ -219,6 +220,7 @@ pub fn on_error(app: &mut crate::App, session_id: &str, msg: String) {
     if let Some(session) = app.session_store.session_mut(session_id) {
         session.in_flight = false;
     }
+    app.chat_store.in_flight_since = None;
 
     // A run ended with an error; reset global UI state so the user can send
     // again. The error toast is only shown for the active session to avoid

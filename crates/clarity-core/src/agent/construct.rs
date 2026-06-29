@@ -105,6 +105,9 @@ impl Agent {
                 snapshot_service: None,
                 tool_orchestrator: None,
                 tool_cache: crate::agent::tool_cache::ToolResultCache::new(Default::default()),
+                workspace_diff: crate::agent::workspace_diff::WorkspaceDiff::new(
+                    &config.working_dir,
+                ),
             })),
         }
     }
