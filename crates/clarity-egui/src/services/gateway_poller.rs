@@ -20,7 +20,16 @@ impl App {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        "Failed to build reqwest Client for Gateway poll, retrying with timeout: {}",
+                        e
+                    );
+                    reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(5))
+                        .build()
+                        .unwrap_or_else(|_| reqwest::Client::new())
+                });
 
             for batch_id in &batch_ids {
                 let url = format!("{}/v1/parallel/{}/status", gateway, batch_id);
@@ -50,7 +59,16 @@ impl App {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        "Failed to build reqwest Client for Gateway poll, retrying with timeout: {}",
+                        e
+                    );
+                    reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(5))
+                        .build()
+                        .unwrap_or_else(|_| reqwest::Client::new())
+                });
 
             let url = format!("{}/health", gateway);
             let status = match client.get(&url).send().await {

@@ -124,8 +124,20 @@ impl Default for AppState {
         let work_dir = dirs::data_dir()
             .map(|d| d.join("clarity").join("bg_work"))
             .unwrap_or_else(|| PathBuf::from("."));
-        let _ = std::fs::create_dir_all(&task_dir);
-        let _ = std::fs::create_dir_all(&work_dir);
+        if let Err(e) = std::fs::create_dir_all(&task_dir) {
+            tracing::error!(
+                "Failed to create background task directory {}: {}",
+                task_dir.display(),
+                e
+            );
+        }
+        if let Err(e) = std::fs::create_dir_all(&work_dir) {
+            tracing::error!(
+                "Failed to create background work directory {}: {}",
+                work_dir.display(),
+                e
+            );
+        }
         let cron_scheduler = Arc::new(tokio::sync::Mutex::new(
             clarity_core::background::CronScheduler::new(),
         ));
@@ -137,7 +149,13 @@ impl Default for AppState {
 
         // 注入 SubagentOrchestrator（SubagentManager）
         let subagent_ctx = work_dir.join("subagent_context");
-        let _ = std::fs::create_dir_all(&subagent_ctx);
+        if let Err(e) = std::fs::create_dir_all(&subagent_ctx) {
+            tracing::error!(
+                "Failed to create subagent context directory {}: {}",
+                subagent_ctx.display(),
+                e
+            );
+        }
         let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
             agent.registry().clone(),
             &work_dir,

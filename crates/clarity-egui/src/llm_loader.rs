@@ -172,14 +172,23 @@ async fn try_load_cloud(
     // ponytail: ProviderRegistry::load hits disk; this is acceptable because
     // ensure_llm already took the load lock and disk I/O is cheap for a few TOML
     // files. If provider count grows, cache the registry in SettingsStore.
-    if let Some(def) = tokio::task::spawn_blocking({
+    let registry_result = tokio::task::spawn_blocking({
         let id = desired_provider.to_string();
         move || ProviderRegistry::load().get(&id).cloned()
     })
-    .await
-    .ok()
-    .flatten()
-    {
+    .await;
+    let def = match registry_result {
+        Ok(Some(def)) => Some(def),
+        Ok(None) => None,
+        Err(join_err) => {
+            tracing::warn!(
+                "ProviderRegistry::load() task panicked or was cancelled: {}",
+                join_err
+            );
+            None
+        }
+    };
+    if let Some(def) = def {
         if def.api_format == ApiFormat::DeepSeekDevice {
             let model_id = if settings.model.is_empty() {
                 "deepseek-chat".to_string()

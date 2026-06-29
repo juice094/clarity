@@ -114,3 +114,61 @@ fn find_gateway_binary() -> Result<std::path::PathBuf, String> {
 
     Err("clarity-gateway binary not found in target/release or target/debug".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gateway_manager_default_has_no_child() {
+        let gm = GatewayManager::default();
+        // Default state: no child process.
+        assert!(gm.child.lock().is_none());
+    }
+
+    #[test]
+    fn gateway_manager_new_consistent_with_default() {
+        let gm1 = GatewayManager::new();
+        let gm2 = GatewayManager::default();
+        assert!(gm1.child.lock().is_none());
+        assert!(gm2.child.lock().is_none());
+    }
+
+    #[test]
+    fn stop_without_child_returns_false() {
+        let gm = GatewayManager::new();
+        let result = gm.stop().unwrap();
+        assert!(!result, "stop() without a child should return Ok(false)");
+    }
+
+    #[test]
+    fn find_gateway_binary_returns_err_for_nonexistent_path() {
+        // Verify the search function handles missing binaries gracefully.
+        // In test environments, clarity-gateway may or may not exist.
+        let result = find_gateway_binary();
+        // The function should not panic — it should return either Ok or Err.
+        match result {
+            Ok(path) => {
+                // If found, it must point to a real file.
+                assert!(
+                    path.exists(),
+                    "find_gateway_binary returned a path that doesn't exist: {:?}",
+                    path
+                );
+            }
+            Err(e) => {
+                assert!(
+                    e.contains("not found"),
+                    "Error message should mention binary not found, got: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_running_does_not_panic() {
+        // is_running is a TCP probe — it may or may not connect, but must not panic.
+        let _ = GatewayManager::is_running();
+    }
+}

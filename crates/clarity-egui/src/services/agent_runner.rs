@@ -501,10 +501,37 @@ impl App {
             // drain task so subscription happens in the spawning task, not inside
             // the spawned future where scheduling delay would race with streaming.
             let wire_ui = wire.ui_side(false);
-            tokio::spawn(async move {
+            // SAFE: spawn a supervised wire dispatch task. If it panics, the
+            // JoinHandle in the outer scope detects it and sends an Error event
+            // so the UI never shows a perpetual typing indicator.
+            let wire_handle = tokio::spawn(async move {
                 let mut wire_ui = wire_ui;
                 while let Some(msg) = wire_ui.recv().await {
                     dispatch_wire_message(msg, &wire_session_id, &tx_wire);
+                }
+            });
+            // Spawn a lightweight watchdog that detects wire dispatch task failure.
+            let tx_wire_watchdog = tx.clone();
+            let watchdog_session_id = session_id.clone();
+            tokio::spawn(async move {
+                match wire_handle.await {
+                    Ok(()) => {
+                        // Normal shutdown: the wire channel was closed after the
+                        // agent completed. This is the expected path.
+                    }
+                    Err(join_err) => {
+                        tracing::error!(
+                            "Wire dispatch task panicked for session {}: {}",
+                            watchdog_session_id,
+                            join_err
+                        );
+                        let _ = tx_wire_watchdog.send(UiEvent::Error {
+                            session_id: watchdog_session_id,
+                            message: "Internal streaming error: wire dispatch task failed. \
+                                 Please try again or restart the application."
+                                .to_string(),
+                        });
+                    }
                 }
             });
 

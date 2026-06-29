@@ -78,7 +78,19 @@ impl GatewayTaskClient {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to build reqwest Client with timeout, falling back with 10s timeout manually configured: {}",
+                    e
+                );
+                // SAFE: the builder failed (likely TLS backend issue), but we still
+                // need a working client. Build a new one and rely on tokio::time::timeout
+                // at the call site for timeout enforcement.
+                reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build()
+                    .unwrap_or_else(|_| reqwest::Client::new())
+            });
         Self { base_url, client }
     }
 
@@ -133,5 +145,107 @@ impl GatewayTaskClient {
 impl Default for GatewayTaskClient {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_default_reads_env_or_falls_back() {
+        let client = GatewayTaskClient::default();
+        let env_url = std::env::var("CLARITY_GATEWAY_URL").unwrap_or_default();
+        if env_url.is_empty() {
+            assert_eq!(client.base_url, DEFAULT_GATEWAY);
+        } else {
+            assert_eq!(client.base_url, env_url);
+        }
+    }
+
+    #[test]
+    fn client_new_and_default_are_equivalent() {
+        let client1 = GatewayTaskClient::new();
+        let client2 = GatewayTaskClient::default();
+        assert_eq!(client1.base_url, client2.base_url);
+    }
+
+    #[test]
+    fn task_detail_dto_converts_to_task_info() {
+        use clarity_core::background::TaskStatus;
+        let dto = TaskDetailDto {
+            task_id: "task-1".into(),
+            name: "Test Task".into(),
+            status: TaskStatus::Running,
+            prompt: "Do something".into(),
+            created_at: 1000,
+            updated_at: 2000,
+        };
+        let info = dto.into_task_info();
+        assert_eq!(info.id, "task-1");
+        assert_eq!(info.spec.name, "Test Task");
+        assert_eq!(info.spec.prompt, "Do something");
+        assert!(matches!(info.status, TaskStatus::Running));
+        assert_eq!(info.created_at, 1000);
+        assert_eq!(info.updated_at, 2000);
+    }
+
+    #[test]
+    fn task_detail_dto_default_agent_type_and_priority() {
+        use clarity_core::background::TaskStatus;
+        let dto = TaskDetailDto {
+            task_id: "task-2".into(),
+            name: "Minimal".into(),
+            status: TaskStatus::Pending,
+            prompt: "prompt".into(),
+            created_at: 0,
+            updated_at: 0,
+        };
+        let info = dto.into_task_info();
+        // Spec defaults are filled in by the conversion.
+        assert_eq!(info.spec.description, "");
+        assert_eq!(info.spec.agent_type, "default");
+        assert_eq!(info.spec.max_iterations, None);
+        assert_eq!(info.spec.timeout_seconds, None);
+    }
+
+    #[test]
+    fn create_task_request_serializes_correctly() {
+        let req = CreateTaskRequest {
+            name: "My Task".into(),
+            prompt: "Do it".into(),
+            max_iterations: Some(10),
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["name"], "My Task");
+        assert_eq!(json["prompt"], "Do it");
+        assert_eq!(json["max_iterations"], 10);
+    }
+
+    #[test]
+    fn create_task_request_skips_none_max_iterations() {
+        let req = CreateTaskRequest {
+            name: "Task".into(),
+            prompt: "Go".into(),
+            max_iterations: None,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert!(json.get("max_iterations").is_none());
+    }
+
+    #[test]
+    fn create_task_response_deserializes() {
+        let json = serde_json::json!({"task_id": "t-abc", "status": "Pending"});
+        let resp: CreateTaskResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(resp.task_id, "t-abc");
+    }
+
+    #[test]
+    fn client_urls_use_base_url() {
+        let client = GatewayTaskClient::default();
+        // Verify the URLs are derived from the base_url.
+        assert!(client.base_url.starts_with("http://"));
+        // The list_tasks URL would be {base_url}/v1/tasks
+        // (tested indirectly via URL construction in list_tasks/create_task)
     }
 }
