@@ -51,6 +51,8 @@ scripts/verify.ps1 clarity-core # Verify single crate
 - Frontend crates **never import each other** — cross-frontend communication goes through `clarity-wire`.
 - No Docker / RAG(Qdrant) / GUI(Electron).
 - Rust core modules cannot be outsourced to sub-agents without human review.
+- **Stores layer independence**: The 20 `stores/` modules must have **zero cross-references** to sibling stores. Stores may only depend on `crate::ui::types`, `crate::settings::GuiSettings` (data type), and `clarity_core` types. The `all_plugins()` / `mcp_plugins()` pattern (accept config directly, not the whole store) is the canonical way to avoid cross-store imports.
+- **No `take()`/restore pattern**: UI config panels must borrow state in-place (`if let Some(ref mut config)`), never `take()` ownership from the store and restore it later. A panic in the render closure would permanently lose the config.
 
 ## Crate Topology
 
@@ -104,6 +106,57 @@ slint ← {contract, wire}
 - No `TODO` / `FIXME` / `XXX` in code; migrate to GitHub Issues or `docs/notes/`.
 - Conventional commits: `feat(scope): imperative under 72 chars`.
 - Keep egui panel render functions under 300 lines; use `Frame::new()` instead of `Frame::group(ui.style())`.
+
+## Egui Error Handling Patterns
+
+### No `take()`/restore for UI config state
+
+```rust
+// WRONG — panic in the closure permanently loses config:
+let mut config_opt = app.store.config.take();
+// ... render UI ...
+app.store.config = config_opt;
+
+// RIGHT — borrow in-place, no null window:
+if let Some(ref mut config) = app.store.config {
+    render_editor(ui, config, &theme);
+}
+```
+
+### `render_safe()` = React Error Boundary
+
+Every panel in `render_layout_shell()` is wrapped in `render_safe(name, |app, ctx| ...)` which catches panics via `catch_unwind`. If a panel panics: it renders blank for that frame, an error toast appears, and the app continues running.
+
+### Gateway offline path
+
+When Gateway is unreachable:
+- Gateway startup failure → logged, app continues with `gateway_manager = None`
+- Gateway task HTTP client → `reqwest::Client::builder().timeout(10s)`, falls back to local `TaskStore`
+- Gateway health poll → 5s timeout, sets `GatewayStatus::Offline`
+- Agent WebSocket → agent returns error, caught by caller
+
+All reqwest client construction has a timeout fallback chain:
+```rust
+reqwest::Client::builder()
+    .timeout(Duration::from_secs(N))
+    .build()
+    .unwrap_or_else(|e| {
+        tracing::warn!("Client build failed: {}", e);
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(N))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    });
+```
+
+### Secret decryption error distinction
+
+`ProviderDefinition::resolve_password()` returns `Result<Option<String>, String>`:
+- `Ok(None)` → no password stored (legitimate)
+- `Ok(Some(p))` → successfully decrypted
+- `Err(msg)` → secret store unavailable or decryption failed (corrupted key file)
+
+Callers must handle the error case distinctly from the "no password" case.
 
 ## Cross-Layer Change Checklist
 
@@ -240,10 +293,67 @@ Search order:
 - **`clarity-tauri` is archived** and excluded from the workspace; do not modify.
 - **`clarity-openclaw` is archived** (merged into `clarity-claw`); do not modify.
 - **Legacy panels** (`panels/legacy/`) removed; MCP and Skill overlays promoted to `panels/` directly.
+- **Egui test coverage**: 347 tests (0 failures), up from 259. Key areas with coverage: `wire_dispatcher` (11), `gateway_task_client` (8), `gateway_manager` (4), `chat` handlers (18), `session` persistence (14), `provider` (29), `truncate` (11), `system` handlers (6), `subagent` handlers (9), `navigation_tree` layout (4). Still untested: `gateway_poller`, `agent_runner`, `claw_events`, `message_actions`, `task_service`, `tray`, most `panels/` render functions.
+- **Library target**: `src/lib.rs` exposes `test_util` via `#[cfg(test)] mod test_util;` so `cargo test --lib` runs 3 shared-test-helper smoke tests. The binary target (`main.rs`) holds all rendering modules. Cross-crate consumers should use `clarity-contract` or `clarity-wire` for shared types.
+- **Layout invariants**: Left rail is NEVER auto-collapsed by window width (only manual toggle). During animation, `effective_left_rail_width()` must be used for all layout consumers (panel width, `compute_metrics()`, `render_main_stage_border()`, `render_status_bar()`). The navigation tree footer uses `allocate_new_ui` with `top_down` (separator at top) + inner `bottom_up` (avatar pinned to bottom).
 
 ## Egui Frontend Architecture (S6 Phase E)
 
-Three-rail shell: left nav tree, center chat stage, right IDE rail. 257 unit tests, 6 theme presets, palette-derived design tokens, animation-driven panel transitions.
+Three-rail shell: left nav tree, center chat stage, right IDE rail. 347 unit tests, 6 theme presets, palette-derived design tokens, animation-driven panel transitions.
+
+### Egui Layout System
+
+Egui's layout model is **declaration-order-dependent space partitioning**, not CSS absolute positioning. Panels declared first consume their space first:
+
+```
+TopBottomPanel::top("titlebar")    → 32px (full width)
+SidePanel::left("nav_tree")        → animated 210px↔36px (full height below titlebar)
+SidePanel::right("ide_panel")      → user-resizable 180–400px
+TopBottomPanel::bottom("status")   → 24px (declared first = bottom-most slot)
+TopBottomPanel::bottom("input")    → natural height (declared second = above status bar)
+CentralPanel::default()            → REMAINING space
+```
+
+Z-order (bottom to top): `LayerId::background()` (main stage fill, border stroke) → Panels (Middle layer) → `LayerId::new(Order::Tooltip, ...)` (border stroke above right-rail cover) → Foreground Areas (toasts) → Foreground Areas (modal scrim + Window) → Command palette Window → `LayerId::new(Order::Foreground, "theme_transition_overlay")`.
+
+Key egui primitives used in clarity-egui:
+- `ui.allocate_new_ui(UiBuilder::new().max_rect(rect).layout(...), |ui| ...)` — child Ui constrained to exact rectangle, used for nav footer and scroll area partitioning
+- `Frame::Prepared` API (`begin()` → modify fill/stroke → `end()`) — dynamic coloring after content inspection, used in turn renderer for error/warning accents
+- `ui.put(rect, widget)` — place widget at exact rect bypassing flow layout
+- `Sense::click()`, `Sense::drag()`, `Sense::hover()` — interaction sensitivity (does NOT affect rect size)
+- `UiBuilder::new()` — child Ui with custom max_rect, layout, id_salt
+
+### Panel Declaration Order
+
+The order in `render_layout_shell()` is load-bearing:
+1. `render_main_stage_border()` — background painter only (no panel)
+2. `render_titlebar()` — TopBottomPanel::top
+3. `render_left_rail()` — SidePanel::left (animated width)
+4. `render_right_rail()` — SidePanel::right (animated open/close + native resize line cover on Foreground layer)
+5. `render_status_bar()` — TopBottomPanel::bottom (first = bottom slot)
+6. `render_input_panel()` — TopBottomPanel::bottom (second = above status bar)
+7. `render_main_stage()` — CentralPanel (remaining space)
+8. Overlays: skill, mcp, toasts, modal scrim + window, onboarding
+
+Each panel is independently panic-guarded via `render_safe(name, |app, ctx| ...)` which wraps in `catch_unwind`. A panic in one panel shows an error toast but leaves other panels intact.
+
+### Test Infrastructure
+
+`src/test_util.rs` provides shared test helpers (available via `crate::test_util` in any `#[cfg(test)]` module):
+
+| Export | Purpose |
+|--------|---------|
+| `with_temp_dir(name, closure)` | Create isolated temp dir → run closure → RAII cleanup |
+| `with_temp_sessions_dir(name, closure)` | Like `with_temp_dir` + auto-create `sessions/` subdir |
+| `TempDirGuard` | RAII struct that `remove_dir_all` on drop |
+
+`crate::session::save_session_to_path(session, path)` is `#[cfg(test)] pub(crate)` — writes a Session to an explicit path for roundtrip integration tests. Any test module can import it via `use crate::session::save_session_to_path`.
+
+Known fragility areas when modifying layout code:
+- Changing panel declaration order breaks the space-partitioning contract
+- Modifying `effective_left_rail_width()` without updating all consumers causes misalignment
+- The `render_main_stage_border()` painter uses absolute screen coordinates; misalignment with panel rects creates visible gaps
+- Navigation tree footer separator positioning depends on `top_down` layout cursor behavior
 
 ### Theme System
 Six theme presets + OS auto-detection: `Theme::system()` reads Windows registry / macOS defaults / Linux gsettings for dark/light preference on first launch. Light themes use soft ambient shadows (α×0.17 vs. dark). Theme switches animate with a 250ms cubic-ease-out fade overlay. All colors are palette-derived from 16 base hex values + 2 font names — adding a new theme is ~20 lines.
