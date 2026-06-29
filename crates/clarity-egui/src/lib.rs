@@ -80,3 +80,4 @@ pub use ui::types;
 // Integration tests link to the library as an external crate, where
 // `#[cfg(test)]` is NOT automatically enabled.
 pub mod test_util;
+// test: verify pre-commit hook

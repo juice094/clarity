@@ -19,6 +19,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -38,6 +40,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev
@@ -59,6 +63,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -76,6 +82,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -93,6 +101,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -110,6 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -127,6 +139,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -151,6 +165,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -174,6 +190,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -199,6 +217,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
@@ -243,6 +263,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Ensure hermes-memory stubs
         shell: bash
         run: bash scripts/ensure-hermes-stubs.sh
