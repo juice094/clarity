@@ -1044,13 +1044,24 @@ impl DeepSeekResponse {
     fn into_biz_data(self, context: &str, raw: &str) -> Result<Value, AgentError> {
         if self.code != 0 {
             return Err(AgentError::Llm(format!(
-                "{} failed (code {}): {}",
+                "{} failed (http code {}): {}",
                 context, self.code, self.msg
             )));
         }
         let data = self.data.ok_or_else(|| {
             AgentError::Llm(format!("{} response data missing: {}", context, raw))
         })?;
+        // Check the business-level error code before accessing biz_data.
+        // When biz_code != 0 (e.g. wrong password, expired token), biz_data
+        // is null — surface the biz_msg instead of a confusing "missing" error.
+        if data.biz_code != 0 {
+            let msg = if data.biz_msg.is_empty() {
+                format!("unknown biz error (code {})", data.biz_code)
+            } else {
+                data.biz_msg.clone()
+            };
+            return Err(AgentError::Llm(format!("{} failed: {}", context, msg)));
+        }
         data.biz_data
             .ok_or_else(|| AgentError::Llm(format!("{} biz_data missing: {}", context, raw)))
     }
@@ -1060,9 +1071,9 @@ impl DeepSeekResponse {
 #[allow(dead_code)]
 struct DeepSeekBizResponse {
     #[serde(default)]
-    _biz_code: i32,
+    biz_code: i32,
     #[serde(default)]
-    _biz_msg: String,
+    biz_msg: String,
     #[serde(default)]
     biz_data: Option<Value>,
 }
