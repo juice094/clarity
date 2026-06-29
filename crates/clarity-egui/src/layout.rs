@@ -94,11 +94,12 @@ fn compute_metrics(app: &App, ctx: &egui::Context) -> LayoutMetrics {
         .ui_store
         .right_rail_width
         .unwrap_or(app.ui_store.theme.size_panel_right);
+    // Use the animated left rail width for smooth expand/collapse transitions.
+    let left_w = app.effective_left_rail_width();
     compute_metrics_raw(
         ctx.screen_rect().width(),
-        app.ui_store.theme.size_sidebar,
+        left_w,
         right_w,
-        app.view_state.left_rail_expanded,
         app.view_state.right_rail_visible,
     )
 }
@@ -106,17 +107,10 @@ fn compute_metrics(app: &App, ctx: &egui::Context) -> LayoutMetrics {
 /// Pure geometry calculation — usable from tests without an egui context.
 fn compute_metrics_raw(
     current_width: f32,
-    size_sidebar: f32,
+    left_rail_w: f32,
     size_panel_right: f32,
-    left_rail_expanded: bool,
     _right_rail_visible: bool,
 ) -> LayoutMetrics {
-    // S6 Phase D: the left chrome is a single fixed-width navigation tree.
-    let left_rail_w = if left_rail_expanded {
-        size_sidebar
-    } else {
-        0.0
-    };
     let left_panel_w = 0.0;
     // Use the actual rendered width regardless of the visibility flag.
     // During close animation, right_rail_visible is false but the panel
@@ -145,9 +139,8 @@ mod tests {
     fn left_rail_stays_expanded_even_when_narrow() {
         let m = compute_metrics_raw(
             800.0, // window width
-            144.0, // sidebar
+            144.0, // left rail (expanded)
             240.0, // right rail
-            true,  // left expanded
             true,  // right visible
         );
         assert_eq!(m.left_rail_w, 144.0);
@@ -158,8 +151,8 @@ mod tests {
     #[test]
     fn content_area_increases_when_left_collapsed_manually() {
         let m = compute_metrics_raw(
-            800.0, 144.0, 240.0, false, // left collapsed
-            true,
+            800.0, 0.0, // left rail (collapsed)
+            240.0, true,
         );
         assert_eq!(m.left_rail_w, 0.0);
         assert!(m.content_w > 500.0);
@@ -167,7 +160,7 @@ mod tests {
 
     #[test]
     fn right_rail_consumes_width() {
-        let m = compute_metrics_raw(1200.0, 144.0, 240.0, true, true);
+        let m = compute_metrics_raw(1200.0, 144.0, 240.0, true);
         assert_eq!(m.left_rail_w, 144.0);
         assert_eq!(m.right_rail_w, 240.0);
         assert_eq!(m.content_w, 1200.0 - 144.0 - 240.0);
@@ -175,7 +168,7 @@ mod tests {
 
     #[test]
     fn content_too_narrow_detects_underflow() {
-        let m = compute_metrics_raw(400.0, 144.0, 240.0, true, true);
+        let m = compute_metrics_raw(400.0, 144.0, 240.0, true);
         assert!(m.content_too_narrow(480.0));
     }
 }

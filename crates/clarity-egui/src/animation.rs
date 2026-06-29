@@ -81,11 +81,13 @@ impl Default for FloatAnimation {
     }
 }
 
-/// Animation state used by the right-rail panel.
+/// Animation state used by the right-rail panel and the left-rail sidebar.
 #[derive(Clone, Default)]
 pub struct PanelAnimationState {
     /// Width animation for the right IDE panel.
     pub right_panel_width: FloatAnimation,
+    /// Width animation for the left navigation rail.
+    pub left_rail_width: FloatAnimation,
     /// Previous panel variant for detecting switches.
     pub prev_panel: Option<clarity_core::ui::RightRailPanel>,
 }

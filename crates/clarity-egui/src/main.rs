@@ -54,6 +54,7 @@ mod window_manager;
 
 use app_state::AppState;
 
+use crate::stores::FocusTarget;
 use ui::types::*;
 
 // ============================================================================
@@ -605,9 +606,28 @@ impl App {
     /// S6 Phase D: the left chrome is now a single fixed-width tree. The old
     /// 36px icon rail and the conditional expanded panel have been replaced by
     /// `panels::navigation_tree`.
+    ///
+    /// During collapse animation, the nav tree renders at the animated width
+    /// so content doesn't skip while the layout adjusts.
     fn render_left_rail(&mut self, ctx: &egui::Context) {
-        if self.view_state.left_rail_expanded {
-            crate::panels::navigation_tree::render_left_navigation_tree(self, ctx);
+        let effective_w = self.effective_left_rail_width();
+        // Only render when there is visible width (either expanded or animating).
+        if effective_w > 0.0 {
+            crate::panels::navigation_tree::render_left_navigation_tree(self, ctx, effective_w);
+        }
+    }
+
+    /// Return the effective left rail width, animated during expand/collapse.
+    fn effective_left_rail_width(&self) -> f32 {
+        let theme = &self.ui_store.theme;
+        if self.panel_animation.left_rail_width.done {
+            if self.view_state.left_rail_expanded {
+                theme.size_sidebar
+            } else {
+                theme.size_sidebar_collapsed
+            }
+        } else {
+            self.panel_animation.left_rail_width.current()
         }
     }
 
@@ -620,11 +640,7 @@ impl App {
     /// Kimi-style floating-stage look.
     fn render_main_stage_border(&self, ctx: &egui::Context) {
         let theme = self.ui_store.theme.clone();
-        let left_w = if self.view_state.left_rail_expanded {
-            theme.size_sidebar
-        } else {
-            0.0
-        };
+        let left_w = self.effective_left_rail_width();
         let right_w =
             self.ui_store
                 .right_rail_width
@@ -696,11 +712,7 @@ impl App {
     /// `size_statusbar` from the theme so it respects font scaling.
     fn render_status_bar(&mut self, ctx: &egui::Context) {
         let theme = self.ui_store.theme.clone();
-        let left_w = if self.view_state.left_rail_expanded {
-            theme.size_sidebar
-        } else {
-            theme.size_sidebar_collapsed
-        };
+        let left_w = self.effective_left_rail_width();
         let right_w =
             self.ui_store
                 .right_rail_width
@@ -932,7 +944,25 @@ impl App {
                     .on_hover_text(sidebar_tooltip)
                     .clicked()
                     {
-                        self.view_state.left_rail_expanded = !self.view_state.left_rail_expanded;
+                        let expanding = !self.view_state.left_rail_expanded;
+                        self.view_state.left_rail_expanded = expanding;
+                        // Start the width animation for smooth expand/collapse.
+                        let from = if expanding {
+                            theme.size_sidebar_collapsed
+                        } else {
+                            theme.size_sidebar
+                        };
+                        let to = if expanding {
+                            theme.size_sidebar
+                        } else {
+                            theme.size_sidebar_collapsed
+                        };
+                        self.panel_animation.left_rail_width =
+                            crate::animation::FloatAnimation::start(
+                                from,
+                                to,
+                                theme.duration_normal,
+                            );
                     }
 
                     // Right-aligned window controls.
@@ -1150,7 +1180,21 @@ impl App {
                 true
             }
             ids::TOGGLE_SIDEBAR => {
-                self.view_state.left_rail_expanded = !self.view_state.left_rail_expanded;
+                let expanding = !self.view_state.left_rail_expanded;
+                self.view_state.left_rail_expanded = expanding;
+                let theme = &self.ui_store.theme;
+                let from = if expanding {
+                    theme.size_sidebar_collapsed
+                } else {
+                    theme.size_sidebar
+                };
+                let to = if expanding {
+                    theme.size_sidebar
+                } else {
+                    theme.size_sidebar_collapsed
+                };
+                self.panel_animation.left_rail_width =
+                    crate::animation::FloatAnimation::start(from, to, theme.duration_normal);
                 true
             }
             ids::OPEN_SETTINGS => {
@@ -1257,7 +1301,7 @@ impl App {
     }
 
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
-        components::settings::render_settings_panel(self, ctx);
+        crate::panels::settings::render_settings_panel(self, ctx);
     }
 
     fn render_chat_area(&mut self, ctx: &egui::Context) {
@@ -1459,7 +1503,7 @@ impl App {
             return;
         };
 
-        if conn.token.is_empty() {
+        if conn.token.as_deref().unwrap_or("").is_empty() {
             self.claw_pairing_state =
                 PairingState::Error("Gateway token is required to request pairing".to_string());
             return;
@@ -1478,8 +1522,7 @@ impl App {
 
         let ws_url = crate::claw::to_ws_url(&conn.gateway_url);
 
-        let token = crate::settings::GuiSettings::resolve_api_key(&Some(conn.token.clone()))
-            .unwrap_or_default();
+        let token = crate::settings::GuiSettings::resolve_api_key(&conn.token).unwrap_or_default();
         self.claw_pairing_state = PairingState::Requesting;
         let client = clarity_claw::ClawClient::connect(&ws_url, &token);
         let scopes = vec![
@@ -1943,3 +1986,5 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
 
 #[cfg(test)]
 mod pretext_alignment;
+#[cfg(test)]
+mod test_util;
