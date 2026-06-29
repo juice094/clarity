@@ -291,7 +291,10 @@ impl DiscordWebhookClient {
     /// Create a new webhook client for the given webhook URL.
     pub fn new(webhook_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             webhook_url: webhook_url.into(),
             retry_policy: RetryPolicy::new(),
         }

@@ -247,7 +247,10 @@ impl Tool for PushNotificationTool {
                         "timestamp": timestamp,
                     });
 
-                    let client = reqwest::Client::new();
+                    let client = reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(30))
+                        .build()
+                        .unwrap_or_else(|_| reqwest::Client::new());
                     let resp = client.post(webhook_url).json(&payload).send().await;
 
                     match resp {

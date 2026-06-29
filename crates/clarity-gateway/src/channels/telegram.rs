@@ -247,7 +247,10 @@ impl TelegramApiClient {
     pub fn new(token: impl Into<String>) -> Self {
         let token = token.into();
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             base_url: format!("https://api.telegram.org/bot{}", token),
             token,
             retry_policy: RetryPolicy::new(),

@@ -84,11 +84,24 @@ impl AnthropicLlm {
         base_url: impl Into<String>,
         model: impl Into<String>,
     ) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to build Anthropic reqwest Client with timeout, falling back: {}",
+                    e
+                );
+                reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(300))
+                    .build()
+                    .unwrap_or_else(|_| reqwest::Client::new())
+            });
         Self {
             api_key: api_key.into(),
             base_url: base_url.into(),
             model: model.into(),
-            client: reqwest::Client::new(),
+            client,
         }
     }
 }

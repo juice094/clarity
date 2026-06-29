@@ -795,8 +795,7 @@ fn discover_settings_openclaw(
                 claw_type: ClawType::OpenClaw,
                 protocol: ClawProtocol::OpenClawJsonRpc,
                 gateway_url: conn.gateway_url.clone(),
-                gateway_token: GuiSettings::resolve_api_key(&Some(conn.token.clone()))
-                    .unwrap_or_default(),
+                gateway_token: GuiSettings::resolve_api_key(&conn.token).unwrap_or_default(),
                 workspace_root: std::env::current_dir().unwrap_or_default(),
                 host,
                 auth_mode,
@@ -1000,7 +999,7 @@ mod tests {
         OpenClawConnection {
             name: "Gray-Cloud".into(),
             gateway_url: "wss://gray-cloud.example:18789".into(),
-            token: "token-with-device".into(),
+            token: Some("token-with-device".into()),
             auth_mode: OpenClawAuthMode::TokenWithDevice,
             enabled: true,
             device_token: None,

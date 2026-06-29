@@ -179,9 +179,14 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(app.t("Token")).size(theme.text_sm));
         ui.add(
-            egui::TextEdit::singleline(&mut app.settings_store.claw_form.token)
-                .password(true)
-                .desired_width(280.0),
+            egui::TextEdit::singleline(
+                app.settings_store
+                    .claw_form
+                    .token
+                    .get_or_insert_with(String::new),
+            )
+            .password(true)
+            .desired_width(280.0),
         );
     });
 
