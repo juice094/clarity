@@ -270,6 +270,27 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Clear Batch Grants", "清除批量授权");
     m.insert("No custom providers configured.", "未配置自定义服务商。");
 
+    // ── Ops tab ──
+    m.insert("Ops Actions", "运维操作");
+    m.insert("AI Diagnostics", "AI 问题诊断");
+    m.insert("Run self-diagnostic checks", "运行自诊断检查");
+    m.insert("Restart Gateway", "重启 Gateway");
+    m.insert("Restart local Gateway service", "重启本地 Gateway 服务");
+    m.insert("Repair Config", "修复配置");
+    m.insert("Auto-repair common config issues", "自动修复常见配置问题");
+    m.insert("Open Terminal", "打开终端");
+    m.insert("Open system terminal", "打开系统终端");
+    m.insert("Data Backup", "数据备份");
+    m.insert("Backup current sessions and config", "备份当前会话和配置");
+    m.insert("System Status", "系统状态");
+    m.insert("View detailed system status", "查看详细系统状态");
+    m.insert("Version Info", "版本信息");
+    m.insert("Last Backup", "上次备份");
+    m.insert("AI diagnostic running…", "AI 诊断运行中…");
+    m.insert("Gateway restart request sent", "Gateway 重启请求已发送");
+    m.insert("Repairing config…", "配置修复中…");
+    m.insert("Data backup complete", "数据备份完成");
+
     // ── Claw role-context E2EE ──
     m.insert("Role passphrase", "角色口令");
     m.insert(

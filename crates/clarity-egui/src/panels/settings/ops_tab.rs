@@ -64,23 +64,25 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
 
     // ── Action buttons (Kimi-style grid) ──
     ui.label(
-        egui::RichText::new("运维操作")
+        egui::RichText::new(app.t("Ops Actions"))
             .size(theme.text_sm)
             .strong()
             .color(theme.text_dim),
     );
     design_system::gap(ui, Space::S1);
 
-    let actions = [
-        ("🩺", "AI 问题诊断", "运行自诊断检查"),
-        ("🔄", "重启 Gateway", "重启本地 Gateway 服务"),
-        ("🔧", "修复配置", "自动修复常见配置问题"),
-        ("💻", "打开终端", "打开系统终端"),
-        ("💾", "数据备份", "备份当前会话和配置"),
-        ("📊", "系统状态", "查看详细系统状态"),
+    let actions: &[(&str, &str, &str)] = &[
+        ("🩺", "AI Diagnostics", "Run self-diagnostic checks"),
+        ("🔄", "Restart Gateway", "Restart local Gateway service"),
+        ("🔧", "Repair Config", "Auto-repair common config issues"),
+        ("💻", "Open Terminal", "Open system terminal"),
+        ("💾", "Data Backup", "Backup current sessions and config"),
+        ("📊", "System Status", "View detailed system status"),
     ];
 
-    for (icon, title, desc) in actions {
+    for (icon, title_key, desc_key) in actions {
+        let title = app.t(title_key);
+        let desc = app.t(desc_key);
         let btn = egui::Button::new(
             egui::RichText::new(format!("{} {}", icon, title))
                 .size(theme.text_sm)
@@ -92,28 +94,28 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
 
         let resp = ui.add(btn);
         if resp.clicked() {
-            match title {
-                "AI 问题诊断" => {
+            match *title_key {
+                "AI Diagnostics" => {
                     app.push_toast(
-                        "AI 诊断运行中...".to_string(),
+                        app.t("AI diagnostic running…").to_string(),
                         crate::ui::types::ToastLevel::Info,
                     );
                 }
-                "重启 Gateway" => {
+                "Restart Gateway" => {
                     app.push_toast(
-                        "Gateway 重启请求已发送".to_string(),
+                        app.t("Gateway restart request sent").to_string(),
                         crate::ui::types::ToastLevel::Info,
                     );
                 }
-                "修复配置" => {
+                "Repair Config" => {
                     app.push_toast(
-                        "配置修复中...".to_string(),
+                        app.t("Repairing config…").to_string(),
                         crate::ui::types::ToastLevel::Info,
                     );
                 }
-                "数据备份" => {
+                "Data Backup" => {
                     app.push_toast(
-                        "数据备份完成".to_string(),
+                        app.t("Data backup complete").to_string(),
                         crate::ui::types::ToastLevel::Info,
                     );
                 }
@@ -130,7 +132,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
 
     // ── Version & backup info ──
     ui.label(
-        egui::RichText::new("版本信息")
+        egui::RichText::new(app.t("Version Info"))
             .size(theme.text_sm)
             .strong()
             .color(theme.text_dim),
@@ -166,7 +168,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
         design_system::gap(ui, Space::S1);
         ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new("上次备份")
+                egui::RichText::new(app.t("Last Backup"))
                     .size(theme.text_sm)
                     .color(theme.text_dim),
             );

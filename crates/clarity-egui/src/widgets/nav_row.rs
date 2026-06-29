@@ -86,6 +86,9 @@ mod tests {
                 }
             });
         });
+        // SAFE: egui::CentralPanel::show always invokes its closure at least
+        // once during the `ctx.run()` call. The `f_opt.take()` ensures the
+        // function is called at most once, so output is always populated.
         output.expect("CentralPanel should always run its closure")
     }
 
