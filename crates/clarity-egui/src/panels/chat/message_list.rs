@@ -16,6 +16,165 @@ struct PendingActions {
     cancel_edit: bool,
 }
 
+/// Result of computing the virtual-list window: which turn units to render.
+struct VirtualWindow {
+    start_idx: usize,
+    end_idx: usize,
+}
+
+impl VirtualWindow {
+    /// Compute which turn units are visible given the current scroll offset and
+    /// available height. Includes a small overscan (3 units) above and below.
+    fn compute(estimates: &[f32], scroll_y: f32, available_height: f32) -> Self {
+        let mut cumulative = 0.0;
+        let mut start_idx = 0;
+        let mut end_idx = estimates.len();
+
+        for (i, h) in estimates.iter().enumerate() {
+            if cumulative + h >= scroll_y && start_idx == 0 {
+                start_idx = i.saturating_sub(3);
+            }
+            cumulative += h;
+            if cumulative >= scroll_y + available_height && end_idx == estimates.len() {
+                end_idx = (i + 3).min(estimates.len());
+                break;
+            }
+        }
+        VirtualWindow { start_idx, end_idx }
+    }
+
+    /// Height of all units before the visible window.
+    fn top_spacer(&self, estimates: &[f32]) -> f32 {
+        if self.start_idx > 0 {
+            estimates[..self.start_idx].iter().sum::<f32>()
+        } else {
+            0.0
+        }
+    }
+
+    /// Height of all units after the visible window.
+    fn bottom_spacer(&self, estimates: &[f32]) -> f32 {
+        if self.end_idx < estimates.len() {
+            estimates[self.end_idx..].iter().sum::<f32>()
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Render the action bar below a user message bubble (edit + copy buttons).
+/// Returns the actions the caller should dispatch after releasing borrows.
+#[allow(dead_code)]
+fn render_user_action_bar(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    msg_idx: usize,
+    pending: &mut PendingActions,
+) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
+            let edit_btn = egui::Button::new(
+                egui::RichText::new(crate::theme::ICON_EDIT)
+                    .font(theme.font_icon(theme.text_sm))
+                    .color(theme.text_muted),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
+                pending.edit_idx = Some(msg_idx);
+            }
+            ui.add_space(4.0);
+            let copy_btn = egui::Button::new(
+                egui::RichText::new(crate::theme::ICON_COPY)
+                    .font(theme.font_icon(theme.text_sm))
+                    .color(theme.text_muted),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                pending.copy_content = Some(String::new()); // placeholder, filled by caller
+            }
+        });
+    });
+}
+
+/// Render the action bar below an agent turn (regenerate + copy buttons).
+#[allow(dead_code)]
+fn render_agent_action_bar(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    unit_start: usize,
+    pending: &mut PendingActions,
+) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
+            let regen_btn = egui::Button::new(
+                egui::RichText::new(crate::theme::ICON_REFRESH)
+                    .font(theme.font_icon(theme.text_sm))
+                    .color(theme.text_muted),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+            if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
+                pending.regenerate_idx = Some(unit_start);
+            }
+            ui.add_space(4.0);
+            let copy_btn = egui::Button::new(
+                egui::RichText::new(crate::theme::ICON_COPY)
+                    .font(theme.font_icon(theme.text_sm))
+                    .color(theme.text_muted),
+            )
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                pending.copy_content = Some(String::new()); // placeholder, filled by caller
+            }
+        });
+    });
+}
+
+/// Compute per-unit height estimates for the virtual list.
+///
+/// Takes individual slices rather than `&Session` so the caller can split
+/// immutable (`messages`) and mutable (`turn_heights`) borrows across slices.
+fn compute_unit_estimates(
+    messages: &[crate::ui::types::Message],
+    units: &[RenderUnit],
+    editing_idx: Option<usize>,
+    max_w: f32,
+    theme: &Theme,
+    metrics: &crate::pretext::EguiFontMetrics,
+    turn_heights: &mut [Option<f32>],
+) -> Vec<f32> {
+    units
+        .iter()
+        .enumerate()
+        .map(|(i, u)| {
+            let editing = editing_idx == Some(u.start);
+            if u.is_user {
+                let bubble_h = messages[u.start].cached_height.unwrap_or_else(|| {
+                    crate::ui::render::estimate_height(&messages[u.start], max_w, theme, metrics)
+                });
+                if editing {
+                    bubble_h + 80.0
+                } else {
+                    bubble_h + 28.0
+                }
+            } else {
+                let cached = turn_heights.get(i).copied().flatten();
+                cached.unwrap_or_else(|| {
+                    let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                        &messages[u.start..u.end],
+                    );
+                    turn.estimate_height(max_w, theme, metrics)
+                }) + 28.0
+            }
+        })
+        .collect()
+}
+
 /// Renders the message list UI.
 pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height();
@@ -147,67 +306,30 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             session.turn_heights.resize(units.len(), None);
         }
 
-        let estimates: Vec<f32> = units
-            .iter()
-            .enumerate()
-            .map(|(i, u)| {
-                let editing = app.chat_store.editing_message_idx == Some(u.start);
-                if u.is_user {
-                    let bubble_h = session.messages[u.start].cached_height.unwrap_or_else(|| {
-                        ui::render::estimate_height(
-                            &session.messages[u.start],
-                            max_w,
-                            &theme,
-                            metrics,
-                        )
-                    });
-                    if editing {
-                        bubble_h + 80.0
-                    } else {
-                        bubble_h + 28.0
-                    }
-                } else {
-                    session
-                        .turn_heights
-                        .get(i)
-                        .copied()
-                        .flatten()
-                        .unwrap_or_else(|| {
-                            let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                                &session.messages[u.start..u.end],
-                            );
-                            turn.estimate_height(max_w, &theme, metrics)
-                        })
-                        + 28.0
-                }
-            })
-            .collect();
+        let estimates = compute_unit_estimates(
+            &session.messages,
+            &units,
+            app.chat_store.editing_message_idx,
+            max_w,
+            &theme,
+            metrics,
+            &mut session.turn_heights,
+        );
 
-        let mut cumulative = 0.0;
-        let mut start_idx = 0;
-        let mut end_idx = units.len();
+        let win = VirtualWindow::compute(&estimates, scroll_y, available_height);
 
-        for (i, h) in estimates.iter().enumerate() {
-            if cumulative + h >= scroll_y && start_idx == 0 {
-                start_idx = i.saturating_sub(3);
+        {
+            let top = win.top_spacer(&estimates);
+            if top > 0.0 {
+                ui.allocate_space(egui::vec2(ui.available_width(), top));
             }
-            cumulative += h;
-            if cumulative >= scroll_y + available_height && end_idx == units.len() {
-                end_idx = (i + 3).min(units.len());
-                break;
-            }
-        }
-
-        if start_idx > 0 {
-            let top = estimates[..start_idx].iter().sum::<f32>();
-            ui.allocate_space(egui::vec2(ui.available_width(), top));
         }
 
         for (i, unit) in units
             .iter()
             .enumerate()
-            .skip(start_idx)
-            .take(end_idx - start_idx)
+            .skip(win.start_idx)
+            .take(win.end_idx - win.start_idx)
         {
             if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
                 continue;
@@ -342,9 +464,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             }
         }
 
-        if end_idx < units.len() {
-            let bottom = estimates[end_idx..].iter().sum::<f32>();
-            ui.allocate_space(egui::vec2(ui.available_width(), bottom));
+        {
+            let bottom = win.bottom_spacer(&estimates);
+            if bottom > 0.0 {
+                ui.allocate_space(egui::vec2(ui.available_width(), bottom));
+            }
         }
 
         // Always show a transient status message while the agent is working,
