@@ -915,8 +915,8 @@ pub struct WebTab {
     pub url: String,
 }
 
-// Re-export FocusTarget so consumers of `use crate::ui::types::*` get it.
-pub use crate::stores::FocusTarget;
+// NOTE: FocusTarget re-export moved to stores/mod.rs to support the library target.
+// The binary's ui/mod.rs already has `pub mod types;` which brings types into scope.
 
 // ============================================================================
 // Unit tests for ToolCallStatus inference
