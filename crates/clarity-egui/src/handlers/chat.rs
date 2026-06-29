@@ -788,4 +788,298 @@ mod tests {
         // Also verify the active session is untouched.
         assert!(!store.session_mut("b").unwrap().in_flight);
     }
+
+    #[test]
+    fn reasoning_chunk_appends_to_existing_think_block() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let mut store = make_store(vec![session_a], "a");
+
+        // First reasoning chunk creates a think block.
+        on_reasoning_chunk(&mut store, &mut chat_store, "a", "step 1: ".into());
+        let session = store.session_mut("a").unwrap();
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, Role::Agent);
+        if let ContentBlock::Think { steps } = &session.messages[0].blocks[0] {
+            assert_eq!(steps.len(), 1);
+            assert_eq!(steps[0], "step 1: ");
+        } else {
+            panic!("Expected Think block");
+        }
+
+        // Second chunk appends to the same step.
+        on_reasoning_chunk(&mut store, &mut chat_store, "a", "result found".into());
+        let session = store.session_mut("a").unwrap();
+        if let ContentBlock::Think { steps } = &session.messages[0].blocks[0] {
+            assert_eq!(steps[0], "step 1: result found");
+        } else {
+            panic!("Expected Think block after append");
+        }
+    }
+
+    #[test]
+    fn empty_reasoning_chunk_is_noop() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let mut store = make_store(vec![session_a], "a");
+
+        on_reasoning_chunk(&mut store, &mut chat_store, "a", "".into());
+        let session = store.session_mut("a").unwrap();
+        assert!(
+            session.messages.is_empty(),
+            "Empty chunk should not create a message"
+        );
+    }
+
+    #[test]
+    fn draft_events_for_active_session_only() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let session_b = make_session("b");
+        let store = make_store(vec![session_a, session_b], "b");
+
+        // Draft progress for inactive session A should not affect chat_store.
+        on_draft_progress(&store, &mut chat_store, "a", "progress".into());
+        assert!(matches!(chat_store.draft_status, DraftStatus::None));
+
+        // Draft progress for active session B should update.
+        on_draft_progress(&store, &mut chat_store, "b", "progress".into());
+        assert!(matches!(
+            chat_store.draft_status,
+            DraftStatus::Progress { .. }
+        ));
+
+        // Draft clear for active session.
+        on_draft_clear(&store, &mut chat_store, "b");
+        assert!(matches!(chat_store.draft_status, DraftStatus::None));
+    }
+
+    #[test]
+    fn draft_content_accumulates_across_chunks() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let store = make_store(vec![session_a], "a");
+
+        on_draft_content(&store, &mut chat_store, "a", "part 1".into());
+        if let DraftStatus::Content { text } = &chat_store.draft_status {
+            assert_eq!(text, "part 1");
+        } else {
+            panic!("Expected DraftStatus::Content");
+        }
+
+        on_draft_content(&store, &mut chat_store, "a", " + part 2".into());
+        if let DraftStatus::Content { text } = &chat_store.draft_status {
+            assert_eq!(text, "part 1 + part 2");
+        } else {
+            panic!("Expected accumulated DraftStatus::Content");
+        }
+    }
+
+    #[test]
+    fn tool_start_and_result_for_active_session() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let mut store = make_store(vec![session_a], "a");
+
+        on_tool_start(
+            &mut store,
+            &mut chat_store,
+            "a",
+            "t1".into(),
+            "read_file".into(),
+            serde_json::json!({"path": "/tmp/x"}),
+        );
+        assert_eq!(chat_store.tool_calls.len(), 1);
+        assert_eq!(chat_store.tool_calls[0].name, "read_file");
+        assert!(matches!(
+            chat_store.tool_calls[0].status,
+            ToolCallStatus::Running
+        ));
+
+        on_tool_result(
+            &mut store,
+            &mut chat_store,
+            "a",
+            "t1".into(),
+            "read_file".into(),
+            "file contents here".into(),
+            None,
+        );
+        // Tool call status should be updated.
+        assert!(matches!(
+            chat_store.tool_calls[0].status,
+            ToolCallStatus::Success
+        ));
+    }
+
+    #[test]
+    fn format_tool_output_think_extracts_summary() {
+        let (display, truncated) =
+            format_tool_output("think", r#"{"summary": "I will read the file first"}"#);
+        assert_eq!(display, "I will read the file first");
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn format_tool_output_think_falls_back_to_truncation() {
+        let long = "a".repeat(5000);
+        let result = format!(r#"{{"not_summary": "{}"}}"#, long);
+        let (display, truncated) = format_tool_output("think", &result);
+        assert!(truncated);
+        assert!(display.len() < 5000);
+    }
+
+    #[test]
+    fn format_tool_output_glob_over_20_results() {
+        let items: Vec<String> = (0..25).map(|i| format!("/tmp/file{}.rs", i)).collect();
+        let result = serde_json::to_string(&items).unwrap();
+        let (display, truncated) = format_tool_output("glob", &result);
+        assert!(display.contains("Found 25 results"));
+        assert!(display.contains("... (20 more)"));
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn format_tool_output_file_read_formats_path() {
+        let result = r#"{"path": "/tmp/test.rs", "content": "fn main() {}"}"#;
+        let (display, truncated) = format_tool_output("file_read", result);
+        assert!(display.contains("📄 /tmp/test.rs"));
+        assert!(display.contains("fn main() {}"));
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn format_tool_output_file_write_shows_path() {
+        let result = r#"{"path": "/tmp/output.txt"}"#;
+        let (display, truncated) = format_tool_output("file_write", result);
+        assert!(display.contains("✏ /tmp/output.txt written"));
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn format_tool_output_file_edit_with_diff() {
+        let result = r#"{"path": "/tmp/test.rs", "_diff_preview": "@@ -1 +1 @@\n-old\n+new"}"#;
+        let (display, truncated) = format_tool_output("file_edit", result);
+        assert!(display.contains("diff preview available"));
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn format_tool_output_unknown_tool_truncates() {
+        let long = "x".repeat(5000);
+        let (display, truncated) = format_tool_output("unknown_tool", &long);
+        assert!(truncated);
+        assert!(display.len() < long.len());
+    }
+
+    #[test]
+    fn on_session_meta_stores_provider_state() {
+        let mut session_a = make_session("a");
+        assert!(session_a.provider_state.is_empty());
+
+        // Simulate what on_session_meta does at the data level.
+        session_a.provider_state.insert(
+            "deepseek-device".into(),
+            r#"{"chat_session_id":"abc"}"#.into(),
+        );
+        assert_eq!(
+            session_a.provider_state.get("deepseek-device"),
+            Some(&r#"{"chat_session_id":"abc"}"#.to_string())
+        );
+    }
+
+    #[test]
+    fn on_compaction_sets_and_clears_turn_state() {
+        let session_a = make_session("a");
+        let store = make_store(vec![session_a], "a");
+        let mut view_state = clarity_core::ui::ViewState::new();
+        view_state.turn = clarity_core::ui::TurnState::Loading;
+
+        on_compaction_begin(&store, &mut view_state, "a");
+        assert_eq!(view_state.turn, clarity_core::ui::TurnState::Compacting);
+
+        on_compaction_end(&store, &mut view_state, "a");
+        assert_eq!(view_state.turn, clarity_core::ui::TurnState::Idle);
+    }
+
+    #[test]
+    fn on_usage_updates_token_counters() {
+        let mut chat_store = ChatStore::default();
+        let session_a = make_session("a");
+        let store = make_store(vec![session_a], "a");
+
+        on_usage(&store, &mut chat_store, "a", 500, 300, 800);
+        assert_eq!(chat_store.last_usage, Some((500, 300, 800)));
+        assert_eq!(chat_store.token_usage.prompt_tokens, 500);
+        assert_eq!(chat_store.token_usage.completion_tokens, 300);
+        assert_eq!(chat_store.token_usage.total_tokens, 800);
+    }
+
+    #[test]
+    fn compute_session_diff_stats_accumulates_from_tool_results() {
+        use crate::ui::types::{ContentBlock, Session, SessionContext, SessionLifecycle};
+
+        let mut session = Session {
+            id: "ds".into(),
+            title: "diff test".into(),
+            category: "chat".into(),
+            project_id: None,
+            context: SessionContext::Chat,
+            lifecycle: SessionLifecycle::Temporary,
+            archived: false,
+            messages: Vec::new(),
+            updated_at: crate::session::now_millis(),
+            last_saved_at: crate::session::now_millis(),
+            turn_heights: Vec::new(),
+            provider_state: HashMap::new(),
+            in_flight: false,
+            diff_stats: None,
+        };
+
+        // A tool result with a _diff_preview.
+        let diff_json = r#"{"_diff_preview":"--- a/test.rs\n+++ b/test.rs\n@@ -1,2 +1,2 @@\n-fn main() {\n+fn run() {\n"}"#;
+        let msg = Message {
+            role: Role::Agent,
+            content: "diff".into(),
+            blocks: vec![ContentBlock::ToolResult {
+                name: "file_edit".into(),
+                args: None,
+                output: diff_json.into(),
+                truncated: false,
+            }],
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+            lines: Vec::new(),
+        };
+        session.messages.push(msg);
+
+        compute_session_diff_stats(&mut session);
+        assert!(session.diff_stats.is_some());
+        let stats = session.diff_stats.unwrap();
+        assert_eq!(stats.files_changed, 1);
+        // -fn main() → 1 removed, +fn run() → 1 added
+        assert!(stats.lines_added > 0 || stats.lines_removed > 0);
+    }
+
+    #[test]
+    fn compute_session_diff_stats_noop_without_diff_blocks() {
+        let mut session = make_session("no-diff");
+        session.messages.push(Message {
+            role: Role::Agent,
+            content: "plain text".into(),
+            blocks: vec![ContentBlock::Text {
+                text: "plain text".into(),
+            }],
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+            lines: Vec::new(),
+        });
+
+        compute_session_diff_stats(&mut session);
+        assert!(session.diff_stats.is_none());
+    }
 }

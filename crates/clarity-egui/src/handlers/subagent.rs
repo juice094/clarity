@@ -105,3 +105,123 @@ pub fn on_subagent_complete(subagent_store: &mut SubAgentStore, agent_id: String
         agent.completed_at = Some(Instant::now());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_store() -> SubAgentStore {
+        SubAgentStore::default()
+    }
+
+    #[test]
+    fn on_subagent_batch_inserts_new_entry() {
+        let mut store = make_store();
+        let status =
+            serde_json::json!({"total": 5, "completed": 2, "failed": 1, "status": "Running"});
+        on_subagent_batch(&mut store, "batch-1".into(), status);
+        assert_eq!(store.parallel_batches.len(), 1);
+        let batch = &store.parallel_batches[0];
+        assert_eq!(batch.batch_id, "batch-1");
+        assert_eq!(batch.total, 5);
+        assert_eq!(batch.completed, 2);
+        assert_eq!(batch.failed, 1);
+        assert_eq!(batch.status, "Running");
+    }
+
+    #[test]
+    fn on_subagent_batch_updates_existing_entry() {
+        let mut store = make_store();
+        let status1 =
+            serde_json::json!({"total": 5, "completed": 1, "failed": 0, "status": "Running"});
+        on_subagent_batch(&mut store, "batch-1".into(), status1);
+        let status2 =
+            serde_json::json!({"total": 5, "completed": 3, "failed": 0, "status": "Running"});
+        on_subagent_batch(&mut store, "batch-1".into(), status2);
+        assert_eq!(store.parallel_batches.len(), 1);
+        assert_eq!(store.parallel_batches[0].completed, 3);
+    }
+
+    #[test]
+    fn on_subagent_stage_records_stages() {
+        let mut store = make_store();
+        on_subagent_stage(&mut store, "agent-1".into(), "Planning".into());
+        on_subagent_stage(&mut store, "agent-1".into(), "Executing".into());
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.stages, vec!["Planning", "Executing"]);
+    }
+
+    #[test]
+    fn on_subagent_output_caps_at_200_lines() {
+        let mut store = make_store();
+        for i in 0..250 {
+            on_subagent_output(&mut store, "agent-1".into(), format!("line {}", i));
+        }
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.output_lines.len(), 200);
+        assert_eq!(agent.output_lines[0], "line 50");
+        assert_eq!(agent.output_lines[199], "line 249");
+    }
+
+    #[test]
+    fn on_subagent_status_updates_agent() {
+        let mut store = make_store();
+        on_subagent_status(
+            &mut store,
+            "agent-1".into(),
+            "coder".into(),
+            "Running".into(),
+        );
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.agent_type, "coder");
+        assert_eq!(agent.status, "Running");
+    }
+
+    #[test]
+    fn on_subagent_progress_updates_steps() {
+        let mut store = make_store();
+        on_subagent_progress(&mut store, "agent-1".into(), 3, 10);
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.steps, 3);
+        assert_eq!(agent.max_steps, 10);
+    }
+
+    #[test]
+    fn on_subagent_complete_success() {
+        let mut store = make_store();
+        // First ensure the agent exists.
+        on_subagent_status(
+            &mut store,
+            "agent-1".into(),
+            "coder".into(),
+            "Running".into(),
+        );
+        on_subagent_complete(&mut store, "agent-1".into(), true);
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.status, "Completed");
+        assert!(agent.completed_at.is_some());
+    }
+
+    #[test]
+    fn on_subagent_complete_failure() {
+        let mut store = make_store();
+        on_subagent_status(
+            &mut store,
+            "agent-1".into(),
+            "coder".into(),
+            "Running".into(),
+        );
+        on_subagent_complete(&mut store, "agent-1".into(), false);
+        let agent = store.running_agents.get("agent-1").unwrap();
+        assert_eq!(agent.status, "Failed");
+        assert!(agent.completed_at.is_some());
+    }
+
+    #[test]
+    fn on_subagent_complete_unknown_agent_is_noop() {
+        let mut store = make_store();
+        // Should not panic when agent doesn't exist.
+        on_subagent_complete(&mut store, "nonexistent".into(), true);
+        assert!(store.running_agents.is_empty());
+    }
+}

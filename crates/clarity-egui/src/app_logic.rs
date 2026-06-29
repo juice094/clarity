@@ -6,6 +6,7 @@ use crate::App;
 use crate::app_state::AppState;
 use crate::session::{load_sessions, new_session, save_session_internal};
 use crate::settings::GuiSettings;
+use crate::stores::FocusTarget;
 use crate::theme::Theme;
 use crate::ui::types::*;
 impl App {
