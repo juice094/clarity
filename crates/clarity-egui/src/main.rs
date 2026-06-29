@@ -1258,13 +1258,18 @@ impl App {
     /// Search the active session's messages for `find_query` and populate
     /// `find_matches` with the indices of matching messages.
     fn update_find_matches(&mut self) {
-        let query = self.chat_store.find_query.clone();
+        // Skip recomputation when the query hasn't changed — avoids an O(n)
+        // scan over all messages every frame while the find bar is open.
+        if self.chat_store.find_query == self.chat_store.find_last_query {
+            return;
+        }
+        self.chat_store.find_last_query = self.chat_store.find_query.clone();
         self.chat_store.find_matches.clear();
-        if query.is_empty() {
+        if self.chat_store.find_query.is_empty() {
             self.chat_store.find_current = 0;
             return;
         }
-        let query_lower = query.to_lowercase();
+        let query_lower = self.chat_store.find_query.to_lowercase();
         if let Some(session) = self.session_store.active_session() {
             for (i, msg) in session.messages.iter().enumerate() {
                 if msg.content.to_lowercase().contains(&query_lower) {
@@ -1609,6 +1614,12 @@ impl eframe::App for App {
             self.chat_store.stick_to_bottom = true;
             self.chat_store.editing_message_idx = None;
             self.chat_store.edit_buffer.clear();
+            // Close find bar and clear query so stale matches from the
+            // previous session don't persist into the new one.
+            self.chat_store.find_open = false;
+            self.chat_store.find_query.clear();
+            self.chat_store.find_matches.clear();
+            self.chat_store.find_current = 0;
             self.ui_store.focus_target = Some(FocusTarget::ChatInput);
             // Stateful providers (e.g. deepseek-device) must not carry
             // conversation context across clarity sessions.

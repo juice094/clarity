@@ -332,6 +332,7 @@ impl App {
                 find_query: String::new(),
                 find_matches: Vec::new(),
                 find_current: 0,
+                find_last_query: String::new(),
                 draft_status: crate::ui::types::DraftStatus::None,
                 status_message: None,
                 claw_in_flight_session_id: None,

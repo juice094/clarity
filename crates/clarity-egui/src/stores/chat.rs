@@ -86,6 +86,10 @@ pub struct ChatStore {
     pub find_matches: Vec<usize>,
     /// Index into `find_matches` of the currently highlighted match.
     pub find_current: usize,
+    /// Snapshot of the query last used to populate `find_matches`. Used to
+    /// avoid an O(n) scan over all messages every frame when the query
+    /// hasn't changed.
+    pub find_last_query: String,
 }
 
 impl Default for ChatStore {
@@ -116,6 +120,7 @@ impl Default for ChatStore {
             find_query: String::new(),
             find_matches: Vec::new(),
             find_current: 0,
+            find_last_query: String::new(),
         }
     }
 }
