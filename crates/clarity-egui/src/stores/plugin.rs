@@ -6,10 +6,16 @@
 //!
 //! Note: currently staged; not yet wired into App. Kept for upcoming
 //! left-rail plugin integration.
+//!
+//! # Layering
+//!
+//! This store depends only on `crate::settings::GuiSettings` (data type) and
+//! `clarity_core::agent::Agent` (core crate). MCP-aware functions accept their
+//! configuration as a parameter so the store never imports sibling stores
+//! (avoiding the only cross-store dependency in the entire stores/ layer).
 #![allow(dead_code)]
 
 use crate::settings::GuiSettings;
-use crate::stores::McpStore;
 use serde::{Deserialize, Serialize};
 
 /// Source of a plugin entry.
@@ -98,8 +104,11 @@ pub fn skill_plugins(agent: &clarity_core::agent::Agent) -> Vec<PluginItem> {
 }
 
 /// Derive plugin items from connected MCP servers.
-pub fn mcp_plugins(mcp_store: &McpStore) -> Vec<PluginItem> {
-    let Some(config) = &mcp_store.mcp_config else {
+///
+/// Accepts the MCP configuration directly rather than the entire `McpStore`
+/// so this module has zero cross-store dependencies.
+pub fn mcp_plugins(mcp_config: Option<&clarity_core::mcp::config::McpConfig>) -> Vec<PluginItem> {
+    let Some(config) = mcp_config else {
         return Vec::new();
     };
     config
@@ -148,14 +157,17 @@ pub fn webtab_plugins(settings: &GuiSettings) -> Vec<PluginItem> {
 }
 
 /// Collect all available plugin items.
+///
+/// Accepts the MCP configuration directly rather than the entire `McpStore`
+/// so this module has zero cross-store dependencies.
 pub fn all_plugins(
     agent: &clarity_core::agent::Agent,
-    mcp_store: &McpStore,
+    mcp_config: Option<&clarity_core::mcp::config::McpConfig>,
     settings: &GuiSettings,
 ) -> Vec<PluginItem> {
     let mut items = builtin_plugins();
     items.extend(skill_plugins(agent));
-    items.extend(mcp_plugins(mcp_store));
+    items.extend(mcp_plugins(mcp_config));
     items.extend(webtab_plugins(settings));
     items
 }
