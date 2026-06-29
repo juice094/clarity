@@ -1598,6 +1598,20 @@ impl eframe::App for App {
             self.timeout_claw_pairing();
         }
 
+        // Persist window position every ~5 s so it survives crashes.
+        if self.ui_store.frame_count % 300 == 0 {
+            if let Some(rect) = ctx.input(|i| i.viewport().outer_rect) {
+                let pos = rect.min;
+                let dirty = self.settings_store.settings_edit.window_x != Some(pos.x)
+                    || self.settings_store.settings_edit.window_y != Some(pos.y);
+                if dirty {
+                    self.settings_store.settings_edit.window_x = Some(pos.x);
+                    self.settings_store.settings_edit.window_y = Some(pos.y);
+                    let _ = self.commit_settings();
+                }
+            }
+        }
+
         // Refresh shell prompt (~1 Hz) to track cwd / git branch changes.
         if self.ui_store.frame_count % 60 == 0 {
             self.refresh_shell_prompt();
@@ -1785,16 +1799,23 @@ fn main() -> eframe::Result {
         }
     }));
 
+    // Load settings early so we can restore the saved window position before
+    // the window is created.
+    let settings_early = crate::settings::GuiSettings::load();
     let options = eframe::NativeOptions {
         viewport: {
             let theme_defaults = crate::theme::Theme::default();
-            egui::ViewportBuilder::default()
+            let mut builder = egui::ViewportBuilder::default()
                 .with_inner_size([
                     theme_defaults.window_default_w,
                     theme_defaults.window_default_h,
                 ])
                 .with_min_inner_size([theme_defaults.window_min_w, theme_defaults.window_min_h])
-                .with_decorations(false)
+                .with_decorations(false);
+            if let (Some(x), Some(y)) = (settings_early.window_x, settings_early.window_y) {
+                builder = builder.with_position([x, y]);
+            }
+            builder
         },
         ..Default::default()
     };

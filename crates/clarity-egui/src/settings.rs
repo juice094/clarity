@@ -141,6 +141,11 @@ pub struct GuiSettings {
     /// Maps to `clarity_core::endpoint::EndpointDescriptor.id`.
     #[serde(default)]
     pub active_persona_id: Option<String>,
+    /// Saved window position (None = let OS decide).
+    #[serde(default)]
+    pub window_x: Option<f32>,
+    #[serde(default)]
+    pub window_y: Option<f32>,
     /// S6 Phase C: whether the right rail drawer is visible.
     #[serde(default)]
     pub right_rail_visible: bool,
@@ -355,6 +360,8 @@ impl Default for GuiSettings {
             font_scale: None,
             content_width: None,
             sidebar_width: None,
+            window_x: None,
+            window_y: None,
             web_tabs: Vec::new(),
             active_persona_id: None,
             right_rail_visible: false,

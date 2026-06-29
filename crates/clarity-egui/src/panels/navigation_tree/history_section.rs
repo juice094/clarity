@@ -86,6 +86,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
 
             let active_session_id = app.session_store.active_session_id.clone();
             let mut clicked_id: Option<String> = None;
+            let mut close_ids: Vec<String> = Vec::new();
             let count = sessions.len();
             // Cap visible body height so the sidebar scroll area handles overflow.
             let max_h = (count as f32 * EST_ROW_HEIGHT).min(theme.palette_max_h);
@@ -97,23 +98,42 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                     for session in &sessions[range] {
                         let is_active = session.is_active && session.id == active_session_id;
                         let icon = session_icon(session);
+                        let session_id = session.id.clone();
+                        // Store diff stats so we can render them inside the
+                        // trailing slot alongside the close button.
+                        let diff_badge = session
+                            .diff_stats
+                            .as_ref()
+                            .map(|s| format!("+{} -{}", s.lines_added, s.lines_removed));
 
-                        let resp =
-                            crate::widgets::nav_row(ui, &theme, icon, &session.title, is_active);
-                        // Render diff stats badge if present.
-                        if let Some(ref stats) = session.diff_stats {
-                            let badge = format!("+{} -{}", stats.lines_added, stats.lines_removed);
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
+                        let resp = crate::widgets::nav_row_with_trailing(
+                            ui,
+                            &theme,
+                            icon,
+                            &session.title,
+                            is_active,
+                            |ui| {
+                                if let Some(ref badge) = diff_badge {
                                     ui.label(
-                                        egui::RichText::new(&badge)
+                                        egui::RichText::new(badge)
                                             .size(theme.text_xs)
                                             .color(theme.text_dim),
                                     );
-                                },
-                            );
-                        }
+                                }
+                                // Close (archive) button — visible on hover.
+                                let close_btn = crate::widgets::icon_button(
+                                    ui,
+                                    crate::theme::ICON_X,
+                                    theme.text_xs,
+                                    egui::Color32::TRANSPARENT,
+                                    egui::CornerRadius::same(4),
+                                    &theme,
+                                );
+                                if close_btn.clicked() {
+                                    close_ids.push(session_id);
+                                }
+                            },
+                        );
                         if resp.clicked() && !session.is_active {
                             clicked_id = Some(session.id.clone());
                         }
@@ -121,6 +141,9 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                 });
 
             // Deferred mutation — apply after the render pass releases app borrows.
+            for id in close_ids {
+                app.set_session_archived(id, true);
+            }
             if let Some(id) = clicked_id {
                 app.switch_to_session(id);
             }

@@ -257,7 +257,58 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        Self::dark()
+        Self::system()
+    }
+}
+
+/// Detect whether the OS is using a dark color scheme.
+///
+/// Returns `true` for dark mode, `false` for light. Falls back to dark
+/// if detection fails on any platform.
+fn is_system_dark_mode() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows 10+ registry: AppsUseLightTheme = 0 means dark mode.
+        std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                !stdout.contains("0x1") // 0x0 = dark
+            })
+            .unwrap_or(true) // default dark
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                stdout.trim() == "Dark"
+            })
+            .unwrap_or(true)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        // Linux: check gsettings first, fall back to env var.
+        std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                stdout.contains("dark") || stdout.contains("prefer-dark")
+            })
+            .unwrap_or_else(|_| {
+                std::env::var("GTK_THEME")
+                    .map(|t| t.to_lowercase().contains("dark"))
+                    .unwrap_or(true)
+            })
     }
 }
 
@@ -513,8 +564,8 @@ fn shared_tokens(overlay_base: egui::Color32) -> SharedTokens {
         content_min_width: 480.0,
         window_default_w: 1280.0,
         window_default_h: 800.0,
-        window_min_w: 900.0,
-        window_min_h: 600.0,
+        window_min_w: 680.0,
+        window_min_h: 480.0,
         window_edge_zone: 10.0,
         size_sidebar_collapsed: 36.0,
         size_tab_h: 28.0,
@@ -533,7 +584,7 @@ fn shared_tokens(overlay_base: egui::Color32) -> SharedTokens {
         size_tab_max_w: 180.0,
         size_close_btn_w: 18.0,
         size_accent_line_h: 1.0,
-        breakpoint_compact: 768.0,
+        breakpoint_compact: 680.0,
         breakpoint_medium: 1100.0,
         breakpoint_wide: 1400.0,
     }
@@ -776,6 +827,16 @@ impl Theme {
     /// - Ice-blue accent (#5B8DEF) harmonises with the cool glass aesthetic.
     /// - Larger corner radii (12/20 px) reinforce the modern glass feel.
     ///
+    /// Auto-detect the system color scheme and return the matching theme.
+    /// Falls back to dark if detection fails.
+    pub fn system() -> Self {
+        if is_system_dark_mode() {
+            Self::dark()
+        } else {
+            Self::light()
+        }
+    }
+
     /// Kimi-style dark theme — mimics Kimi Desktop v3.0.15 dark palette.
     pub fn dark() -> Self {
         let mut t = Self::from_palette(
@@ -984,8 +1045,8 @@ impl Theme {
             // Chrome dimensions (P0.5.F.1, shared)
             window_default_w: 1280.0,
             window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
+            window_min_w: 680.0,
+            window_min_h: 480.0,
             window_edge_zone: 10.0,
             size_sidebar_collapsed: 36.0,
             size_tab_h: 28.0,
