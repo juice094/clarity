@@ -64,6 +64,7 @@ impl ApiFormat {
     }
 
     /// Parses from a string.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "anthropic-messages" => Self::AnthropicMessages,
@@ -119,6 +120,7 @@ impl AuthMode {
     }
 
     /// Parses from a string, defaulting to `Token`.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "password" => Self::Password,
@@ -286,13 +288,21 @@ impl ProviderDefinition {
         Ok(())
     }
 
-    /// Decrypt the stored password, if any.
-    pub fn resolve_password(&self) -> Option<String> {
-        let ciphertext = self.password_enc.as_ref()?;
-        // ponytail: failures to load the secret store or decrypt are silently
-        // treated as "no password"; callers validate presence before use.
-        let store = clarity_llm::default_secret_store().ok()?;
-        store.decrypt(ciphertext).ok()
+    /// Decrypt the stored password.
+    ///
+    /// Returns `Ok(Some(plaintext))` on success, `Ok(None)` when no password
+    /// is stored, or `Err(msg)` when the secret store is unavailable or
+    /// decryption fails (e.g. corrupted key file).
+    pub fn resolve_password(&self) -> Result<Option<String>, String> {
+        let Some(ciphertext) = self.password_enc.as_ref() else {
+            return Ok(None);
+        };
+        let store = clarity_llm::default_secret_store()
+            .map_err(|e| format!("Failed to load secret store: {e}"))?;
+        store
+            .decrypt(ciphertext)
+            .map(Some)
+            .map_err(|e| format!("Failed to decrypt password: {e}"))
     }
 
     /// Clear any stored password.
@@ -408,9 +418,12 @@ impl ProviderDefinition {
         }
 
         if self.auth_mode.is_password() {
-            let password = self.resolve_password().ok_or_else(|| {
-                "DeepSeek (Device) password mode requires a saved password.".to_string()
-            })?;
+            let password = self
+                .resolve_password()
+                .map_err(|e| format!("Password decryption failed: {e}"))?
+                .ok_or_else(|| {
+                    "DeepSeek (Device) password mode requires a saved password.".to_string()
+                })?;
             if self.mobile.is_empty() {
                 return Err("DeepSeek (Device) password login requires a mobile number.".into());
             }
@@ -1004,12 +1017,12 @@ api_format = "deep-seek-device"
         assert!(def.password_enc.is_some());
         assert!(!def.password_enc.as_ref().unwrap().is_empty());
         assert_eq!(
-            def.resolve_password().as_deref(),
+            def.resolve_password().unwrap().as_deref(),
             Some("my-secret-password")
         );
 
         def.clear_password();
-        assert!(def.resolve_password().is_none());
+        assert!(def.resolve_password().unwrap().is_none());
     }
 
     #[test]
@@ -1077,6 +1090,86 @@ api_format = "deep-seek-device"
         assert_eq!(
             ApiFormat::DeepSeekDevice.runtime_api_format(),
             "deepseek_device"
+        );
+    }
+
+    #[test]
+    fn test_api_format_from_str_falls_back_to_openai() {
+        // Unknown strings default to OpenaiCompletions.
+        assert_eq!(
+            ApiFormat::from_str("unknown-format"),
+            ApiFormat::OpenaiCompletions
+        );
+        assert_eq!(ApiFormat::from_str(""), ApiFormat::OpenaiCompletions);
+        assert_eq!(
+            ApiFormat::from_str("openai-completions"),
+            ApiFormat::OpenaiCompletions
+        );
+    }
+
+    #[test]
+    fn test_api_format_from_str_all_variants() {
+        assert_eq!(
+            ApiFormat::from_str("anthropic-messages"),
+            ApiFormat::AnthropicMessages
+        );
+        assert_eq!(ApiFormat::from_str("kimi"), ApiFormat::Kimi);
+        assert_eq!(
+            ApiFormat::from_str("deepseek-device"),
+            ApiFormat::DeepSeekDevice
+        );
+    }
+
+    #[test]
+    fn test_api_format_as_str_roundtrip() {
+        for fmt in [
+            ApiFormat::OpenaiCompletions,
+            ApiFormat::AnthropicMessages,
+            ApiFormat::Kimi,
+            ApiFormat::DeepSeekDevice,
+        ] {
+            assert_eq!(ApiFormat::from_str(fmt.as_str()), fmt);
+        }
+    }
+
+    #[test]
+    fn test_provider_definition_default_is_empty() {
+        let def = ProviderDefinition::default();
+        assert!(def.id.is_empty());
+        assert!(def.models.is_empty());
+        // AuthType default is ApiKey, not None.
+        assert_eq!(def.auth_type, AuthType::ApiKey);
+        assert!(!def.builtin);
+        assert!(def.tags.is_empty());
+    }
+
+    #[test]
+    fn test_provider_definition_display_name_when_set() {
+        let def = ProviderDefinition {
+            id: "my-id".into(),
+            display_name: "Pretty Name".into(),
+            ..Default::default()
+        };
+        assert_eq!(def.display(), "Pretty Name");
+    }
+
+    #[test]
+    fn test_auth_type_serde_roundtrip() {
+        for auth in [AuthType::ApiKey, AuthType::OAuth, AuthType::None] {
+            let json = serde_json::to_string(&auth).unwrap();
+            let restored: AuthType = serde_json::from_str(&json).unwrap();
+            assert_eq!(auth, restored, "roundtrip failed for {:?}", auth);
+        }
+    }
+
+    #[test]
+    fn test_auth_type_kebab_case_serialization() {
+        let json = serde_json::to_value(&AuthType::ApiKey).unwrap();
+        // kebab-case: "ApiKey" → "api-key"
+        assert!(json.as_str().unwrap().contains("api"), "got: {}", json);
+        assert!(
+            !json.as_str().unwrap().contains('_'),
+            "should be kebab-case"
         );
     }
 }

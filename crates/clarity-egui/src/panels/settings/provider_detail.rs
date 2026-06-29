@@ -649,7 +649,10 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
                     }
                     let prov = app.settings_store.provider_registry.get(&current).cloned();
                     let mobile = prov.as_ref().map(|p| p.mobile.clone()).unwrap_or_default();
-                    let has_password = prov.as_ref().and_then(|p| p.resolve_password()).is_some();
+                    let has_password = prov
+                        .as_ref()
+                        .and_then(|p| p.resolve_password().ok().flatten())
+                        .is_some();
                     if mobile.is_empty() || !has_password {
                         app.push_toast(
                             "DeepSeek (Device) password mode requires mobile and password",
