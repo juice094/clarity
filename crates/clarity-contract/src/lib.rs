@@ -244,6 +244,7 @@ pub use rollout::{
     RolloutLine, RolloutResponseItem, SessionMeta, SessionMetaLine, SessionSource, ThreadSource,
     TurnContextItem,
 };
+pub use rollout_retention::{RetentionPolicy, prune_files};
 pub use subagent::{
     AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle, BatchStatus,
     CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,

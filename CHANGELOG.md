@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **可靠性基础设施 — syncthing-rust 生产模式融合（2026-06-29）**
+  - `clarity-contract` 新增 `retry` 模块：`RetryConfig`（指数退避+抖动）、`ExponentialBackoff`、`RestartPolicy`、`RestartConfig`（任务监督）、`ConnectionState`（连接状态机）、`AddressType`（URL 风格序列化）、`HeartbeatConfig`（传输感知心跳）、`ConnectionMetrics`（无锁原子计数器）
+  - `clarity-contract` 新增 `rollout_retention` 模块：`RetentionPolicy`（CountBased/AgeBased/Staggered/Unlimited）、`prune_files()`
+  - `clarity-core` 新增 `agent::supervisor`：`Supervisor` + `SupervisedTask`（工厂模式任务监督、指数退避重启、永久失败检测、优雅关闭）
+  - `clarity-core` 新增 `agent::orchestrator`：`ToolOrchestrator`（信号量并发控制、确定性抖动、RAII Permit、优先级调度）
+  - `clarity-core` 新增 `agent::tool_cache`：`ToolResultCache`（内容寻址 LRU 缓存、TTL 过期、volatile 工具排除、per-turn 生命周期）
+  - `clarity-core` 新增 `agent::workspace_diff`：`WorkspaceDiff`（快照对比、mtime 变更检测、安全边界上限）
+  - `clarity-core` 新增 `agent::compaction_cache`：`CompactionCache`（确定性 hash key、LRU 淘汰、TTL 过期）
+  - `clarity-wire` 新增 `WireEventBuffer`：环形缓冲 + 序列号、`events_since()` 重连回放、集成到 `WireSoulSide::send`
+  - `clarity-llm` 新增 `provider_race`：`RacingProvider`（并发 LLM 竞速、oneshot winner channel、EMA 延迟跟踪、分数板）
+  - `clarity-claw` 新增 `watchdog`：`GatewayWatchdog`（TCP 健康探针、读取 restart-intent.json、自愈重启，闭合 Gateway 健康监控环路）
+  - `clarity-claw` 新增 `netmon`：`NetMonitor`（netdev 轮询、网络接口变更事件、MissedTickBehavior::Skip）
+  - `clarity-claw` 重写 `connection_manager`：管理器级重连循环 + `RetryConfig` 退避、`StartNetmon` 主动重连、`ConnectionMetrics` 集成
+  - `clarity-claw` `mesh::merger` 增强：`ConflictStrategy`、`dominates()`、`resolve_scalar_conflict()`、`MergeResult` 冲突报告
+  - `clarity-gateway` 集成：`AppState.event_wire` 共享 Wire + `Subscribe` 消息 + 事件回放、`AppState.metrics` + `GET /health/metrics` 端点
+  - Agent LLM 重试路径升级：`retry_with_backoff` 使用 `RetryConfig::backoff_duration()` (±25% 抖动)
+  - Agent 工具分发路径集成 `ToolOrchestrator`（并行+串行获取许可）
+  - Agent `refresh_context` 集成 `WorkspaceDiff`（每 turn 检测文件变更）和 `ToolResultCache`（每 turn 清空）
+
 ### Changed
 
 - **重构 `clarity-anthropic-proxy` 与 `clarity-llm` 的 Anthropic 适配层（2026-06-29）**

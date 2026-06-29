@@ -286,7 +286,14 @@ pub fn on_chunk(
                 } else {
                     last.blocks.push(ContentBlock::Text { text: text.clone() });
                 }
-                // Deferred: prepare() will be called in on_done() after streaming ends.
+                // Incrementally re-parse markdown every 5 chunks so code
+                // blocks, lists, and formatting appear during streaming
+                // instead of only at the end. Cached height is cleared so
+                // the message list re-measures the growing bubble.
+                if chat_store.chunks_since_save % 5 == 0 {
+                    last.prepare();
+                    last.cached_height = None;
+                }
                 // Bump updated_at so the auto-save timer can persist partial
                 // responses mid-stream, guarding against crash data loss.
                 session.updated_at = crate::session::now_millis();

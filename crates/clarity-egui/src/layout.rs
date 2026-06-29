@@ -87,10 +87,17 @@ fn apply_responsive_breakpoints(app: &mut App, ctx: &egui::Context) {
 
 /// Compute region widths from current view state.
 fn compute_metrics(app: &App, ctx: &egui::Context) -> LayoutMetrics {
+    // Use the user-resized width if available; fall back to the theme default.
+    // This keeps the chat area stable when the right rail toggles or resizes
+    // because the measurement matches the actual rendered width.
+    let right_w = app
+        .ui_store
+        .right_rail_width
+        .unwrap_or(app.ui_store.theme.size_panel_right);
     compute_metrics_raw(
         ctx.screen_rect().width(),
         app.ui_store.theme.size_sidebar,
-        app.ui_store.theme.size_panel_right,
+        right_w,
         app.view_state.left_rail_expanded,
         app.view_state.right_rail_visible,
     )
@@ -102,7 +109,7 @@ fn compute_metrics_raw(
     size_sidebar: f32,
     size_panel_right: f32,
     left_rail_expanded: bool,
-    right_rail_visible: bool,
+    _right_rail_visible: bool,
 ) -> LayoutMetrics {
     // S6 Phase D: the left chrome is a single fixed-width navigation tree.
     let left_rail_w = if left_rail_expanded {
@@ -111,11 +118,11 @@ fn compute_metrics_raw(
         0.0
     };
     let left_panel_w = 0.0;
-    let right_rail_w = if right_rail_visible {
-        size_panel_right
-    } else {
-        0.0
-    };
+    // Use the actual rendered width regardless of the visibility flag.
+    // During close animation, right_rail_visible is false but the panel
+    // is still rendering with decreasing width. Using the real width
+    // from ui_store avoids the chat area jumping to full width mid-animation.
+    let right_rail_w = size_panel_right;
     let content_w = current_width - left_rail_w - left_panel_w - right_rail_w;
 
     LayoutMetrics {

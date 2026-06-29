@@ -625,13 +625,14 @@ impl App {
         } else {
             0.0
         };
-        let right_w = if self.view_state.right_rail_visible {
+        let right_w =
             self.ui_store
                 .right_rail_width
-                .unwrap_or(theme.size_panel_right)
-        } else {
-            0.0
-        };
+                .unwrap_or(if self.view_state.right_rail_visible {
+                    theme.size_panel_right
+                } else {
+                    0.0
+                });
 
         let screen = ctx.screen_rect();
         let titlebar_h = theme.size_titlebar;
@@ -700,13 +701,14 @@ impl App {
         } else {
             theme.size_sidebar_collapsed
         };
-        let right_w = if self.view_state.right_rail_visible {
+        let right_w =
             self.ui_store
                 .right_rail_width
-                .unwrap_or(theme.size_panel_right)
-        } else {
-            0.0
-        };
+                .unwrap_or(if self.view_state.right_rail_visible {
+                    theme.size_panel_right
+                } else {
+                    0.0
+                });
 
         egui::TopBottomPanel::bottom("status_bar")
             .exact_height(theme.size_statusbar)
@@ -724,12 +726,15 @@ impl App {
             .show(ctx, |ui| {
                 // Inset horizontally to match the main stage bounds.
                 let content_w = ui.available_width() - left_w - right_w;
-                ui.allocate_ui_with_layout(
+                let content_max_rect = egui::Rect::from_min_size(
+                    egui::pos2(ui.min_rect().min.x + left_w, ui.min_rect().min.y),
                     egui::vec2(content_w, theme.size_statusbar),
-                    egui::Layout::left_to_right(egui::Align::Center),
+                );
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new()
+                        .max_rect(content_max_rect)
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     |ui| {
-                        // Clip content so long labels don't bleed into other
-                        // chrome elements on very narrow windows.
                         ui.set_clip_rect(ui.max_rect());
                         // Left: git branch / shell prompt.
                         let prompt = &self.ui_store.shell_prompt;
@@ -741,44 +746,42 @@ impl App {
                             );
                         }
 
-                        // Right: agent status + model.
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = theme.space_8;
+                        // Elastic spacer — pushes everything after it to the right.
+                        ui.add_space(ui.available_width() - 160.0);
 
-                            // Model name.
-                            let model = &self.settings_store.settings_edit.model;
-                            if !model.is_empty() && model != "auto" {
-                                ui.label(
-                                    egui::RichText::new(model.as_str())
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                );
-                            }
-
-                            // Agent status dot + label.
-                            let (dot_color, label) = match self.chat_store.agent_status {
-                                crate::ui::types::AgentStatus::Online
-                                | crate::ui::types::AgentStatus::Unconfigured => {
-                                    (theme.status_online, "Ready")
-                                }
-                                crate::ui::types::AgentStatus::Busy => (theme.status_busy, "Busy"),
-                                crate::ui::types::AgentStatus::Offline => {
-                                    (theme.status_offline, "Offline")
-                                }
-                            };
-                            let dot_radius = theme.space_4 / 2.0;
-                            let (dot_rect, _) = ui.allocate_exact_size(
-                                egui::vec2(dot_radius * 2.0, dot_radius * 2.0),
-                                egui::Sense::hover(),
-                            );
-                            ui.painter()
-                                .circle_filled(dot_rect.center(), dot_radius, dot_color);
+                        // Right: model name + agent status.
+                        ui.spacing_mut().item_spacing.x = theme.space_8;
+                        let model = &self.settings_store.settings_edit.model;
+                        if !model.is_empty() && model != "auto" {
                             ui.label(
-                                egui::RichText::new(label)
+                                egui::RichText::new(model.as_str())
                                     .size(theme.text_xs)
-                                    .color(theme.text_muted),
+                                    .color(theme.text_dim),
                             );
-                        });
+                        }
+                        // Agent status dot + label.
+                        let (dot_color, label) = match self.chat_store.agent_status {
+                            crate::ui::types::AgentStatus::Online
+                            | crate::ui::types::AgentStatus::Unconfigured => {
+                                (theme.status_online, "Ready")
+                            }
+                            crate::ui::types::AgentStatus::Busy => (theme.status_busy, "Busy"),
+                            crate::ui::types::AgentStatus::Offline => {
+                                (theme.status_offline, "Offline")
+                            }
+                        };
+                        let dot_radius = theme.space_4 / 2.0;
+                        let (dot_rect, _) = ui.allocate_exact_size(
+                            egui::vec2(dot_radius * 2.0, dot_radius * 2.0),
+                            egui::Sense::hover(),
+                        );
+                        ui.painter()
+                            .circle_filled(dot_rect.center(), dot_radius, dot_color);
+                        ui.label(
+                            egui::RichText::new(label)
+                                .size(theme.text_xs)
+                                .color(theme.text_muted),
+                        );
                     },
                 );
             });
@@ -817,7 +820,13 @@ impl App {
     /// the Bot bar. The old stacked-card content lives in `panels::right_rail`
     /// and will be migrated into the new IDE panels over the next iterations.
     fn render_right_rail(&mut self, ctx: &egui::Context) {
-        if !self.view_state.right_rail_visible {
+        // Allow rendering during close animation: the rail is still
+        // visible (decreasing width) while the animation runs. Only
+        // skip when fully collapsed with no animation in progress.
+        let panel_is_none =
+            self.view_state.right_rail_panel == clarity_core::ui::RightRailPanel::None;
+        let anim_done = self.panel_animation.right_panel_width.done;
+        if !self.view_state.right_rail_visible && panel_is_none && anim_done {
             return;
         }
         crate::panels::right_ide_panel::render_right_ide_panel(self, ctx);

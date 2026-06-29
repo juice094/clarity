@@ -11,6 +11,7 @@
 //! - State persistence
 //! - Parallel tool execution
 
+pub mod compaction_cache;
 pub mod compaction_service;
 pub mod config;
 pub mod controller;

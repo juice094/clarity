@@ -504,6 +504,14 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 - **前端美化**：System 消息 glass pill、代码块行号 + shadow + >30 行折叠、文件路径可点击（主击打开/右键复制）、TUI 风格 `─` 分隔符、Toast 图标 + 动画 + ×关闭、气泡 hover 时间戳、面板过渡动画、滚动到底部按钮、VS Code 2px accent 导航条、delta diff 左边 accent 条、fuzzy 命令面板。
 - **事件层下沉**：`ToolCallProgress` WireMessage → UiEvent → Console 显示 已全栈贯通；`StreamDelta.partial_tool_calls` 编译修复覆盖 6 个 crate。
 - **配套更新**：TUI 状态栏增加模型名称、Gateway Web 增加 `tool_call_progress` handler + TypeScript 类型、CLAUDE.md 全面反映新架构。
+- **可靠性基础设施 — syncthing-rust 生产模式融合（2026-06-29）**：全方位分析 syncthing-rust 的 14 个生产模式并融合到 Clarity 各层。
+  - **连接可靠性**：`RetryConfig`（指数退避+抖动）、`Supervisor`（任务监督+自动重启）、`ClawConnectionManager` 重连循环、`GatewayWatchdog`（自愈闭环）、`NetMonitor`（网络变更主动重连）。
+  - **可观测性**：`ConnectionMetrics`（无锁原子计数器）、`GET /health/metrics` 端点、`WireEventBuffer`（重连事件回放）。
+  - **资源编排**：`ToolOrchestrator`（信号量并发控制+确定性抖动+优先级调度）。
+  - **缓存优化**：`ToolResultCache`（内容寻址 LRU 工具结果缓存）、`CompactionCache`（确定性 hash LLM 压缩缓存）、`RacingProvider`（并行 LLM 竞速，P99 延迟 ~27s→~3s）。
+  - **数据管理**：`WorkspaceDiff`（快照对比文件变更检测）、`RetentionPolicy`（分级保留策略防 rollout 无限增长）。
+  - **冲突解决**：`dominates()` / `resolve_scalar_conflict()`（版本向量确定性与决胜）。
+  - 16 个新模块，~4300 LOC，87+ 新测试，零架构不变式违规。
 
 ### 11.2 实验性 / 未完成方向
 

@@ -102,10 +102,14 @@ impl Default for CompactionServiceConfig {
 /// Service that compacts conversation history by summarizing old messages
 #[derive(Debug, Clone)]
 pub struct CompactionService {
+    #[allow(clippy::type_complexity)]
     config: CompactionServiceConfig,
     tier1_enabled: bool,
     session_store: Option<Arc<clarity_memory::SessionStore>>,
     session_id: String,
+    /// Cache for LLM compaction results to avoid redundant summarization calls.
+    /// Uses RefCell for interior mutability since `maybe_compact` takes `&self`.
+    cache: Arc<parking_lot::Mutex<crate::agent::compaction_cache::CompactionCache>>,
 }
 
 impl CompactionService {
@@ -120,6 +124,9 @@ impl CompactionService {
             tier1_enabled: true,
             session_store: None,
             session_id,
+            cache: Arc::new(parking_lot::Mutex::new(
+                crate::agent::compaction_cache::CompactionCache::new(),
+            )),
         }
     }
 
@@ -357,6 +364,17 @@ impl CompactionService {
         ];
         let tools = serde_json::json!({ "functions": [] });
 
+        // Check the compaction cache before calling the LLM.
+        let cache_key = crate::agent::compaction_cache::CompactionCache::hash_messages(messages);
+        if let Some(cached) = self.cache.lock().get(cache_key) {
+            tracing::info!(
+                "Compaction cache hit, reusing cached summary ({} messages)",
+                cached.len()
+            );
+            *messages = cached;
+            return Ok(());
+        }
+
         match llm.complete(&prompt, &tools).await {
             Ok(response) => {
                 let summary = response.content;
@@ -376,6 +394,9 @@ impl CompactionService {
 
                 // Append the recent messages that were left intact.
                 new_messages.extend(messages[split_index..].iter().cloned());
+
+                // Cache the compaction result for future turns.
+                self.cache.lock().put(cache_key, new_messages.clone());
 
                 *messages = new_messages;
                 Ok(())

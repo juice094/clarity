@@ -1,6 +1,6 @@
 # clarity-contract
 
-Minimal trait contracts for AI agent tools: `Tool` trait, capability tokens, and structured errors. Extract this crate when you need a zero-dependency foundation for tool interoperability without pulling in the full Clarity engine.
+Shared contract types for the Clarity ecosystem: reliability primitives (`RetryConfig`, `ExponentialBackoff`, `RestartConfig`, `ConnectionState`, `HeartbeatConfig`, `ConnectionMetrics`), retention policies (`RetentionPolicy`), identity types (`User`, `Team`, `Organization`, `TeamPolicy`, `PermissionPolicy`), LLM abstractions (`LlmProvider`, `Tool`), and structured errors. Zero internal dependencies — all other Clarity crates build on this.
 
 ## Why use this instead of...
 

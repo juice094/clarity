@@ -1497,6 +1497,7 @@ dependencies = [
  "clarity-contract",
  "clarity-memory",
  "clarity-secrets",
+ "dashmap 6.1.0",
  "dirs 5.0.1",
  "futures",
  "hf-hub",

@@ -127,39 +127,53 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
         bottom: inset,
     };
 
-    // ── Animation: detect panel state transitions ──
+    // ── Animation state machine ──
+    // `right_rail_visible` is now driven by the animation, not set
+    // imperatively by `collapse_right_rail()`. This prevents the chat
+    // area from jumping to full width while the close animation runs.
     let current_panel = Some(app.view_state.right_rail_panel);
-    let visible = app.view_state.right_rail_visible;
     let prev = app.panel_animation.prev_panel;
+
+    // Detect open: panel went from None to a real panel.
     if current_panel != prev
-        && (current_panel.is_some() && current_panel != Some(RightRailPanel::None))
+        && current_panel != Some(RightRailPanel::None)
+        && prev == Some(RightRailPanel::None)
     {
-        // Panel switched — animate width from 0 to target.
-        let target_w = theme.size_panel_right;
+        app.view_state.right_rail_visible = true;
+        let user_w = app
+            .ui_store
+            .right_rail_width
+            .unwrap_or(theme.size_panel_right);
         app.panel_animation.right_panel_width =
-            crate::animation::FloatAnimation::start(0.0, target_w, theme.duration_normal);
-    } else if !visible && prev.is_some() && prev != Some(RightRailPanel::None) {
-        // Panel collapsed — cubic-ease-out close animation.
+            crate::animation::FloatAnimation::start(0.0, user_w, theme.duration_normal);
+    }
+    // Detect close: panel went from a real panel to None.
+    else if current_panel == Some(RightRailPanel::None)
+        && prev.is_some()
+        && prev != Some(RightRailPanel::None)
+    {
         let current_w = app.panel_animation.right_panel_width.current();
         app.panel_animation.right_panel_width =
             crate::animation::FloatAnimation::start(current_w, 0.0, theme.duration_normal);
     }
     app.panel_animation.prev_panel = current_panel;
 
-    // Animated width: interpolate during transition, latch at user preference
-    // or theme default once the animation completes.
+    // Compute effective width based on animation progress.
+    let anim_done = app.panel_animation.right_panel_width.done;
+    let is_closing = current_panel == Some(RightRailPanel::None);
     let anim_w = app.panel_animation.right_panel_width.current();
+
+    // When closing animation completes, hide the panel and stop rendering.
+    if anim_done && is_closing {
+        app.view_state.right_rail_visible = false;
+        return;
+    }
+    // When open animation completes, use the user's preferred width.
     let user_w = app
         .ui_store
         .right_rail_width
         .unwrap_or(theme.size_panel_right);
-    let effective_w = if app.panel_animation.right_panel_width.done && !visible {
-        return; // Panel is fully collapsed, don't render.
-    } else if app.panel_animation.right_panel_width.done {
-        user_w // Animation done: use user preference.
-    } else {
-        anim_w.max(0.0) // Animating: use interpolated value.
-    };
+    let effective_w = if anim_done { user_w } else { anim_w.max(0.0) };
 
     let panel_response = egui::SidePanel::right("right_ide_panel")
         // LAYOUT-EXEMPT: panel width bounds chosen for IDE-style utility rail.
