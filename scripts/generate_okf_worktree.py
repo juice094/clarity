@@ -22,7 +22,6 @@ CRATES = [
             "clarity-tools",
             "clarity-channels",
             "clarity-secrets",
-            "clarity-openclaw",
             "clarity-rollout",
             "clarity-thread-store",
             "clarity-telemetry",
@@ -160,22 +159,6 @@ CRATES = [
             "Local keyring integration",
         ],
         "note": "Used by `models.toml` per-alias encrypted keys.",
-    },
-    {
-        "id": "clarity-openclaw",
-        "name": "clarity-openclaw",
-        "type": "openclaw",
-        "layer": "infrastructure",
-        "depends_on": ["clarity-contract"],
-        "consumed_by": ["clarity-core", "clarity-egui"],
-        "summary": "OpenClaw/KimiClaw Gateway WebSocket client and device identity.",
-        "responsibilities": [
-            "Device discovery",
-            "Paired token management",
-            "Gateway WebSocket dialect detection",
-            "Protocol translation fallback",
-        ],
-        "note": "Internal Clarity mesh uses Gateway WebSocket; OpenClaw JSON-RPC is external fallback.",
     },
     {
         "id": "clarity-subagents",
@@ -337,16 +320,18 @@ CRATES = [
         "name": "clarity-claw",
         "type": "claw",
         "layer": "presentation",
-        "depends_on": ["clarity-core"],
-        "consumed_by": [],
-        "summary": "System-tray background monitor.",
+        "depends_on": ["clarity-contract"],
+        "consumed_by": ["clarity-egui"],
+        "summary": "Unified client-side Claw node: UI-agnostic library + system-tray binary.",
         "responsibilities": [
-            "Tray icon",
-            "OS notifications",
             "Gateway WebSocket client",
+            "OpenClaw/KimiClaw JSON-RPC compatibility layer",
+            "Device discovery / identity / pairing",
+            "Role-context sync",
+            "Tray icon and OS notifications",
             "Task monitoring",
         ],
-        "note": "Only communicates through Gateway WebSocket; not an external OpenClaw adapter.",
+        "note": "Merged from former clarity-openclaw; internal Clarity mesh uses Gateway WebSocket, OpenClaw JSON-RPC is external fallback.",
     },
     {
         "id": "clarity-headless",
@@ -472,14 +457,14 @@ id: clarity-worktree
 name: Clarity Project Worktree
 description: OKF knowledge bundle describing the Clarity crate topology, responsibilities, and dependency graph.
 version: 0.3.4-rc
-date: 2026-06-25
+date: 2026-06-29
 source_repo: https://github.com/juice094/clarity
 ---
 
 # Clarity Project Worktree
 
-This OKF bundle describes the 23 crate directories in the Clarity workspace:
-22 active workspace members + 1 archived (`clarity-tauri`), plus the
+This OKF bundle describes the 20 crate directories in the Clarity workspace:
+19 active workspace members + 1 archived (`clarity-tauri`), plus the
 `tests/integration` integration-test crate.
 
 ## Layers

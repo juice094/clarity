@@ -274,6 +274,7 @@ mod tests {
             archived: false,
             messages: vec![],
             updated_at: 0,
+            last_saved_at: 0,
             turn_heights: vec![],
             provider_state: HashMap::new(),
             in_flight: false,

@@ -16,10 +16,14 @@ cargo test -p clarity-gateway --lib
 
 - `src/lib.rs` — 模块声明
 - `src/server.rs` — 双端口服务器、`AppState`、路由构造器
-- `src/handlers/mod.rs` — 所有 Axum handler（chat、tasks、admin、files、mcp）
+- `src/handlers/mod.rs` — 所有 Axum handler（chat、tasks、admin、files、mcp、claw、anthropic）
 - `src/handlers/mcp.rs` — MCP 服务器管理 handler
+- `src/handlers/claw.rs` — Claw 设备注册/心跳/列表 handler
+- `src/handlers/claw_sync.rs` — 角色上下文同步端点
+- `src/handlers/anthropic.rs` — Anthropic Messages API 兼容端点（`anthropic-api` feature）
 - `src/session_store.rs` — SQLite 持久化会话存储
-- `src/ws.rs` — WebSocket handler
+- `src/role_context_store.rs` — 角色上下文事件持久化存储
+- `src/ws.rs` — WebSocket handler（含 Claw 协议消息）
 - `static/` — 内嵌 Web UI 静态文件
 
 ## 约定

@@ -4,6 +4,9 @@
 
 /// Admin/configuration handlers.
 pub mod admin;
+/// Anthropic Messages API-compatible handler (requires `anthropic-api` feature).
+#[cfg(feature = "anthropic-api")]
+pub mod anthropic;
 /// OpenAI-compatible chat completion handler.
 pub mod chat;
 /// Claw device registry handlers.

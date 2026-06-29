@@ -111,7 +111,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         .map(|p| p.to_string_lossy().into_owned());
 
     let root_path = app.files_store.workspace_root.clone();
-    let mut secondary_click = app.files_store.selected_path.as_ref().map(|p| p.clone());
+    let mut secondary_click = app.files_store.selected_path.clone();
 
     crate::ui::file_browser::render_file_tree(
         ui,
@@ -164,11 +164,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.to_string_lossy().into_owned());
-            let is_selected = app
-                .files_store
-                .selected_path
-                .as_ref()
-                .map_or(false, |p| p == &path);
+            let is_selected = app.files_store.selected_path.as_ref() == Some(&path);
             let row_resp = crate::widgets::interactive_row(ui, is_selected, &theme, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -253,4 +249,18 @@ fn render_context_menu(
             .on_disabled_hover_text(app.t("GitHub integration coming soon"));
         },
     );
+}
+
+// ── Panel trait implementation ──
+
+/// Files panel renderer.
+pub struct FilesPanel;
+
+impl crate::design_system::Panel for FilesPanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Files")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
 }

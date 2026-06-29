@@ -1,3 +1,4 @@
+use crate::server::AppState;
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -12,14 +13,12 @@ use clarity_core::agent::{
 };
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
-
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::{debug, info, warn};
 
 use crate::handlers::AgentHandle;
-use crate::server::AppState;
 
 // ==================== 健康检查 ====================
 
@@ -43,6 +42,12 @@ pub async fn health_check() -> impl IntoResponse {
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
     (StatusCode::OK, Json(response))
+}
+
+/// Return current connection metrics for monitoring.
+pub async fn health_metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let snapshot = state.metrics.snapshot();
+    (StatusCode::OK, Json(snapshot))
 }
 
 // ==================== Chat Completions ====================

@@ -23,14 +23,12 @@ fn main() {
         .replace("127.0.0.1", "localhost");
     let device_token = cfg["token"].as_str().expect("token");
 
-    let device =
-        clarity_openclaw::DeviceIdentity::load_or_generate().expect("load device identity");
+    let device = clarity_claw::DeviceIdentity::load_or_generate().expect("load device identity");
 
     println!("Connecting to {} with device auth...", gateway_url);
     println!("Device ID: {}", device.device_id());
 
-    let client =
-        clarity_openclaw::ClawClient::connect_with_device(&gateway_url, device, device_token);
+    let client = clarity_claw::ClawClient::connect_with_device(&gateway_url, device, device_token);
 
     // Give auth time to complete, then probe sessions and send a hello.
     thread::sleep(Duration::from_secs(2));
@@ -57,10 +55,10 @@ fn main() {
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_openclaw::client::ClawResponse::Connected { .. } => {
+                clarity_claw::client::ClawResponse::Connected { .. } => {
                     println!("Device auth connected.");
                 }
-                clarity_openclaw::client::ClawResponse::SessionMessage {
+                clarity_claw::client::ClawResponse::SessionMessage {
                     role,
                     content,
                     finished,
@@ -70,13 +68,13 @@ fn main() {
                         role, finished, content
                     );
                 }
-                clarity_openclaw::client::ClawResponse::Event {
+                clarity_claw::client::ClawResponse::Event {
                     event_type,
                     payload,
                 } => {
                     println!("event {} -> {}", event_type, payload);
                 }
-                clarity_openclaw::client::ClawResponse::Reply {
+                clarity_claw::client::ClawResponse::Reply {
                     id,
                     method: _,
                     ok,
@@ -84,7 +82,7 @@ fn main() {
                 } => {
                     println!("reply id={} ok={} payload={}", id, ok, payload);
                 }
-                clarity_openclaw::client::ClawResponse::Error(e) => {
+                clarity_claw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

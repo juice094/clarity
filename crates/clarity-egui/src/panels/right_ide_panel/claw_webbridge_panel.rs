@@ -6,6 +6,9 @@
 
 use crate::App;
 
+// LAYOUT-EXEMPT: compact URL input height local to this panel.
+const URL_INPUT_H: f32 = 24.0;
+
 /// Render the Claw WebBridge panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
@@ -18,7 +21,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text_dim),
         );
         let url_resp = ui.add_sized(
-            egui::vec2(ui.available_width() - 4.0, 24.0),
+            egui::vec2(ui.available_width() - theme.space_4, URL_INPUT_H),
             egui::TextEdit::singleline(&mut app.chat_store.input)
                 .hint_text("https://example.com or /path/to/file")
                 .font(egui::TextStyle::Monospace),
@@ -37,6 +40,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // Content area.
+    // LAYOUT-EXEMPT: viewport reserve/maximum tied to panel proportions, not grid.
     let content_height = (ui.available_height() - 40.0).max(200.0);
     egui::ScrollArea::vertical()
         .max_height(content_height)
@@ -63,7 +67,10 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 egui::Frame::new()
                     .fill(theme.code_block_bg)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::symmetric(12, 10))
+                    .inner_margin(egui::Margin::symmetric(
+                        theme.space_12 as i8,
+                        theme.space_8 as i8 + 2,
+                    ))
                     .show(ui, |ui| {
                         ui.label(
                             egui::RichText::new(&preview_text)
@@ -97,4 +104,18 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 });
             }
         });
+}
+
+// ── Panel trait implementation ──
+
+/// Claw WebBridge panel renderer.
+pub struct ClawWebBridgePanel;
+
+impl crate::design_system::Panel for ClawWebBridgePanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("WebBridge")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
 }

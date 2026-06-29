@@ -72,6 +72,7 @@ slack = ["dep:slack-morphism"]
 telemetry-api = ["dep:clarity-telemetry"]
 webhook = []
 hermes = ["clarity-core/hermes"]
+anthropic-api = []
 
 [lints]
 workspace = true

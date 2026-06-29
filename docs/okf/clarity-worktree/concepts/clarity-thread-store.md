@@ -3,18 +3,8 @@ id: clarity-thread-store
 name: clarity-thread-store
 type: thread-store
 layer: infrastructure
-depends_on:
-- clarity-contract
-- clarity-rollout
-consumed_by:
-- clarity-core
-title: clarity-thread-store
-description: Thread persistence abstraction.
-tags:
-- clarity
-- infrastructure
-- thread-store
-timestamp: '2026-06-26T11:28:50Z'
+depends_on: ["clarity-contract", "clarity-rollout"]
+consumed_by: ["clarity-core"]
 ---
 
 # clarity-thread-store

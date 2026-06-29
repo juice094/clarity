@@ -381,6 +381,9 @@ pub struct Session {
     pub archived: bool,
     pub messages: Vec<Message>,
     pub updated_at: u64,
+    /// Timestamp of last successful disk save (ms). Runtime-only; never persisted.
+    /// Used for auto-save dirty detection in the frame loop.
+    pub last_saved_at: u64,
     /// Cached heights for aggregated agent turns.
     pub turn_heights: Vec<Option<f32>>,
     /// Opaque provider-side state blobs, keyed by provider id.
@@ -909,6 +912,9 @@ pub struct WebTab {
     pub url: String,
 }
 
+// Re-export FocusTarget so consumers of `use crate::ui::types::*` get it.
+pub use crate::stores::FocusTarget;
+
 // ============================================================================
 // Unit tests for ToolCallStatus inference
 // ============================================================================
@@ -1053,6 +1059,3 @@ mod tests {
         assert_eq!(ctx, restored);
     }
 }
-
-// Re-export FocusTarget so consumers of `use crate::ui::types::*` get it.
-pub use crate::stores::FocusTarget;

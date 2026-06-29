@@ -16,6 +16,7 @@
 //! - OpenAI
 //! - More providers can be added by implementing the LlmProvider trait
 
+pub mod anthropic;
 pub mod api;
 pub mod auth;
 pub mod catalog;
@@ -34,8 +35,6 @@ pub mod ollama;
 pub mod policy;
 pub mod providers;
 pub mod registry_table;
-/// Reliable provider with fallback and retry logic.
-pub mod reliable;
 pub mod runtime;
 pub mod runtime_router;
 pub mod sse;
@@ -48,6 +47,7 @@ pub(crate) mod request;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Re-export provider types
+pub use clarity_contract::ReliableProvider;
 pub use deepseek::DeepSeekProvider;
 pub use deepseek_device::{
     DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceMode, DeepSeekDeviceOptions,
@@ -66,7 +66,6 @@ pub use model_registry::{
 pub use ollama::OllamaProvider;
 pub use policy::{ProviderSelection, select_provider};
 pub use providers::{AnthropicLlm, KimiCodeLlm, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
-pub use reliable::ReliableProvider;
 
 pub use model_listing::{get_available_models, scan_local_models};
 
@@ -169,6 +168,13 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
+    fn no_proxy_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client build should not fail")
+    }
+
     #[tokio::test]
     async fn test_openai_stream_assembles_tool_calls() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -190,8 +196,12 @@ mod tests {
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let llm =
-            OpenAiCompatibleLlm::new("test-key", format!("http://127.0.0.1:{}", port), "gpt-4o");
+        let llm = OpenAiCompatibleLlm::with_client(
+            "test-key",
+            format!("http://127.0.0.1:{}", port),
+            "gpt-4o",
+            no_proxy_client(),
+        );
         let mut rx = llm.stream(&[], &serde_json::json!({})).unwrap();
 
         let mut deltas = Vec::new();

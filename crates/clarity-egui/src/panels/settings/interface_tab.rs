@@ -172,7 +172,8 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             (current_scale - **a)
                 .abs()
                 .partial_cmp(&(current_scale - **b).abs())
-                .unwrap()
+                // SAFE: font-scale steps and current value are finite non-NaN f32s.
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .copied()
         .unwrap_or(0.85);
@@ -298,14 +299,14 @@ fn set_theme(app: &mut App, name: &str) {
         .settings_edit
         .font_scale
         .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
-    app.ui_store.theme = match name {
+    app.set_theme_with_transition(match name {
         "light" => Theme::light().with_font_scale(scale),
         "catppuccin" => Theme::catppuccin_mocha().with_font_scale(scale),
         "tokyo_night" => Theme::tokyo_night().with_font_scale(scale),
         "one_dark" => Theme::one_dark().with_font_scale(scale),
         "oled" => Theme::oled_black().with_font_scale(scale),
         _ => Theme::dark().with_font_scale(scale),
-    };
+    });
     app.auto_save_settings();
 }
 
@@ -319,7 +320,7 @@ fn set_theme(app: &mut App, name: &str) {
 pub struct InterfacePanel;
 
 impl crate::design_system::Panel for InterfacePanel {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "Interface"
     }
 

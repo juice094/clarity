@@ -71,6 +71,7 @@ pub fn load_sessions() -> Vec<Session> {
                             archived: data.archived,
                             messages,
                             updated_at: data.updated_at,
+                            last_saved_at: data.updated_at,
                             turn_heights: vec![],
                             provider_state: data.provider_state,
                             in_flight: false,
@@ -86,7 +87,7 @@ pub fn load_sessions() -> Vec<Session> {
 }
 
 /// Persists session internal to disk.
-pub fn save_session_internal(session: &Session) -> Result<(), String> {
+pub fn save_session_internal(session: &mut Session) -> Result<(), String> {
     let path = session_path(&session.id);
     // Empty sessions are transient — don't write them to disk.
     // If a previously-non-empty session became empty, delete its file.
@@ -150,6 +151,7 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         } => Some(id.clone()),
         _ => None,
     };
+    let now = now_millis();
     Session {
         id,
         title,
@@ -159,7 +161,9 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         lifecycle: SessionLifecycle::Temporary,
         archived: false,
         messages: vec![],
-        updated_at: now_millis(),
+        updated_at: now,
+        // New sessions start in sync — no pending auto-save until messages arrive.
+        last_saved_at: now,
         turn_heights: vec![],
         provider_state: HashMap::new(),
         in_flight: false,

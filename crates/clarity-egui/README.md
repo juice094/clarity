@@ -18,8 +18,9 @@ cargo test -p clarity-egui --bin clarity-egui
 - **Stability tier**: Beta / Primary desktop frontend
   - egui 是当前主力桌面栈；Tauri 已归档，`clarity-slint` 为实验栈
   - Sprint S5 正在进行 Pretext 单页 / 三栏布局迁移，迁移期间保持 `cargo clippy` 零警告
-- **MSRV**: 1.78.0
+- **MSRV**: 1.85（跟随 workspace）
 - **反向依赖禁止** (No reverse dependencies):
-  - 可依赖 clarity-core + clarity-memory + clarity-wire
+  - 可依赖 clarity-core、clarity-memory、clarity-wire、clarity-claw 等内部 crate
+  - 禁止任何内部 crate 反过来依赖 clarity-egui
 - **Library/binary classification**:
   - Binary: application entry point, not a library

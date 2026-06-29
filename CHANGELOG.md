@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **重构 `clarity-anthropic-proxy` 与 `clarity-llm` 的 Anthropic 适配层（2026-06-29）**
+  - 新增 `clarity-llm::anthropic` 模块：`AnthropicAdapter` 可将任意 `LlmProvider` 包装为 Anthropic Messages API facade；`clarity-anthropic-proxy` 的协议转换逻辑全部下沉至此。
+  - 将 `clarity-core::agent::tool_parser` 迁移到 `clarity-contract::tool_parser`，消除 `clarity-anthropic-proxy` 对 `clarity-core` 的依赖。
+  - `clarity-anthropic-proxy` 重写为薄壳二进制：只负责 axum 路由、日志、端口绑定和 DeepSeek 设备凭证加载；请求/响应转换委托给 `clarity_llm::anthropic::AnthropicAdapter`。
+  - `clarity-gateway` 新增可选 `anthropic-api` feature，启用 `POST /v1/messages` Anthropic Messages API 兼容端点，复用同一套 `clarity_llm::anthropic::AnthropicAdapter` 协议转换逻辑。
+  - 更新 `clarity-anthropic-proxy/README.md`、`clarity-anthropic-proxy/AGENTS.md`、`clarity-gateway/README.md`、`clarity-gateway/AGENTS.md`、OKF 概念文件、`AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/architecture/tech-stack.md`、`docs/architecture/map-topology.md`、`README.md`/`README.zh.md`/`README.en.md` 以反映新的依赖关系与职责边界。
+
+- **合并 `clarity-openclaw` 到 `clarity-claw`（2026-06-29）**
+  - `clarity-openclaw` crate 已删除，其 Gateway WebSocket 客户端、OpenClaw/KimiClaw JSON-RPC 兼容层、设备发现/身份/配对、角色上下文同步等能力并入 `clarity-claw`。
+  - `clarity-claw` 现在是统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制。
+  - `clarity-egui` 改为依赖 `clarity-claw`；workspace 保持 20 个 crate 目录（19 个活跃成员 + 1 个已归档 `clarity-tauri`）。
+  - 更新 `docs/architecture/tech-stack.md`、`docs/architecture/map-topology.md`、`docs/architecture/claw-protocol.md`、`docs/ARCHITECTURE.md`、`README.md`、`README.zh.md`、`README.en.md`、`scripts/generate_okf_worktree.py` 以移除 `clarity-openclaw` 引用并反映合并后职责。
+
 ### Added
 
 - **S6-D 右 IDE 面板全面落地 + 美化系统（2026-06-28）**

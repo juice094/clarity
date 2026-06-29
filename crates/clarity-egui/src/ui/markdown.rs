@@ -653,8 +653,8 @@ fn looks_like_file_path(text: &str) -> bool {
         || s.contains(".html");
     let has_lineno = s.contains(':')
         && s.split(':')
-            .last()
-            .map_or(false, |p| p.parse::<usize>().is_ok());
+            .next_back()
+            .is_some_and(|p| p.parse::<usize>().is_ok());
     has_separator || has_ext || has_lineno
 }
 

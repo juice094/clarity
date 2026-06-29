@@ -35,7 +35,7 @@ webbrowser = "1"
 
 # Internal crates
 clarity-core = { path = "../clarity-core" }
-clarity-openclaw = { path = "../clarity-openclaw" }
+clarity-claw = { path = "../clarity-claw", default-features = false, features = ["mesh"] }
 clarity-contract = { path = "../clarity-contract" }
 clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory" }

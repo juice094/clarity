@@ -88,6 +88,12 @@ pub mod ids {
     pub const TOGGLE_DASHBOARD: &str = "toggle-dashboard";
     /// `TOGGLE_LAYOUT_DEBUG` constant.
     pub const TOGGLE_LAYOUT_DEBUG: &str = "toggle-layout-debug";
+    /// `TOGGLE_CONSOLE` constant.
+    pub const TOGGLE_CONSOLE: &str = "toggle-console";
+    /// `TOGGLE_FILES` constant.
+    pub const TOGGLE_FILES: &str = "toggle-files";
+    /// `TOGGLE_SHARE` constant.
+    pub const TOGGLE_SHARE: &str = "toggle-share";
 
     // ── Input / Palette ──
     /// `FOCUS_INPUT` constant.
@@ -110,6 +116,8 @@ pub mod ids {
     pub const NAVIGATE_BOTTOM: &str = "navigate-bottom";
     /// `COPY_LINE` constant.
     pub const COPY_LINE: &str = "copy-line";
+    /// `SHOW_SHORTCUTS` constant — keyboard shortcuts reference modal.
+    pub const SHOW_SHORTCUTS: &str = "show-shortcuts";
 }
 
 /// 预置的常用命令常量 — 避免两端硬编码重复。
@@ -205,6 +213,24 @@ pub mod built_in {
         .with_shortcut("Ctrl+Shift+L")
     }
 
+    /// `toggle_console`.
+    pub fn toggle_console() -> CommandItem {
+        CommandItem::new(ids::TOGGLE_CONSOLE, "Toggle Console", CommandScope::Global)
+            .with_shortcut("Ctrl+\u{0060}")
+    }
+
+    /// `toggle_files`.
+    pub fn toggle_files() -> CommandItem {
+        CommandItem::new(ids::TOGGLE_FILES, "Toggle Files", CommandScope::Global)
+            .with_shortcut("Ctrl+Shift+F")
+    }
+
+    /// `toggle_share`.
+    pub fn toggle_share() -> CommandItem {
+        CommandItem::new(ids::TOGGLE_SHARE, "Toggle Share", CommandScope::Global)
+            .with_shortcut("Ctrl+Shift+S")
+    }
+
     /// `toggle_command_palette`.
     pub fn toggle_command_palette() -> CommandItem {
         CommandItem::new(
@@ -249,6 +275,9 @@ pub mod built_in {
             toggle_team_panel(),
             toggle_dashboard(),
             toggle_layout_debug(),
+            toggle_console(),
+            toggle_files(),
+            toggle_share(),
             toggle_command_palette(),
             increase_font_scale(),
             decrease_font_scale(),

@@ -32,18 +32,16 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     ui.horizontal(|ui| {
         let can_load = !app.knowledge_store.bundle_path.is_empty() && !app.knowledge_store.loading;
+        let button_size = egui::vec2(theme.space_16 * 5.0, theme.size_input);
         if ui
-            .add_sized(
-                [80.0, theme.size_input],
-                egui::Button::new(app.t("Load bundle")),
-            )
+            .add_sized(button_size, egui::Button::new(app.t("Load bundle")))
             .clicked()
             && can_load
         {
             trigger_bundle_load(app);
         }
         if ui
-            .add_sized([80.0, theme.size_input], egui::Button::new(app.t("Reload")))
+            .add_sized(button_size, egui::Button::new(app.t("Reload")))
             .clicked()
             && can_load
         {
@@ -286,4 +284,18 @@ fn concept_title(concept: &OkfConcept) -> String {
         .as_deref()
         .map(|t| t.to_string())
         .unwrap_or_else(|| concept.id.clone())
+}
+
+// ── Panel trait implementation ──
+
+/// Knowledge base panel renderer.
+pub struct KnowledgePanel;
+
+impl crate::design_system::Panel for KnowledgePanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Knowledge")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
 }

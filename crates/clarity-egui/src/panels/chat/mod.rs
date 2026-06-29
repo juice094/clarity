@@ -247,6 +247,12 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             }
 
             if !is_empty_state(app) {
+                // Find-in-session bar (Ctrl+F).
+                if app.chat_store.find_open {
+                    app.render_find_bar(ui);
+                    ui.add_space(4.0);
+                }
+
                 // The input bar is rendered by `render_input_panel` in a separate
                 // bottom panel. The remaining central area is used for the message
                 // list.

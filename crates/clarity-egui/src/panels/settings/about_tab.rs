@@ -153,7 +153,7 @@ copies or substantial portions of the Software."#;
 pub struct AboutPanel;
 
 impl crate::design_system::Panel for AboutPanel {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "About"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

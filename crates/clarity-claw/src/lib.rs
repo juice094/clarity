@@ -1,3 +1,16 @@
+//! clarity-claw —— Clarity 分布式节点客户端库与系统托盘常驻程序
+//!
+//! 本 crate 是 Claw 概念的 client-side 统一入口：
+//! - **库**：UI 无关的 Claw 客户端，支持 Gateway WebSocket、设备发现、配对、
+//!   角色上下文同步，以及可选的 OpenClaw/KimiClaw JSON-RPC 兼容层。
+//! - **二进制**：系统托盘常驻节点，与本地 `clarity-gateway` 通信。
+//!
+//! Server-side 对应物是 `clarity-gateway`；跨 crate 共享契约见
+//! `clarity-contract::claw_context` 与 `clarity-contract::federation`。
+//!
+//! "Claw" 名字来自早期对外部 ZeroClaw / OpenClaw / KimiClaw 的参照，
+//! 在 Clarity 内部已重新定义为分布式协作节点概念。
+
 #![cfg_attr(
     test,
     allow(
@@ -8,34 +21,42 @@
         unsafe_code
     )
 )]
-//! clarity-claw —— Clarity 内部 mesh 的系统托盘常驻节点
-//!
-//! Claw is the system-tray resident node of Project Clarity's internal mesh.
-//! It speaks **Gateway WebSocket only** to `clarity-gateway` and does not act
-//! as an external OpenClaw/KimiClaw adapter. External protocol interop is the
-//! responsibility of `clarity-openclaw`.
-//!
-//! ## Role boundary
-//!
-//! - One protocol: Gateway WebSocket (`clarity-gateway`)
-//! - No OpenClaw JSON-RPC fallback
-//! - No external KimiClaw/OpenClaw dialect handling
-//!
-//! All tray operations — chat, role-context sync, task/thread polling,
-//! device registration and heartbeats — go through Gateway WebSocket.
+
+pub mod client;
+pub mod connection_manager;
+pub mod device;
+pub mod discovery;
+pub mod gateway_client;
+#[cfg(feature = "mesh")]
+pub mod mesh;
+#[cfg(feature = "mesh")]
+pub mod mesh_client;
+pub mod netmon;
+pub mod protocol;
+pub mod types;
+pub mod watchdog;
+
+#[cfg(feature = "tray")]
+pub mod tray;
+
+mod util;
+
+pub use client::ClawClient as OpenClawClient;
+pub use client::{ClawAuth, ClawClient};
+pub use connection_manager::ClawConnectionManager;
+pub use device::{DeviceIdentity, PairedToken, load_paired_token, save_paired_token};
+pub use discovery::discover_openclaw_devices;
+pub use gateway_client::{GatewayClient, GatewayMessage, GatewayResponse, ToolCall};
+pub use netmon::{NetChangeEvent, NetMonitor};
+pub use protocol::{DetectedProtocol, ProtocolCommand, ProtocolEvent, ProtocolHistoryMessage};
+pub use types::{ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};
+pub use watchdog::GatewayWatchdog;
 
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
-use tokio_tungstenite::tungstenite::Message;
 
 // ------------------------------------------------------------------
-// Tray integration
-// ------------------------------------------------------------------
-
-pub mod tray;
-
-// ------------------------------------------------------------------
-// Shared types
+// Gateway interaction helpers (shared by library consumers and tray)
 // ------------------------------------------------------------------
 
 /// Default Gateway address.
@@ -68,51 +89,10 @@ pub struct ThreadSummary {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-// ------------------------------------------------------------------
-// Pure logic helpers
-// ------------------------------------------------------------------
-
 /// Resolve the Gateway URL from the environment.
 pub fn resolve_gateway_url() -> String {
     std::env::var("CLARITY_GATEWAY_URL").unwrap_or_else(|_| GATEWAY_URL.to_string())
 }
-
-/// Format the tray tooltip from task and thread counts.
-pub fn format_tooltip(
-    running: usize,
-    pending: usize,
-    total_tasks: usize,
-    recent_threads: usize,
-) -> String {
-    let task_part = if total_tasks == 0 {
-        "no tasks".to_string()
-    } else {
-        format!(
-            "{} running, {} pending ({} tasks)",
-            running, pending, total_tasks
-        )
-    };
-    let thread_part = if recent_threads == 0 {
-        "no recent threads".to_string()
-    } else {
-        format!("{} recent threads", recent_threads)
-    };
-    format!("Clarity Claw — {} | {}", task_part, thread_part)
-}
-
-/// Classify a task status into a notification summary.
-pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::Urgency>) {
-    match status {
-        "Completed" => ("✅ Task completed", None),
-        "Failed" => ("❌ Task failed", Some(notify_rust::Urgency::Critical)),
-        "Cancelled" => ("🚫 Task cancelled", None),
-        _ => ("Task finished", None),
-    }
-}
-
-// ------------------------------------------------------------------
-// Gateway interaction helpers
-// ------------------------------------------------------------------
 
 /// Send a single WebSocket request to the Gateway and return the first
 /// non-welcome response.
@@ -139,13 +119,15 @@ async fn gateway_ws_request(
     }
 
     write
-        .send(Message::Text(request.to_string()))
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            request.to_string(),
+        ))
         .await
         .map_err(|e| anyhow::anyhow!("send request: {}", e))?;
 
     while let Some(msg) = read.next().await {
         let msg = msg?;
-        if let Message::Text(text) = msg {
+        if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
             let value: serde_json::Value = serde_json::from_str(&text)?;
             if value.get("type").and_then(|v| v.as_str()) == Some("welcome") {
                 continue;
@@ -318,6 +300,45 @@ fn get_hostname() -> String {
 }
 
 // ------------------------------------------------------------------
+// Tray-only helpers
+// ------------------------------------------------------------------
+
+#[cfg(feature = "tray")]
+/// Format the tray tooltip from task and thread counts.
+pub fn format_tooltip(
+    running: usize,
+    pending: usize,
+    total_tasks: usize,
+    recent_threads: usize,
+) -> String {
+    let task_part = if total_tasks == 0 {
+        "no tasks".to_string()
+    } else {
+        format!(
+            "{} running, {} pending ({} tasks)",
+            running, pending, total_tasks
+        )
+    };
+    let thread_part = if recent_threads == 0 {
+        "no recent threads".to_string()
+    } else {
+        format!("{} recent threads", recent_threads)
+    };
+    format!("Clarity Claw — {} | {}", task_part, thread_part)
+}
+
+#[cfg(feature = "tray")]
+/// Classify a task status into a notification summary.
+pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::Urgency>) {
+    match status {
+        "Completed" => ("✅ Task completed", None),
+        "Failed" => ("❌ Task failed", Some(notify_rust::Urgency::Critical)),
+        "Cancelled" => ("🚫 Task cancelled", None),
+        _ => ("Task finished", None),
+    }
+}
+
+// ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------
 
@@ -345,47 +366,6 @@ mod tests {
         set_env("CLARITY_GATEWAY_URL", "http://custom:8080");
         assert_eq!(resolve_gateway_url(), "http://custom:8080");
         remove_env("CLARITY_GATEWAY_URL");
-    }
-
-    #[test]
-    fn test_format_tooltip_idle() {
-        assert_eq!(
-            format_tooltip(0, 0, 0, 0),
-            "Clarity Claw — no tasks | no recent threads"
-        );
-    }
-
-    #[test]
-    fn test_format_tooltip_with_tasks() {
-        assert_eq!(
-            format_tooltip(2, 1, 3, 0),
-            "Clarity Claw — 2 running, 1 pending (3 tasks) | no recent threads"
-        );
-    }
-
-    #[test]
-    fn test_format_tooltip_with_threads() {
-        assert_eq!(
-            format_tooltip(0, 0, 0, 5),
-            "Clarity Claw — no tasks | 5 recent threads"
-        );
-    }
-
-    #[test]
-    fn test_classify_task_status() {
-        assert_eq!(
-            classify_task_status("Completed"),
-            ("✅ Task completed", None)
-        );
-        assert_eq!(
-            classify_task_status("Failed"),
-            ("❌ Task failed", Some(notify_rust::Urgency::Critical))
-        );
-        assert_eq!(
-            classify_task_status("Cancelled"),
-            ("🚫 Task cancelled", None)
-        );
-        assert_eq!(classify_task_status("Unknown"), ("Task finished", None));
     }
 
     #[test]
@@ -421,5 +401,51 @@ mod tests {
             gateway_ws_url("ws://127.0.0.1:18790"),
             "ws://127.0.0.1:18790/ws"
         );
+    }
+
+    #[cfg(feature = "tray")]
+    mod tray_helpers {
+        use super::*;
+
+        #[test]
+        fn test_format_tooltip_idle() {
+            assert_eq!(
+                format_tooltip(0, 0, 0, 0),
+                "Clarity Claw — no tasks | no recent threads"
+            );
+        }
+
+        #[test]
+        fn test_format_tooltip_with_tasks() {
+            assert_eq!(
+                format_tooltip(2, 1, 3, 0),
+                "Clarity Claw — 2 running, 1 pending (3 tasks) | no recent threads"
+            );
+        }
+
+        #[test]
+        fn test_format_tooltip_with_threads() {
+            assert_eq!(
+                format_tooltip(0, 0, 0, 5),
+                "Clarity Claw — no tasks | 5 recent threads"
+            );
+        }
+
+        #[test]
+        fn test_classify_task_status() {
+            assert_eq!(
+                classify_task_status("Completed"),
+                ("✅ Task completed", None)
+            );
+            assert_eq!(
+                classify_task_status("Failed"),
+                ("❌ Task failed", Some(notify_rust::Urgency::Critical))
+            );
+            assert_eq!(
+                classify_task_status("Cancelled"),
+                ("🚫 Task cancelled", None)
+            );
+            assert_eq!(classify_task_status("Unknown"), ("Task finished", None));
+        }
     }
 }

@@ -101,6 +101,7 @@ mod tests {
             archived: false,
             messages: Vec::new(),
             updated_at: now_millis(),
+            last_saved_at: now_millis(),
             turn_heights: Vec::new(),
             provider_state: HashMap::new(),
             in_flight: false,

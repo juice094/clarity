@@ -29,7 +29,7 @@ cargo test -p clarity-tui --lib
 
 - **Stability tier**: Experimental
   - Experimental: API may change before v0.4.0
-- **MSRV**: 1.78.0
+- **MSRV**: 1.85（跟随 workspace）
 - **反向依赖禁止** (No reverse dependencies):
   - 可依赖 clarity-core + clarity-wire
 - **Library/binary classification**:

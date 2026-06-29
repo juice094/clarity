@@ -6,39 +6,88 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Clarity distributed node client library and system-tray resident binary"
+
+[features]
+default = []
+# System-tray resident binary dependencies.
+# Enables the `tray` module and the `clarity-claw` binary target.
+tray = [
+    "dep:tao",
+    "dep:tray-icon",
+    "dep:notify-rust",
+    "dep:image",
+    "dep:notify",
+    "dep:clarity-core",
+    "dep:clarity-wire",
+]
+# Role-context offline synchronization via syncthing-rust.
+mesh = [
+    "dep:syncthing-core",
+    "dep:syncthing-sync",
+    "dep:reqwest",
+    "dep:bytes",
+]
 
 [dependencies]
+# Shared contracts. The library layer intentionally does not depend on
+# clarity-core or clarity-wire; those are only needed by the tray binary.
 clarity-contract = { path = "../clarity-contract" }
-clarity-core = { workspace = true }
-clarity-wire = { path = "../clarity-wire" }
+clarity-core = { workspace = true, optional = true }
+clarity-wire = { path = "../clarity-wire", optional = true }
+
+# Async runtime / networking
 tokio = { workspace = true }
-tracing = { workspace = true }
-anyhow = { workspace = true }
-
-# GUI / System tray
-tao = "0.35.3"
-tray-icon = "0.24.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
-
-# Notifications
-notify-rust = "4"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+async-trait = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Observability
+tracing = { workspace = true }
+
+# Device identity / crypto (core library functionality)
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+ring = { workspace = true }
+rand = "0.8"
+hex = { workspace = true }
+base64 = { workspace = true }
+
+# Paths / platform
+dirs = "5.0"
+netdev = "0.42"
+
+# Time
 chrono = { workspace = true }
 
-# Gateway WebSocket client for all Gateway communication.
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
-futures-util = "0.3"
-
-# Filesystem watch for real-time task notifications
-notify = { version = "7", default-features = false, features = ["macos_fsevent", "crossbeam-channel"] }
-
-# Intentionally not depending on clarity-openclaw: Claw is an internal mesh node
-# that speaks Gateway WebSocket only; external OpenClaw/KimiClaw interop is handled
-# by clarity-openclaw on the Gateway side.
+# Sync primitives
 parking_lot = "0.12"
+
+# Mesh synchronization (optional)
+syncthing-core = { path = "../../third_party/syncthing-rust/crates/syncthing-core", optional = true }
+syncthing-sync = { path = "../../third_party/syncthing-rust/crates/syncthing-sync", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+bytes = { workspace = true, optional = true }
+
+# System tray binary dependencies (optional)
+tao = { version = "0.35.3", optional = true }
+tray-icon = { version = "0.24.1", optional = true }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+notify-rust = { version = "4", optional = true }
+notify = { version = "7", default-features = false, features = ["macos_fsevent", "crossbeam-channel"], optional = true }
+
+[[bin]]
+name = "clarity-claw"
+path = "src/main.rs"
+required-features = ["tray"]
 
 [lints]
 workspace = true

@@ -42,11 +42,16 @@ export ANTHROPIC_BASE_URL="http://127.0.0.1:18791/v1/messages"
 
 ## Architecture
 
-- `main.rs` — axum server, request/response routing, and middleware.
-- Anthropic request types are deserialized, flattened into a prompt string, and
-  forwarded through `clarity_llm::deepseek_device::DeepSeekDeviceProvider`.
-- Tool calls are parsed with `clarity_core::agent::tool_parser` and emitted as
-  Anthropic `tool_use` content blocks.
+- `main.rs` — thin axum server: routing, logging middleware, and DeepSeek device
+  credential loading.
+- Anthropic protocol conversion lives in `clarity_llm::anthropic::AnthropicAdapter`.
+  The proxy simply deserializes the request, calls the adapter, and returns the
+  response.
+- Tool call parsing is provided by `clarity_contract::tool_parser`.
+
+This crate is intentionally thin: the Anthropic facade is now a first-class
+adapter inside `clarity-llm`, and this binary is one runtime consumer of that
+adapter (targeting the DeepSeek device provider by default).
 
 ## License
 

@@ -138,6 +138,23 @@ impl OllamaProvider {
         let model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3".into());
         Ok(Self::new(base_url, model))
     }
+
+    /// Test-only constructor that accepts a pre-built HTTP client.
+    ///
+    /// ponytail: used by mock tests to bypass system HTTP proxies that
+    /// would otherwise intercept 127.0.0.1 requests.
+    #[cfg(test)]
+    pub(crate) fn with_client(
+        base_url: impl Into<String>,
+        model: impl Into<String>,
+        client: reqwest::Client,
+    ) -> Self {
+        Self {
+            base_url: base_url.into(),
+            model: model.into(),
+            client,
+        }
+    }
 }
 
 fn convert_messages(messages: &[Message]) -> Vec<OllamaApiMessage> {
@@ -398,6 +415,13 @@ mod tests {
     /// Serializes tests that mutate process environment variables.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    fn no_proxy_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client build should not fail")
+    }
+
     fn set_env(key: &str, value: &str) {
         // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
         unsafe { env::set_var(key, value) };
@@ -587,7 +611,11 @@ mod tests {
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let llm = OllamaProvider::new(format!("http://127.0.0.1:{}", port), "llama3");
+        let llm = OllamaProvider::with_client(
+            format!("http://127.0.0.1:{}", port),
+            "llama3",
+            no_proxy_client(),
+        );
         let mut rx = llm.stream(&[], &json!({})).unwrap();
 
         let mut contents = Vec::new();
@@ -621,7 +649,11 @@ Content-Type: application/json
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let llm = OllamaProvider::new(format!("http://127.0.0.1:{}", port), "llama3");
+        let llm = OllamaProvider::with_client(
+            format!("http://127.0.0.1:{}", port),
+            "llama3",
+            no_proxy_client(),
+        );
         let result = llm
             .complete(&[Message::user("Hello")], &json!({}))
             .await

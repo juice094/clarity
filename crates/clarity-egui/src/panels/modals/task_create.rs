@@ -185,7 +185,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
 pub struct TaskCreateModal;
 
 impl crate::design_system::Panel for TaskCreateModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "TaskCreate"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

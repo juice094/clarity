@@ -139,7 +139,7 @@ Compressed historical context...
 |---------|-----------------|----------------------|
 | Storage | SQLite + FTS5 | SQLite + FTS5 |
 | Sessions | JSONL | JSONL |
-| Compilation | 4 levels | 4 levels (ported) |
+| Compilation | 4 levels | 4 levels（设计参考 OpenHanako） |
 | Trigger | Turn-based | Turn-based |
 | Facts | LLM extraction | LLM extraction |
 | Deduplication | Fingerprint | Fingerprint (SHA256) |
@@ -174,17 +174,15 @@ impl Agent {
 ```bash
 # Run all tests
 cargo test -p clarity-memory
-
-# Run examples
-cargo run --example basic_usage
-cargo run --example integration_core
 ```
+
+> 当前 `examples/` 目录已禁用；集成示例参见 `clarity-core` 与 `tests/integration`。
 
 ## 边界与稳定性
 
 - **Stability tier**: Stable
   - Stable: API unlikely to change in minor releases
-- **MSRV**: 1.78.0
+- **MSRV**: 1.85（跟随 workspace）
 - **反向依赖禁止** (No reverse dependencies):
   - 不得依赖 clarity-core
 - **Library/binary classification**:
@@ -192,4 +190,4 @@ cargo run --example integration_core
 
 ## License
 
-MIT
+AGPL-3.0-or-later

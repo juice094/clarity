@@ -7,7 +7,7 @@
 
 use crate::theme::Theme;
 use crate::ui::types::{ContextItem, ContextSource};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// State for the `#` context picker popup.
 #[derive(Clone, Default)]
@@ -198,16 +198,17 @@ pub fn render_context_picker(
                                     .to_string(),
                                 );
                             }
+                            ContextSource::Web { .. } | ContextSource::Terminal { .. }
+                                if state.filter.is_empty() =>
+                            {
+                                state.filter = String::new();
+                            }
                             ContextSource::Web { .. } | ContextSource::Terminal { .. } => {
-                                if state.filter.is_empty() {
-                                    state.filter = String::new();
-                                } else {
-                                    let resolved_src = resolve_source(src, &state.filter);
-                                    let item = build_item(&resolved_src, &state.cwd);
-                                    result = Some(item);
-                                    state.open = false;
-                                    state.filter.clear();
-                                }
+                                let resolved_src = resolve_source(src, &state.filter);
+                                let item = build_item(&resolved_src, &state.cwd);
+                                result = Some(item);
+                                state.open = false;
+                                state.filter.clear();
                             }
                             _ => {
                                 let resolved_src = resolve_source(src, &state.filter);
@@ -302,7 +303,7 @@ fn resolve_source(src: &ContextSource, filter: &str) -> ContextSource {
     }
 }
 
-fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
+fn build_item(src: &ContextSource, cwd: &Path) -> ContextItem {
     match src {
         ContextSource::File {
             path,

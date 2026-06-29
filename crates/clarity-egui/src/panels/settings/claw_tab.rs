@@ -305,7 +305,7 @@ fn auth_mode_label(mode: OpenClawAuthMode) -> &'static str {
 pub struct ClawPanel;
 
 impl crate::design_system::Panel for ClawPanel {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "Claw"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

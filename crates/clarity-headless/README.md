@@ -17,7 +17,7 @@ cargo run -p clarity-headless -- --help
 
 - **Stability tier**: Experimental
   - Experimental: API may change before v0.4.0
-- **MSRV**: 1.78.0
+- **MSRV**: 1.85（跟随 workspace）
 - **反向依赖禁止** (No reverse dependencies):
   - 可依赖 clarity-core
 - **Library/binary classification**:

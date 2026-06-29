@@ -1,7 +1,9 @@
 use crate::theme::Theme;
 
 /// Icon button with customizable fill and corner radius.
-/// Replaces manual `Button::new(RichText::new(icon).font(...)).fill(...).corner_radius(...)` constructions.
+///
+/// Paints a keyboard focus ring when the button has focus, so Tab-based
+/// navigation is visually tracked.
 pub fn icon_button(
     ui: &mut egui::Ui,
     icon: &str,
@@ -10,11 +12,15 @@ pub fn icon_button(
     radius: egui::CornerRadius,
     theme: &Theme,
 ) -> egui::Response {
-    ui.add(
+    let response = ui.add(
         egui::Button::new(egui::RichText::new(icon).font(theme.font_icon(size)))
             .fill(fill)
             .corner_radius(radius),
-    )
+    );
+    if response.has_focus() {
+        crate::design_system::paint_focus_ring(ui, response.rect, radius);
+    }
+    response
 }
 
 /// Convenience: icon button with transparent fill and small radius (toolbar style).

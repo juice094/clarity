@@ -52,11 +52,13 @@ pub mod key_ref;
 pub mod lifecycle;
 pub mod llm;
 pub mod reliable_provider;
+pub mod retry;
 pub mod rollout;
 pub mod subagent;
 pub mod thread;
 pub mod tool;
 pub mod tool_format;
+pub mod tool_parser;
 
 pub use key_ref::resolve_key_ref;
 
@@ -231,6 +233,11 @@ pub use identity::{
 };
 pub use llm::{LlmProvider, LlmProviderFactory, LlmResponse, Pricing, ProviderCapabilities};
 pub use reliable_provider::ReliableProvider;
+pub use retry::{
+    AddressType, ConnectionMetrics, ConnectionMetricsSnapshot, ConnectionPriority, ConnectionState,
+    ConnectionStats, ConnectionType, ExponentialBackoff, HeartbeatConfig, RestartConfig,
+    RestartPolicy, RetryConfig,
+};
 pub use rollout::{
     CompactedItem, CreateRolloutParams, GitInfo, ResumeRolloutParams, RolloutEventMsg, RolloutItem,
     RolloutLine, RolloutResponseItem, SessionMeta, SessionMetaLine, SessionSource, ThreadSource,

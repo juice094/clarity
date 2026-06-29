@@ -328,6 +328,7 @@ pub fn render_diff_view(
 
 // ── Single-line render helper ────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn render_diff_line(
     ui: &mut egui::Ui,
     content: &str,

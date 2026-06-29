@@ -180,7 +180,7 @@ pub fn render_cron_create_modal(app: &mut App, ctx: &egui::Context) {
 pub struct CronCreateModal;
 
 impl crate::design_system::Panel for CronCreateModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "CronCreate"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

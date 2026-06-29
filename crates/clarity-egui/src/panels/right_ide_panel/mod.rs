@@ -6,6 +6,7 @@
 //! `panels::right_rail` as a content source during migration.
 
 use crate::App;
+use crate::design_system::Panel;
 use crate::stores::FocusTarget;
 use clarity_core::ui::RightRailPanel;
 
@@ -19,11 +20,106 @@ pub mod knowledge_panel;
 pub mod share_panel;
 pub mod template_panel;
 
+/// Dispatch enum that materialises the currently active right-rail panel as a
+/// `design_system::Panel` implementation. This keeps header, close, and
+/// animation concerns in one place while letting each panel own its rendering.
+enum ActivePanel {
+    Share(share_panel::SharePanel),
+    Console(console_panel::ConsolePanel),
+    Files(files_panel::FilesPanel),
+    ClawSettings(claw_settings_panel::ClawSettingsPanel),
+    ClawWorkspace(claw_workspace_panel::ClawWorkspacePanel),
+    ClawTerminal(claw_terminal_panel::ClawTerminalPanel),
+    ClawWebBridge(claw_webbridge_panel::ClawWebBridgePanel),
+    KnowledgeBase(knowledge_panel::KnowledgePanel),
+    Templates(template_panel::TemplatesPanel),
+    /// Panels that have not been migrated from legacy views yet. They render a
+    /// friendly placeholder instead of a raw migration message.
+    Placeholder {
+        title_key: &'static str,
+        hint_key: &'static str,
+    },
+}
+
+impl ActivePanel {
+    fn from_kind(kind: RightRailPanel) -> Self {
+        match kind {
+            RightRailPanel::Share => Self::Share(share_panel::SharePanel),
+            RightRailPanel::Console => Self::Console(console_panel::ConsolePanel),
+            RightRailPanel::Files => Self::Files(files_panel::FilesPanel),
+            RightRailPanel::ClawSettings => {
+                Self::ClawSettings(claw_settings_panel::ClawSettingsPanel)
+            }
+            RightRailPanel::ClawWorkspace => {
+                Self::ClawWorkspace(claw_workspace_panel::ClawWorkspacePanel)
+            }
+            RightRailPanel::ClawTerminal => {
+                Self::ClawTerminal(claw_terminal_panel::ClawTerminalPanel)
+            }
+            RightRailPanel::ClawWebBridge => {
+                Self::ClawWebBridge(claw_webbridge_panel::ClawWebBridgePanel)
+            }
+            RightRailPanel::KnowledgeBase => Self::KnowledgeBase(knowledge_panel::KnowledgePanel),
+            RightRailPanel::Templates => Self::Templates(template_panel::TemplatesPanel),
+            RightRailPanel::Team => Self::Placeholder {
+                title_key: "Team",
+                hint_key: "Team collaboration coming soon",
+            },
+            RightRailPanel::Task => Self::Placeholder {
+                title_key: "Task",
+                hint_key: "Task details coming soon",
+            },
+            RightRailPanel::Dashboard => Self::Placeholder {
+                title_key: "Dashboard",
+                hint_key: "Dashboard coming soon",
+            },
+            RightRailPanel::None => Self::Placeholder {
+                title_key: "Panel",
+                hint_key: "Select a panel from the Bot bar",
+            },
+        }
+    }
+}
+
+impl Panel for ActivePanel {
+    fn title(&self, app: &crate::App) -> &str {
+        match self {
+            Self::Share(_) => app.t("Share"),
+            Self::Console(_) => app.t("Console"),
+            Self::Files(_) => app.t("Files"),
+            Self::ClawSettings(_) => app.t("Claw"),
+            Self::ClawWorkspace(_) => app.t("Workspace"),
+            Self::ClawTerminal(_) => app.t("Terminal"),
+            Self::ClawWebBridge(_) => app.t("WebBridge"),
+            Self::KnowledgeBase(_) => app.t("Knowledge"),
+            Self::Templates(_) => app.t("Templates"),
+            Self::Placeholder { title_key, .. } => app.t(title_key),
+        }
+    }
+
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        match self {
+            Self::Share(p) => p.render(app, ui),
+            Self::Console(p) => p.render(app, ui),
+            Self::Files(p) => p.render(app, ui),
+            Self::ClawSettings(p) => p.render(app, ui),
+            Self::ClawWorkspace(p) => p.render(app, ui),
+            Self::ClawTerminal(p) => p.render(app, ui),
+            Self::ClawWebBridge(p) => p.render(app, ui),
+            Self::KnowledgeBase(p) => p.render(app, ui),
+            Self::Templates(p) => p.render(app, ui),
+            Self::Placeholder { hint_key, .. } => {
+                render_empty_state(ui, app.t(hint_key), &app.ui_store.theme);
+            }
+        }
+    }
+}
+
 /// Render the IDE-style right rail panel.
 pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
     let inset = theme.space_4 as i8;
-    let inner_margin = egui::Margin::symmetric(12, 16);
+    let inner_margin = egui::Margin::symmetric(theme.space_12 as i8, theme.space_16 as i8);
     let outer_margin = egui::Margin {
         left: 0,
         right: inset,
@@ -50,15 +146,23 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
     }
     app.panel_animation.prev_panel = current_panel;
 
-    // Animated width: interpolate during transition, latch at target otherwise.
+    // Animated width: interpolate during transition, latch at user preference
+    // or theme default once the animation completes.
     let anim_w = app.panel_animation.right_panel_width.current();
+    let user_w = app
+        .ui_store
+        .right_rail_width
+        .unwrap_or(theme.size_panel_right);
     let effective_w = if app.panel_animation.right_panel_width.done && !visible {
         return; // Panel is fully collapsed, don't render.
+    } else if app.panel_animation.right_panel_width.done {
+        user_w // Animation done: use user preference.
     } else {
-        anim_w.max(0.0)
+        anim_w.max(0.0) // Animating: use interpolated value.
     };
 
-    let response = egui::SidePanel::right("right_ide_panel")
+    let panel_response = egui::SidePanel::right("right_ide_panel")
+        // LAYOUT-EXEMPT: panel width bounds chosen for IDE-style utility rail.
         .default_width(effective_w.ceil().max(180.0))
         .min_width(180.0)
         .max_width(400.0)
@@ -78,12 +182,13 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
             }
             ui.set_min_width(ui.available_width());
 
-            let panel = app.view_state.right_rail_panel;
+            let panel_kind = app.view_state.right_rail_panel;
+            let mut panel = ActivePanel::from_kind(panel_kind);
 
             // Header: title + close button.
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new(panel_title(panel, app))
+                    egui::RichText::new(panel.title(app))
                         .size(theme.text_base)
                         .strong()
                         .color(theme.text_strong),
@@ -106,7 +211,7 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
 
             // Surface the empty-session quick-start hints only inside the Console
             // panel; the central empty stage keeps just the Clarity title/subtitle.
-            if panel == clarity_core::ui::RightRailPanel::Console
+            if panel_kind == clarity_core::ui::RightRailPanel::Console
                 && crate::panels::chat::is_empty_state(app)
             {
                 render_quick_start_hints(app, ui);
@@ -114,44 +219,16 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
             }
 
             // Panel content.
-            match panel {
-                RightRailPanel::Share => share_panel::render(app, ui),
-                RightRailPanel::Console => console_panel::render(app, ui),
-                RightRailPanel::Files => files_panel::render(app, ui),
-                RightRailPanel::ClawSettings => claw_settings_panel::render(app, ui),
-                RightRailPanel::ClawWorkspace => claw_workspace_panel::render(app, ui),
-                RightRailPanel::ClawTerminal => claw_terminal_panel::render(app, ui),
-                RightRailPanel::ClawWebBridge => claw_webbridge_panel::render(app, ui),
-                RightRailPanel::KnowledgeBase => knowledge_panel::render(app, ui),
-                RightRailPanel::Templates => template_panel::render(app, ui),
-                // Migrated from legacy SidePanel — currently stub;
-                // legacy render path in main.rs still active during migration.
-                RightRailPanel::Team => {
-                    ui.label("Team panel — migrating from legacy SidePanel");
-                }
-                RightRailPanel::Task => {
-                    ui.label("Task panel — migrating from legacy SidePanel");
-                }
-                RightRailPanel::Dashboard => {
-                    ui.label("Dashboard — migrating from legacy SidePanel");
-                }
-                RightRailPanel::None => {
-                    ui.label(
-                        egui::RichText::new(app.t("Select a panel from the Bot bar"))
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
-                    );
-                }
-            }
+            panel.render(app, ui);
         });
 
-    app.ui_store.right_rail_width = Some(response.response.rect.width());
+    app.ui_store.right_rail_width = Some(panel_response.response.rect.width());
 
     // The native resize hover/drag line is drawn by egui on top of the panel
     // contents and cannot be disabled with `show_separator_line(false)`. Cover
     // the line with the background color and redraw the divider ourselves so it
     // aligns cleanly with the rounded main-stage surface.
-    let panel_rect = response.response.rect;
+    let panel_rect = panel_response.response.rect;
     let screen = ctx.screen_rect();
     let surface_top = theme.size_titlebar + theme.space_4;
     let surface_bottom = screen.max.y - theme.space_4;
@@ -244,20 +321,27 @@ fn render_quick_start_hints(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
-fn panel_title(panel: RightRailPanel, app: &crate::App) -> &'static str {
-    match panel {
-        RightRailPanel::None => app.t("Panel"),
-        RightRailPanel::Share => app.t("Share"),
-        RightRailPanel::Console => app.t("Console"),
-        RightRailPanel::Files => app.t("Files"),
-        RightRailPanel::ClawSettings => app.t("Claw"),
-        RightRailPanel::ClawWorkspace => app.t("Workspace"),
-        RightRailPanel::ClawTerminal => app.t("Terminal"),
-        RightRailPanel::ClawWebBridge => app.t("WebBridge"),
-        RightRailPanel::KnowledgeBase => app.t("Knowledge"),
-        RightRailPanel::Templates => app.t("Templates"),
-        RightRailPanel::Team => app.t("Team"),
-        RightRailPanel::Task => app.t("Task"),
-        RightRailPanel::Dashboard => app.t("Dashboard"),
-    }
+/// Shared empty-state widget used by placeholder right-rail panels.
+fn render_empty_state(ui: &mut egui::Ui, message: &str, theme: &crate::theme::Theme) {
+    egui::Frame::new()
+        .fill(theme.surface)
+        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+        .inner_margin(egui::Margin::same(theme.space_16 as i8))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new(crate::theme::ICON_LAYERS)
+                        .font(theme.font_icon(theme.text_2xl))
+                        .color(theme.text_dim),
+                );
+                crate::design_system::gap(ui, crate::design_system::Space::S2);
+                ui.label(
+                    egui::RichText::new(message)
+                        .size(theme.text_sm)
+                        .color(theme.text_dim)
+                        .italics(),
+                );
+            });
+        });
 }

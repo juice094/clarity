@@ -6,6 +6,9 @@
 
 use crate::App;
 
+// LAYOUT-EXEMPT: compact command input height local to this panel.
+const CMD_INPUT_H: f32 = 24.0;
+
 /// Render the Claw SSH terminal panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
@@ -93,6 +96,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     // Terminal output area — scrollable log.
     let history_count = app.ui_store.claw_history.len();
+    // LAYOUT-EXEMPT: output viewport reserve/maximum tied to panel proportions.
     let output_height = (ui.available_height() - 80.0).max(120.0);
     egui::ScrollArea::vertical()
         .max_height(output_height)
@@ -157,7 +161,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         );
         let hint = app.t("Enter command…");
         let resp = ui.add_sized(
-            egui::vec2(ui.available_width() - 4.0, 24.0),
+            egui::vec2(ui.available_width() - theme.space_4, CMD_INPUT_H),
             egui::TextEdit::singleline(&mut app.chat_store.input)
                 .hint_text(hint)
                 .font(egui::TextStyle::Monospace),
@@ -187,4 +191,18 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             }
         }
     });
+}
+
+// ── Panel trait implementation ──
+
+/// Claw terminal panel renderer.
+pub struct ClawTerminalPanel;
+
+impl crate::design_system::Panel for ClawTerminalPanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Terminal")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
 }

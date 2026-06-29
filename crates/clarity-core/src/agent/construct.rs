@@ -103,6 +103,8 @@ impl Agent {
                 jumpy_predictor: None,
                 lsp_initialized: false,
                 snapshot_service: None,
+                tool_orchestrator: None,
+                tool_cache: crate::agent::tool_cache::ToolResultCache::new(Default::default()),
             })),
         }
     }

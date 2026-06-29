@@ -133,7 +133,7 @@ fn render_empty_state(app: &mut App, ui: &mut egui::Ui) {
 pub struct ProviderPanel;
 
 impl crate::design_system::Panel for ProviderPanel {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "Provider"
     }
 

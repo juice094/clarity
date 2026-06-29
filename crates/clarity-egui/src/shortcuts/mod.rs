@@ -141,10 +141,10 @@ impl ShortcutAction {
             ShortcutAction::NavigateTop => ids::NAVIGATE_TOP,
             ShortcutAction::NavigateBottom => ids::NAVIGATE_BOTTOM,
             ShortcutAction::CopyLine => ids::COPY_LINE,
-            ShortcutAction::ToggleConsole => "toggle-console",
-            ShortcutAction::ToggleFiles => "toggle-files",
-            ShortcutAction::ToggleShare => "toggle-share",
-            ShortcutAction::ShowShortcuts => "show-shortcuts",
+            ShortcutAction::ToggleConsole => ids::TOGGLE_CONSOLE,
+            ShortcutAction::ToggleFiles => ids::TOGGLE_FILES,
+            ShortcutAction::ToggleShare => ids::TOGGLE_SHARE,
+            ShortcutAction::ShowShortcuts => ids::SHOW_SHORTCUTS,
         }
     }
 }
@@ -272,7 +272,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 }
 
 /// Returns `true` when a modal dialog is open that should block main-UI shortcuts.
-fn is_modal_open(app: &App) -> bool {
+pub fn is_modal_open(app: &App) -> bool {
     !app.ui_store.pending_approvals.is_empty()
         || app.view_state.main == clarity_core::ui::AppView::Settings
         || app.view_state.modal == Some(clarity_core::ui::ModalType::TeamCreate)
@@ -317,6 +317,16 @@ mod tests {
             ),
             (ShortcutAction::ToggleDashboardPanel, ids::TOGGLE_DASHBOARD),
             (ShortcutAction::ToggleLayoutDebug, ids::TOGGLE_LAYOUT_DEBUG),
+            (ShortcutAction::ToggleConsole, ids::TOGGLE_CONSOLE),
+            (ShortcutAction::ToggleFiles, ids::TOGGLE_FILES),
+            (ShortcutAction::ToggleShare, ids::TOGGLE_SHARE),
+            (ShortcutAction::IncreaseFontScale, ids::INCREASE_FONT_SCALE),
+            (ShortcutAction::DecreaseFontScale, ids::DECREASE_FONT_SCALE),
+            (ShortcutAction::NavigateDown, ids::NAVIGATE_DOWN),
+            (ShortcutAction::NavigateUp, ids::NAVIGATE_UP),
+            (ShortcutAction::NavigateTop, ids::NAVIGATE_TOP),
+            (ShortcutAction::NavigateBottom, ids::NAVIGATE_BOTTOM),
+            (ShortcutAction::CopyLine, ids::COPY_LINE),
         ];
         for (action, expected) in all {
             assert_eq!(
@@ -339,5 +349,12 @@ mod tests {
                 action.command_id()
             );
         }
+    }
+
+    #[test]
+    fn show_shortcuts_uses_local_command_id() {
+        // ShowShortcuts only opens the in-app help modal and is not a shared
+        // core command, so it intentionally stays a local kebab-case id.
+        assert_eq!(ShortcutAction::ShowShortcuts.command_id(), "show-shortcuts");
     }
 }

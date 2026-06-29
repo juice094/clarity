@@ -8,7 +8,7 @@ tags: [architecture]
 # Clarity Architecture
 
 > Code-accurate architecture reference | Last updated: 2026-06-25
-> Reflects v0.3.x delivery: 22 active workspace crates + 1 archived (`clarity-tauri`) across 23 crate directories
+> Reflects v0.3.x delivery: 19 active workspace crates + 1 archived (`clarity-tauri`) across 20 crate directories
 
 ---
 
@@ -16,7 +16,7 @@ tags: [architecture]
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 22 active independent workspace crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
+| **Single Responsibility** | 19 active independent workspace crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -37,7 +37,7 @@ tags: [architecture]
 │  0.31    │• SSE/WS │• crossterm  │• `--prompt` / `--file`            │
 │• eframe │• static │• commands   │• `--output json/markdown`         │
 │  0.31    │  files  │  /plan etc.  │• `--provider local` (GGUF)        │
-│• Tauri 2 │          │              │                                    │
+│• Tauri 2 │          │              │• `clarity-claw` (lib + bin)       │
 │  archived│          │              │                                    │
 └─────┬────┴────┬─────┴──────┬───────┴────────────┬───────────────────────┘
       │         │            │                    │
@@ -69,13 +69,13 @@ tags: [architecture]
           ┌─────────────┴───────────────────────────────────────────────┐
           │              Shared Infrastructure Layer                     │
           ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
-          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │clarity-  │
-          │contract  │memory    │mcp       │llm       │  tools          │openclaw  │
-          │          │          │          │          │                 │          │
-          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │• OpenClaw│
-          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search │  Gateway │
-          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task │• device  │
-          │  trait   │• chunking│• WS      │• local   │                 │  identity│
+          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
+          │contract  │memory    │mcp       │llm       │  tools          │
+          │          │          │          │          │                 │
+          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │
+          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search │
+          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task │
+          │  trait   │• chunking│• WS      │• local   │                 │
           └──────────┴──────────┴──────────┴──────────┴─────────────────┘
           ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
           │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
@@ -114,7 +114,6 @@ clarity-contract
     ├── clarity-wire      (SPMC event bus)
     ├── clarity-memory    (SQLite + BM25 + vector)
     ├── clarity-mcp       (MCP client transports)
-    ├── clarity-openclaw  (OpenClaw Gateway client + device identity)
     ├── clarity-llm       (provider bindings)
     ├── clarity-tools     (built-in tools)
     ├── clarity-channels  (external channel abstraction; WeChat iLink implemented; Webhook enabled)
@@ -135,7 +134,7 @@ clarity-contract
     │  clarity-headless / clarity-mobile-core │
     └───────────────────────────────────────┘
 
-clarity-anthropic-proxy: Anthropic Messages API → DeepSeek proxy (utility binary)
+clarity-anthropic-proxy: Anthropic Messages API gateway over clarity-llm::anthropic (default DeepSeek device)
 ```
 
 **Reusability rating**:
@@ -155,7 +154,6 @@ clarity-anthropic-proxy: Anthropic Messages API → DeepSeek proxy (utility bina
 | `clarity-subagents` | ~2,500 | 37+ | `SubAgentManager`, `AgentPool`, `Team`, `Token` |
 | `clarity-llm` | ~3,500 | 63+ | `LlmFactory`, `ModelRegistry`, `LocalGgufProvider` |
 | `clarity-mcp` | ~2,000 | 37+ | `McpClient`, `McpRegistry`, `McpTransport` |
-| `clarity-openclaw` | ~1,000 | 4+ | `ClawClient`, `DeviceIdentity`, device discovery |
 | `clarity-tools` | ~4,500 | 99+ | `FileReadTool`, `BashTool`, `WebSearchTool`, `TaskCreateTool` |
 | `clarity-memory` | ~3,600 | 97+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
 | `clarity-thread-store` | ~1,200 | 13+ | `ThreadStore`, `LocalThreadStore`, `LiveThread` |
@@ -167,12 +165,12 @@ clarity-anthropic-proxy: Anthropic Messages API → DeepSeek proxy (utility bina
 | `clarity-gateway` | ~3,600 | 62+ | `AppState`, `PersistentSessionStore`, API handlers |
 | `clarity-egui` | ~4,600 | 116+ | egui app, `ViewState`, panels, widgets, theme |
 | `clarity-tui` | ~1,800 | 46+ | `App`, `ui()`, command registry |
-| `clarity-claw` | ~600 | 18+ | Tray monitor, `notify` watcher |
+| `clarity-claw` | ~1,600 | 22+ | Unified client-side Claw node: UI-agnostic lib (`ClawClient`, `DeviceIdentity`, Gateway WebSocket + OpenClaw/KimiClaw compatibility) + system-tray binary |
 | `clarity-headless` | ~380 | 16+ | CLI args, `build_provider()` |
 | `clarity-mobile-core` | ~400 | 3+ | UniFFI bridge: Runtime/events/config/memory for Android/iOS |
 | `clarity-slint` | — | — | Experimental Slint GUI stack (excluded from default CI) |
 | `clarity-tauri` | — | — | **Archived** React+Vite frontend (excluded from workspace) |
-| `clarity-anthropic-proxy` | ~500 | 4+ | Anthropic Messages API → DeepSeek proxy (utility binary) |
+| `clarity-anthropic-proxy` | ~150 | 4+ | Anthropic Messages API gateway; protocol conversion in `clarity-llm::anthropic` |
 
 ---
 

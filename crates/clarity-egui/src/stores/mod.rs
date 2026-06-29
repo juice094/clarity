@@ -15,10 +15,12 @@ pub mod plugin;
 pub mod project;
 pub mod session;
 pub mod settings;
+pub mod share;
 pub mod snapshot;
 pub mod subagent;
 pub mod task;
 pub mod team;
+pub mod template;
 pub mod tool_call;
 pub mod ui;
 
@@ -32,10 +34,12 @@ pub use onboarding::*;
 pub use project::*;
 pub use session::*;
 pub use settings::*;
+pub use share::*;
 pub use snapshot::*;
 pub use subagent::*;
 pub use task::*;
 pub use team::*;
+pub use template::*;
 pub use tool_call::*;
 pub use ui::*;
 

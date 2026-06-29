@@ -70,7 +70,7 @@
    - 集中程度：极高（跨十几个 crate）。
 
 5. **局部 `#[allow(clippy::unwrap_used)]` / `#[allow(clippy::expect_used)]` 未说明不变量**
-   - 文件：`clarity-tools/src/web_browser.rs:246`、`clarity-tools/src/web.rs:27`、`clarity-memory/src/extractor.rs` 多处、`clarity-core/src/agent/tool_parser.rs`、`clarity-core/src/agent/run/loop_helpers.rs` 等。
+   - 文件：`clarity-tools/src/web_browser.rs:246`、`clarity-tools/src/web.rs:27`、`clarity-memory/src/extractor.rs` 多处、`clarity-contract/src/tool_parser.rs`、`clarity-core/src/agent/run/loop_helpers.rs` 等。
    - 现象：只加 `allow`，没有 `// SAFE:` 注释。
    - 风险：后来者无法判断这些 unwrap 是否真安全。
 

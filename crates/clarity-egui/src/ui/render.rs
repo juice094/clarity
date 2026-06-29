@@ -854,7 +854,7 @@ fn estimate_height_pretext(
     let text_width = match msg.role {
         Role::User => ((content_max_width * 0.72).max(280.0) - 36.0).max(120.0),
         Role::Agent => content_max_width.max(120.0),
-        Role::System => content_max_width.min(360.0).max(120.0),
+        Role::System => content_max_width.clamp(120.0, 360.0),
     };
 
     for block in &msg.parsed {

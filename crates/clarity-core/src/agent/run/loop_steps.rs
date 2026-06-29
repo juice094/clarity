@@ -52,12 +52,12 @@ pub(crate) fn record_cost(
 /// Fallback: parse tool calls from content if native tool_calls are empty.
 pub(crate) fn parse_tool_calls(response: &clarity_contract::LlmResponse) -> Vec<ToolCall> {
     if response.tool_calls.is_empty() && !response.content.is_empty() {
-        if let Some(format) = crate::agent::tool_parser::detect_tool_format(&response.content) {
+        if let Some(format) = clarity_contract::tool_parser::detect_tool_format(&response.content) {
             tracing::info!(
                 "Detected tool format {:?}, parsing tool calls from content",
                 format
             );
-            crate::agent::tool_parser::parse_tool_calls(&response.content, format)
+            clarity_contract::tool_parser::parse_tool_calls(&response.content, format)
         } else {
             Vec::new()
         }

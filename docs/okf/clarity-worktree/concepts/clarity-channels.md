@@ -3,17 +3,8 @@ id: clarity-channels
 name: clarity-channels
 type: channels
 layer: infrastructure
-depends_on:
-- clarity-contract
-consumed_by:
-- clarity-core
-title: clarity-channels
-description: External communication channel abstraction.
-tags:
-- channels
-- clarity
-- infrastructure
-timestamp: '2026-06-26T11:28:50Z'
+depends_on: ["clarity-contract"]
+consumed_by: ["clarity-core"]
 ---
 
 # clarity-channels

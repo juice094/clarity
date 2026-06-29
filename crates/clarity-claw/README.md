@@ -1,34 +1,67 @@
 # clarity-claw
 
-Clarity 系统托盘守护进程：常驻后台，监控任务状态，提供快速入口与 OS 通知。
+Clarity 分布式节点（Claw）的 client-side 统一入口：同时提供 UI 无关的客户端库和系统托盘常驻二进制。
 
 ## 职责
 
-- **系统托盘** — 基于 `tao` + `tray-icon` 实现 Windows 系统托盘常驻
-- **快速输入** — 左键点击托盘图标唤起输入框，直接发送消息到 Gateway
-- **任务监控** — 轮询 Gateway `/v1/tasks`，实时显示运行中 / 待处理任务数
-- **OS 通知** — 任务完成、失败或取消时推送桌面通知（`notify-rust`）
-- **文件监听** — 监听 `.clarity/tasks` 目录变化，加速任务状态刷新
-- **Wire 集成** — 预留 `clarity-wire` 通道，未来可直接接收 Soul 端推送
+- **库（lib）**
+  - Gateway WebSocket 原生协议客户端
+  - OpenClaw / KimiClaw JSON-RPC 兼容层
+  - 设备发现、Ed25519 设备身份、配对 token 管理
+  - 角色上下文同步（可选 `mesh` feature，基于 syncthing-rust）
+- **二进制（bin）**
+  - 系统托盘常驻节点
+  - 设备注册、心跳、任务/线程轮询
+  - OS 通知与快速输入
 
-## 关键类型
+## 命名说明
 
-- `UserEvent` — 自定义事件枚举，用于 Tao 事件循环的跨线程通信
-- `TaskSummary` / `TaskListPayload` — Gateway 任务列表的极简反序列化结构
-- `main` — 初始化托盘、启动后台轮询与事件循环的入口
+"Claw" 名字来自早期对外部 ZeroClaw / OpenClaw / KimiClaw 的参照，
+在 Clarity 内部已重新定义为**分布式协作节点**概念。
+
+- `clarity-claw`：client-side（本 crate）
+- `clarity-gateway`：server-side
+- `clarity-contract::claw_context` / `clarity-contract::federation`：跨 crate 共享契约
+
+## 使用
+
+```rust
+use clarity_claw::{DeviceIdentity, OpenClawClient};
+
+let device = DeviceIdentity::load_or_generate().unwrap();
+let client = OpenClawClient::connect_with_device(
+    "ws://127.0.0.1:18679",
+    device,
+    &device_token,
+);
+
+client.send_message("agent:main:main", "hello");
+```
+
+## Features
+
+| Feature | 说明 |
+|---------|------|
+| `tray` | 启用系统托盘二进制所需的 GUI 依赖（`tao`/`tray-icon`/`notify-rust` 等）。二进制目标 `clarity-claw` 需要此 feature。 |
+| `mesh` | 启用基于 `syncthing-rust` 的角色上下文离线同步。 |
 
 ## 测试
 
 ```bash
+# 库默认 feature
 cargo test -p clarity-claw --lib
+
+# 带 mesh
+cargo test -p clarity-claw --lib --features mesh
+
+# 托盘二进制
+cargo test -p clarity-claw --bin clarity-claw --features tray
 ```
 
 ## 边界与稳定性
 
 - **Stability tier**: Experimental
-  - Experimental: API may change before v0.4.0
-- **MSRV**: 1.78.0
-- **反向依赖禁止** (No reverse dependencies):
-  - 可依赖 clarity-core + clarity-wire + clarity-gateway
-- **Library/binary classification**:
-  - Binary: application entry point, not a library
+- **MSRV**: 1.85（跟随 workspace）
+- **库层面不依赖 `clarity-core` / `clarity-wire`**：
+  - `clarity-core` 与 `clarity-wire` 仅由系统托盘二进制通过 `tray` feature 引入。
+  - 前端依赖 `clarity-claw` 时应使用 `default-features = false`，避免拖入托盘 GUI 依赖。

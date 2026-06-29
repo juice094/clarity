@@ -68,6 +68,14 @@ pub struct AppState {
     pub device_registry: crate::handlers::claw::DeviceRegistry,
     /// Persistent SQLite store for Claw Mesh role-context events.
     pub role_context_store: Arc<RoleContextStore>,
+    /// Shared Wire for cross-connection event replay.
+    ///
+    /// All chat requests forward their streaming events through this wire so
+    /// that reconnecting WebSocket clients can catch up on missed messages
+    /// via the built-in ring buffer (WireEventBuffer).
+    pub event_wire: Arc<clarity_wire::Wire>,
+    /// Global connection metrics for the gateway.
+    pub metrics: Arc<clarity_contract::ConnectionMetrics>,
 }
 
 impl AppState {
@@ -174,6 +182,9 @@ impl AppState {
             }
         };
 
+        let event_wire = Arc::new(clarity_wire::Wire::new());
+        let metrics = Arc::new(clarity_contract::ConnectionMetrics::default());
+
         Ok(Self {
             agent: agent.clone(),
             session_store,
@@ -188,6 +199,8 @@ impl AppState {
             oauth_service,
             device_registry: crate::handlers::claw::DeviceRegistry::new(),
             role_context_store,
+            event_wire,
+            metrics,
         })
     }
 }
@@ -360,12 +373,13 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
     let assets_dir =
         std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/static/assets"));
 
-    Router::new()
+    let router = Router::new()
         .route("/", get(serve_chat))
         .route("/chat.html", get(serve_chat))
         .route("/chat-v1.html", get(serve_chat_v1))
         .nest_service("/assets", ServeDir::new(assets_dir))
         .route("/health", get(handlers::chat::health_check))
+        .route("/health/metrics", get(handlers::chat::health_metrics))
         .route(
             "/v1/chat/completions",
             post(handlers::chat::chat_completions),
@@ -441,7 +455,12 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/:id/chat",
             post(handlers::thread_chat::thread_chat),
         )
-        .route("/ws", get(crate::ws::ws_handler))
+        .route("/ws", get(crate::ws::ws_handler));
+
+    #[cfg(feature = "anthropic-api")]
+    let router = router.route("/v1/messages", post(handlers::anthropic::messages));
+
+    router
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)

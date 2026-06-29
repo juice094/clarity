@@ -22,6 +22,8 @@ cargo test -p clarity-egui --bin clarity-egui
 - `src/error.rs` — `EguiError` 枚举（SettingsLoad、LlmLoad、NetworkUnavailable…）
 - `src/llm_loader.rs` — 异步 LLM 加载器（云端 → registry → factory，本地 GGUF 回退）
 - `src/theme.rs` — 设计系统：颜色、字号、圆角
+- `src/claw.rs` — Claw 设备发现、Bot 实例聚合、Claw 消息发送入口
+- `src/panels/settings/claw_tab.rs` — Claw 设置面板（设备发现、配对 token、连接管理）
 
 ## 约定
 
@@ -59,7 +61,7 @@ cargo test -p clarity-egui --bin clarity-egui
 ### 当前基线
 
 - `cargo check -p clarity-egui`: 0 errors, 0 warnings（迁移期允许 dead_code）
-- `cargo test -p clarity-egui --bin clarity-egui`: 89 passed, 0 failed, 0 ignored
+- `cargo test -p clarity-egui --bin clarity-egui`: 249 passed, 0 failed, 2 ignored
 - `cargo test --workspace --lib --exclude clarity-slint`: 全绿
 - `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings`: 全绿
 - 视觉基线：需手动截图保存（sidebar / titlebar / chat / workspace / settings）

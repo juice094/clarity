@@ -22,7 +22,7 @@ fn main() {
     let gateway_url = &args[1];
     let gateway_token = &args[2];
 
-    let device = clarity_openclaw::DeviceIdentity::load_or_generate()
+    let device = clarity_claw::DeviceIdentity::load_or_generate()
         .expect("failed to load/generate device identity");
 
     println!("Device ID:    {}", device.device_id());
@@ -30,7 +30,7 @@ fn main() {
     println!();
     println!("Connecting to {} to request pairing...", gateway_url);
 
-    let client = clarity_openclaw::ClawClient::connect(gateway_url, gateway_token);
+    let client = clarity_claw::ClawClient::connect(gateway_url, gateway_token);
 
     let scopes = vec![
         "operator.admin".into(),
@@ -58,10 +58,10 @@ fn main() {
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_openclaw::client::ClawResponse::Connected { .. } => {
+                clarity_claw::client::ClawResponse::Connected { .. } => {
                     println!("Connected to Gateway.");
                 }
-                clarity_openclaw::client::ClawResponse::PairingResult {
+                clarity_claw::client::ClawResponse::PairingResult {
                     device_id,
                     approved,
                     token,
@@ -80,13 +80,13 @@ fn main() {
                         println!("Pairing pending for device {}. Still waiting...", device_id);
                     }
                 }
-                clarity_openclaw::client::ClawResponse::Event {
+                clarity_claw::client::ClawResponse::Event {
                     event_type,
                     payload,
                 } => {
                     println!("Gateway event: {} -> {}", event_type, payload);
                 }
-                clarity_openclaw::client::ClawResponse::Reply {
+                clarity_claw::client::ClawResponse::Reply {
                     id,
                     method: _,
                     ok,
@@ -94,7 +94,7 @@ fn main() {
                 } => {
                     println!("Gateway reply: id={} ok={} payload={}", id, ok, payload);
                 }
-                clarity_openclaw::client::ClawResponse::Error(e) => {
+                clarity_claw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

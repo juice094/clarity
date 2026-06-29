@@ -328,6 +328,10 @@ impl App {
                 last_snapshot: None,
                 input_history: Vec::new(),
                 input_history_idx: None,
+                find_open: false,
+                find_query: String::new(),
+                find_matches: Vec::new(),
+                find_current: 0,
                 draft_status: crate::ui::types::DraftStatus::None,
                 status_message: None,
                 claw_in_flight_session_id: None,
@@ -479,13 +483,13 @@ impl App {
             // Always ensure a device identity is available. OpenClaw remote
             // Gateways reject token-only connections and clear scopes, which
             // causes sessions.send to fail with an empty error payload.
-            claw_device_identity: clarity_openclaw::DeviceIdentity::load_or_generate()
+            claw_device_identity: clarity_claw::DeviceIdentity::load_or_generate()
                 .map(Some)
                 .unwrap_or_else(|e| {
                     tracing::warn!("Failed to load or generate Clarity device identity: {}", e);
                     None
                 }),
-            claw_device_token: clarity_openclaw::load_paired_token().unwrap_or_else(|e| {
+            claw_device_token: clarity_claw::load_paired_token().unwrap_or_else(|e| {
                 tracing::warn!("Failed to load Clarity device token: {}", e);
                 None
             }),
@@ -494,6 +498,8 @@ impl App {
             knowledge_store: crate::stores::KnowledgeStore::new(),
             console_store: crate::stores::ConsoleStore::default(),
             files_store: crate::stores::FilesStore::default(),
+            share_store: crate::stores::ShareStore::default(),
+            template_store: crate::stores::TemplateStore::default(),
             panel_animation: crate::animation::PanelAnimationState::default(),
         };
         mark("app_struct_init");
@@ -640,10 +646,28 @@ impl App {
     }
 
     /// Persists current session to disk.
-    pub(crate) fn save_current_session(&self) {
-        if let Some(session) = self.session_store.active_session() {
-            if let Err(e) = save_session_internal(session) {
-                tracing::warn!("Failed to save session: {}", e);
+    ///
+    /// On success, sets `last_saved_at` so the auto-save timer skips
+    /// unchanged sessions. On failure, surfaces the error as a toast so the
+    /// user is aware their data may not be durable.
+    pub(crate) fn save_current_session(&mut self) {
+        if let Some(session) = self.session_store.active_session_mut() {
+            let now = crate::session::now_millis();
+            match save_session_internal(session) {
+                Ok(()) => {
+                    // SAFE: this is the only non-loader path that mutates an
+                    // active session's save timestamp. The value is never
+                    // persisted — it's a runtime-only auto-save marker.
+                    session.last_saved_at = now;
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to save session {}: {}", session.id, e);
+                    crate::handlers::system::push_toast(
+                        &mut self.ui_store,
+                        format!("Failed to save session: {}", e),
+                        crate::ui::types::ToastLevel::Error,
+                    );
+                }
             }
         }
     }
@@ -1146,16 +1170,25 @@ impl App {
     pub(crate) fn set_font_scale(&mut self, scale: f32) {
         self.settings_store.settings_edit.font_scale = Some(scale);
         let theme_name = self.settings_store.settings_edit.theme.clone();
-        self.ui_store.theme = match theme_name.as_str() {
-            "light" => crate::theme::Theme::light(),
-            "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
-            "tokyo_night" => crate::theme::Theme::tokyo_night(),
-            "one_dark" => crate::theme::Theme::one_dark(),
-            "oled" => crate::theme::Theme::oled_black(),
-            _ => crate::theme::Theme::dark(),
-        }
-        .with_font_scale(scale);
+        self.set_theme_with_transition(
+            match theme_name.as_str() {
+                "light" => crate::theme::Theme::light(),
+                "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
+                "tokyo_night" => crate::theme::Theme::tokyo_night(),
+                "one_dark" => crate::theme::Theme::one_dark(),
+                "oled" => crate::theme::Theme::oled_black(),
+                _ => crate::theme::Theme::dark(),
+            }
+            .with_font_scale(scale),
+        );
         self.auto_save_settings();
+    }
+
+    /// Apply a new theme with a brief 250ms fade-in transition to avoid the
+    /// jarring flash that occurs with an instantaneous palette swap.
+    pub(crate) fn set_theme_with_transition(&mut self, theme: crate::theme::Theme) {
+        self.ui_store.theme_transition_start = Some(std::time::Instant::now());
+        self.ui_store.theme = theme;
     }
 
     /// Set a session's archived flag.

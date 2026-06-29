@@ -8,6 +8,11 @@ use crate::App;
 use crate::design_system::{self, Space};
 use crate::ui::types::ToastLevel;
 
+// LAYOUT-EXEMPT: compact action-button heights used only inside the Claw
+// settings panel; not part of the global spacing grid.
+const ACTION_BUTTON_H: f32 = 28.0;
+const SMALL_BUTTON_H: f32 = 24.0;
+
 /// Render the Claw device settings panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
@@ -94,6 +99,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 );
                 design_system::gap(ui, Space::S0);
                 ui.add_sized(
+                    // LAYOUT-EXEMPT: compact passphrase input height.
                     egui::vec2(ui.available_width(), 28.0),
                     egui::TextEdit::singleline(&mut app.ui_store.claw_role_passphrase_input)
                         .password(true)
@@ -246,7 +252,7 @@ fn section_header(ui: &mut egui::Ui, theme: &crate::theme::Theme, text: &str, ic
 
 fn action_button(ui: &mut egui::Ui, theme: &crate::theme::Theme, text: &str) -> egui::Response {
     ui.add_sized(
-        egui::vec2(ui.available_width(), 28.0),
+        egui::vec2(ui.available_width(), ACTION_BUTTON_H),
         egui::Button::new(egui::RichText::new(text).size(theme.text_sm))
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
@@ -259,7 +265,7 @@ fn action_button_danger(
     text: &str,
 ) -> egui::Response {
     ui.add_sized(
-        egui::vec2(ui.available_width(), 28.0),
+        egui::vec2(ui.available_width(), ACTION_BUTTON_H),
         egui::Button::new(
             egui::RichText::new(text)
                 .size(theme.text_sm)
@@ -272,7 +278,21 @@ fn action_button_danger(
 
 fn small_button(ui: &mut egui::Ui, theme: &crate::theme::Theme, text: &str) -> egui::Response {
     ui.add_sized(
-        egui::vec2(ui.available_width(), 24.0),
+        egui::vec2(ui.available_width(), SMALL_BUTTON_H),
         egui::Button::new(egui::RichText::new(text).size(theme.text_sm)),
     )
+}
+
+// ── Panel trait implementation ──
+
+/// Claw settings panel renderer.
+pub struct ClawSettingsPanel;
+
+impl crate::design_system::Panel for ClawSettingsPanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Claw")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
 }

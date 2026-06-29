@@ -10,7 +10,7 @@
 //! | `OpenClaw` | kimi-openclaw | OpenClaw Gateway (:18789) | Local + Cloud (Tailscale) |
 //!
 //! This module is the egui-specific adapter. The UI-agnostic OpenClaw client,
-//! device identity and discovery live in the dedicated `clarity-openclaw` crate.
+//! device identity and discovery live in the dedicated `clarity-claw` crate.
 //! Per-device connection parameters drive the behaviour of the Settings /
 //! Workspace / Terminal / WebBridge panels.
 //!
@@ -30,7 +30,7 @@ use std::sync::{Arc, RwLock};
 
 // Re-export UI-agnostic types from the shared crate so existing panels can keep
 // using `crate::claw::ClawType` / `crate::claw::ClawConnection`.
-pub use clarity_openclaw::types::{ClawConnection, ClawProtocol, ClawType, OpenClawSendMethod};
+pub use clarity_claw::types::{ClawConnection, ClawProtocol, ClawType, OpenClawSendMethod};
 
 /// Source of a discovered Claw endpoint, ordered by user-intent priority.
 /// Lower discriminants win when two sources describe the same endpoint.
@@ -149,24 +149,24 @@ pub enum ClawEvent {
 
 /// A protocol-agnostic handle for an active Claw connection.
 ///
-/// Internally this wraps a `clarity_openclaw::ClawConnectionManager` that
+/// Internally this wraps a `clarity_claw::ClawConnectionManager` that
 /// auto-detects the remote dialect (OpenClaw JSON-RPC vs native Gateway
 /// WebSocket) from the server's first message.
 #[derive(Clone)]
 pub struct ClawClientHandle {
-    manager: clarity_openclaw::ClawConnectionManager,
+    manager: clarity_claw::ClawConnectionManager,
 }
 
 impl ClawClientHandle {
     /// Wrap a pre-configured connection manager.
-    pub fn new(manager: clarity_openclaw::ClawConnectionManager) -> Self {
+    pub fn new(manager: clarity_claw::ClawConnectionManager) -> Self {
         Self { manager }
     }
 
     /// Send a chat message. The wire method is chosen by the detected dialect:
     /// Gateway WebSocket uses `chat.send`; OpenClaw JSON-RPC uses `sessions.send`.
     pub fn send_chat(&self, session_key: &str, message: &str) {
-        self.manager.send(clarity_openclaw::ProtocolCommand::Chat {
+        self.manager.send(clarity_claw::ProtocolCommand::Chat {
             session_key: session_key.into(),
             message: message.into(),
         });
@@ -175,7 +175,7 @@ impl ClawClientHandle {
     /// Request conversation history for the given session key.
     pub fn get_history(&self, session_key: &str) {
         self.manager
-            .send(clarity_openclaw::ProtocolCommand::GetHistory {
+            .send(clarity_claw::ProtocolCommand::GetHistory {
                 session_key: session_key.into(),
             });
     }
@@ -183,19 +183,19 @@ impl ClawClientHandle {
     /// Subscribe to session-level events (OpenClaw only; no-op for Gateway).
     pub fn subscribe_session(&self, key: &str) {
         self.manager
-            .send(clarity_openclaw::ProtocolCommand::SubscribeSession { key: key.into() });
+            .send(clarity_claw::ProtocolCommand::SubscribeSession { key: key.into() });
     }
 
     /// Subscribe to message-level events (OpenClaw only; no-op for Gateway).
     pub fn subscribe_messages(&self, key: &str) {
         self.manager
-            .send(clarity_openclaw::ProtocolCommand::SubscribeMessages { key: key.into() });
+            .send(clarity_claw::ProtocolCommand::SubscribeMessages { key: key.into() });
     }
 
     /// Request missing role-context events for the given role.
     pub fn sync_role_context(&self, role_id: &str, since_event_id: Option<&str>, device_id: &str) {
         self.manager
-            .send(clarity_openclaw::ProtocolCommand::SyncRoleContext {
+            .send(clarity_claw::ProtocolCommand::SyncRoleContext {
                 role_id: role_id.into(),
                 since_event_id: since_event_id.map(Into::into),
                 device_id: device_id.into(),
@@ -218,8 +218,8 @@ impl ClawClientHandle {
     }
 }
 
-fn map_protocol_event(event: clarity_openclaw::ProtocolEvent) -> Vec<ClawEvent> {
-    use clarity_openclaw::ProtocolEvent;
+fn map_protocol_event(event: clarity_claw::ProtocolEvent) -> Vec<ClawEvent> {
+    use clarity_claw::ProtocolEvent;
     let mut events = Vec::new();
     match event {
         ProtocolEvent::Connected {
@@ -771,10 +771,10 @@ fn discover_settings_openclaw(
         });
         let send_method = match conn.send_method {
             crate::settings::OpenClawSendMethod::SessionsSend => {
-                clarity_openclaw::types::OpenClawSendMethod::SessionsSend
+                clarity_claw::types::OpenClawSendMethod::SessionsSend
             }
             crate::settings::OpenClawSendMethod::ChatSend => {
-                clarity_openclaw::types::OpenClawSendMethod::ChatSend
+                clarity_claw::types::OpenClawSendMethod::ChatSend
             }
         };
         merge_endpoint(
@@ -810,7 +810,7 @@ fn discover_settings_openclaw(
 fn discover_saved_openclaw(
     endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
 ) {
-    let paired = match clarity_openclaw::load_paired_token() {
+    let paired = match clarity_claw::load_paired_token() {
         Ok(Some(p)) => p,
         Ok(None) => return,
         Err(e) => {
@@ -948,7 +948,7 @@ fn discover_openclaw_crate(
     endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
     hostname: &str,
 ) {
-    for record in clarity_openclaw::discovery::discover_openclaw_devices(hostname) {
+    for record in clarity_claw::discovery::discover_openclaw_devices(hostname) {
         let mut device = BotInstance {
             id: record.info.id,
             name: record.info.name,
@@ -977,11 +977,11 @@ fn discover_openclaw_crate(
     }
 }
 
-fn map_status(status: clarity_openclaw::types::DeviceStatus) -> BotStatus {
+fn map_status(status: clarity_claw::types::DeviceStatus) -> BotStatus {
     match status {
-        clarity_openclaw::types::DeviceStatus::Online => BotStatus::Online,
-        clarity_openclaw::types::DeviceStatus::Offline => BotStatus::Offline,
-        clarity_openclaw::types::DeviceStatus::Syncing => BotStatus::Syncing,
+        clarity_claw::types::DeviceStatus::Online => BotStatus::Online,
+        clarity_claw::types::DeviceStatus::Offline => BotStatus::Offline,
+        clarity_claw::types::DeviceStatus::Syncing => BotStatus::Syncing,
     }
 }
 
@@ -1288,7 +1288,7 @@ mod tests {
 
     #[test]
     fn test_claw_event_mapping_connected() {
-        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::Connected {
+        let events = map_protocol_event(clarity_claw::ProtocolEvent::Connected {
             gateway_url: "wss://gray-cloud.example:18789".into(),
             session_id: None,
         });
@@ -1308,9 +1308,7 @@ mod tests {
     #[test]
     fn test_claw_event_mapping_wire_payload() {
         let payload = serde_json::json!({"foo": "bar"});
-        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::WireMessage(
-            payload.clone(),
-        ));
+        let events = map_protocol_event(clarity_claw::ProtocolEvent::WireMessage(payload.clone()));
         assert_eq!(events.len(), 1);
         match &events[0] {
             ClawEvent::WirePayload(p) => assert_eq!(p, &payload),
@@ -1320,12 +1318,12 @@ mod tests {
 
     #[test]
     fn test_claw_event_mapping_history() {
-        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::History(vec![
-            clarity_openclaw::ProtocolHistoryMessage {
+        let events = map_protocol_event(clarity_claw::ProtocolEvent::History(vec![
+            clarity_claw::ProtocolHistoryMessage {
                 role: "user".into(),
                 content: "hello".into(),
             },
-            clarity_openclaw::ProtocolHistoryMessage {
+            clarity_claw::ProtocolHistoryMessage {
                 role: "assistant".into(),
                 content: "hi there".into(),
             },
@@ -1349,7 +1347,7 @@ mod tests {
 
     #[test]
     fn test_claw_event_mapping_pairing_result() {
-        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::PairingResult {
+        let events = map_protocol_event(clarity_claw::ProtocolEvent::PairingResult {
             device_id: "dev-1".into(),
             approved: true,
             token: Some("tok".into()),
@@ -1374,7 +1372,7 @@ mod tests {
 
     #[test]
     fn test_claw_event_mapping_reconnect_pending() {
-        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::ReconnectPending {
+        let events = map_protocol_event(clarity_claw::ProtocolEvent::ReconnectPending {
             reason: "network flap".into(),
             seconds: 4,
         });

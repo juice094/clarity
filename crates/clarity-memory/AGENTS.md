@@ -25,4 +25,4 @@ cargo test -p clarity-memory --lib
 
 - 错误处理使用 `thiserror` 定义的内部错误类型
 - 异步使用 `tokio`
-- 事实去重使用 SHA256 fingerprint
+- 编译输出使用 SHA256 fingerprint 做变更检测；事实去重基于归一化字符串匹配

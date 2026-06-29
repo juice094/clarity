@@ -276,7 +276,7 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
 pub struct TeamCreateModal;
 
 impl crate::design_system::Panel for TeamCreateModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "TeamCreate"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

@@ -147,6 +147,24 @@ impl Agent {
         let args: Value = serde_json::from_str(&tool_call.function.arguments)
             .map_err(|e| ToolError::invalid_params(format!("Invalid JSON: {}", e)))?;
 
+        // Check the per-turn tool result cache before executing.
+        // Skips volatile tools (shell, web_fetch, etc.) and disabled caches.
+        {
+            let mut inner = self.inner.write();
+            let cache = &mut inner.tool_cache;
+            if cache.is_cacheable(name) {
+                let cwd = self.config.working_dir.to_string_lossy().to_string();
+                let key = cache.make_key(name, &args, &cwd);
+                if let Some(cached) = cache.get(&key) {
+                    tracing::debug!(
+                        tool = %name,
+                        "Tool result cache hit, returning cached value"
+                    );
+                    return Ok(cached);
+                }
+            }
+        }
+
         info!("Executing tool '{}' with args: {:?}", name, args);
 
         let sensitive_path = self.detect_sensitive_access(name, &args);
@@ -294,7 +312,20 @@ impl Agent {
             .with_approval_mode(mode)
             .with_capability_token(self.config.capability_token.clone());
 
-        self.registry.execute(name, args, ctx).await
+        let result = self.registry.execute(name, args.clone(), ctx).await;
+
+        // Cache successful results for deterministic/idempotent tools.
+        if let Ok(ref value) = result {
+            let mut inner = self.inner.write();
+            let cache = &mut inner.tool_cache;
+            if cache.is_cacheable(name) {
+                let cwd = self.config.working_dir.to_string_lossy().to_string();
+                let key = cache.make_key(name, &args, &cwd);
+                cache.put(key, value.clone());
+            }
+        }
+
+        result
     }
 
     /// Execute a tool directly (bypassing the LLM loop)

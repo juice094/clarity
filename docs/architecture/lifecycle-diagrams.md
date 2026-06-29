@@ -322,7 +322,6 @@ flowchart TB
         TOOL[clarity-tools<br/>File / Shell / Web]
         CHAN[clarity-channels<br/>WeChat iLink / Webhook]
         SEC[clarity-secrets<br/>enc2: secret store]
-        OPEN[clarity-openclaw<br/>Gateway WS client]
         TEL[clarity-telemetry<br/>WideEvent / traces]
     end
 
@@ -344,7 +343,7 @@ flowchart TB
         EGUI[clarity-egui<br/>Desktop GUI]
         TUI[clarity-tui<br/>Terminal UI]
         GW[clarity-gateway<br/>Web IDE]
-        CLAW[clarity-claw<br/>System Tray]
+        CLAW[clarity-claw<br/>Unified client node<br/>lib + system tray]
         HEAD[clarity-headless<br/>CLI / CI]
         MOB[clarity-mobile-core<br/>Mobile FFI]
     end

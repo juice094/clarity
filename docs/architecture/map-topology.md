@@ -56,14 +56,13 @@ clarity-contract
     ├── clarity-wire
     ├── clarity-memory
     ├── clarity-mcp
-    ├── clarity-openclaw
     ├── clarity-llm
     ├── clarity-tools
     ├── clarity-channels
     └── clarity-secrets
 
 旁路 / 独立入口 crate：
-  clarity-claw            → 系统托盘监控（激活中）
+  clarity-claw            → 统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制（激活中）
   clarity-headless        → 无头 CLI（激活中）
   clarity-mobile-core     → 移动端 UniFFI FFI 核心
   clarity-anthropic-proxy → Anthropic Messages API → DeepSeek 代理
@@ -79,7 +78,6 @@ clarity-contract
 | `clarity-wire` | contract | serde, tokio | 纯协议，无业务逻辑，可被任意前端引用 |
 | `clarity-memory` | contract | rusqlite, ndarray, tantivy(opt) | 独立存储层；gateway 直接引用；core 通过 factory 注入 |
 | `clarity-mcp` | contract, wire | serde_json, tokio | MCP client；被 `clarity-llm` 使用 |
-| `clarity-openclaw` | contract | tokio-tungstenite, ed25519-dalek | OpenClaw Gateway 客户端与设备身份 |
 | `clarity-llm` | contract, mcp, memory, secrets | reqwest, candle-core(opt) | Provider 绑定层 |
 | `clarity-tools` | contract, memory | regex, glob | 内置工具库；从 `clarity-core` 拆出 |
 | `clarity-channels` | contract | reqwest | 外部消息通道适配器 |
@@ -92,10 +90,10 @@ clarity-contract
 | `clarity-egui` | core, wire | eframe 0.31, egui 0.31 | 主力 GUI。禁止直接依赖 memory |
 | `clarity-gateway` | core, wire, memory, telemetry | axum, tokio | HTTP API + WebSocket |
 | `clarity-tui` | core, wire | ratatui, crossterm | TUI 前端 |
-| `clarity-claw` | core | notify, tray-icon | 系统托盘监控 |
+| `clarity-claw` | core, wire | notify, tray-icon, tokio-tungstenite | 统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制 |
 | `clarity-headless` | core | clap | 无头 CLI |
 | `clarity-mobile-core` | core, wire, memory, contract, llm | uniffi | 移动端 UniFFI FFI 核心 |
-| `clarity-anthropic-proxy` | contract, core, llm | axum | Anthropic Messages API → DeepSeek 代理 |
+| `clarity-anthropic-proxy` | contract, llm | axum | Anthropic Messages API 网关（默认 DeepSeek device，协议转换在 `clarity-llm::anthropic`） |
 
 ---
 

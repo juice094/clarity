@@ -150,11 +150,25 @@ impl Agent {
         }
 
         // Phase 2: execute all tools in parallel via tokio::spawn.
+        // Each tool acquires an orchestrator permit before execution so
+        // concurrency is bounded by the orchestrator's semaphore.
         let mut handles = Vec::new();
         for tc in tool_calls.iter().cloned() {
             let this = self.clone(); // Agent::clone is lightweight (Arc-based)
             handles.push(tokio::spawn(async move {
                 let name = tc.function.name.clone();
+
+                // Acquire orchestrator permit if configured.
+                // The permit is held for the duration of the tool call and
+                // released on drop, decrementing the active counter.
+                let _permit = match this.tool_orchestrator() {
+                    Some(ref orch) => {
+                        let permit = orch.clone().begin_tool(&name).await;
+                        Some(permit)
+                    }
+                    None => None,
+                };
+
                 let result: Result<Value, ToolError> = this.execute_tool_call(&tc).await;
                 let display = match &result {
                     Ok(v) => this
@@ -165,6 +179,7 @@ impl Agent {
                         .map(|t| t.format_output(v)),
                     Err(_) => None,
                 };
+                // _permit is dropped here, releasing the semaphore slot.
                 (tc.id.clone(), name, result, display)
             }));
         }
@@ -242,7 +257,7 @@ impl Agent {
 
             messages.push(Message::tool(
                 &tc.id,
-                &format!(
+                format!(
                     "<tool_result name=\"{}\">{}</tool_result>",
                     tc.function.name, context_content
                 ),
@@ -372,7 +387,17 @@ impl Agent {
 
             let result: Result<Value, ToolError> = match cancel_error {
                 Some(err) => Err(err),
-                None => self.execute_tool_call(&tc).await,
+                None => {
+                    // Acquire orchestrator permit if configured.
+                    let _permit = match self.tool_orchestrator() {
+                        Some(ref orch) => {
+                            let permit = orch.clone().begin_tool(&tc.function.name).await;
+                            Some(permit)
+                        }
+                        None => None,
+                    };
+                    self.execute_tool_call(&tc).await
+                }
             };
             let sanitized = result.map_err(|e| e.sanitize_paths());
             let mut result_value = match &sanitized {

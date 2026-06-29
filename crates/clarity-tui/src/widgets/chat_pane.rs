@@ -259,6 +259,28 @@ mod tests {
 
     // ── Layout integration tests ──
 
+    /// Helper: render a ChatPane and collect the output Lines.
+    fn render_to_lines(pane: ChatPane<'_>) -> Vec<Line<'static>> {
+        use ratatui::buffer::Buffer;
+        use ratatui::layout::Rect;
+        let area = Rect::new(0, 0, 80, 40);
+        let mut buf = Buffer::empty(area);
+        pane.render(area, &mut buf);
+        // Reconstruct Lines from the buffer's cell content.
+        let mut lines: Vec<Line> = Vec::new();
+        for y in 0..area.height {
+            let row: String = (0..area.width)
+                .map(|x| buf.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "))
+                .collect::<String>()
+                .trim_end()
+                .to_string();
+            if !row.is_empty() {
+                lines.push(Line::from(row));
+            }
+        }
+        lines
+    }
+
     /// Extract plain text from rendered ratatui Lines.
     fn collect_text(lines: &[Line]) -> String {
         lines
@@ -341,27 +363,4 @@ mod tests {
         );
         assert!(text.contains("system info"), "content present");
     }
-}
-
-/// Helper: render a ChatPane and collect the output Lines.
-#[cfg(test)]
-fn render_to_lines(pane: ChatPane<'_>) -> Vec<Line<'static>> {
-    use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
-    let area = Rect::new(0, 0, 80, 40);
-    let mut buf = Buffer::empty(area);
-    pane.render(area, &mut buf);
-    // Reconstruct Lines from the buffer's cell content.
-    let mut lines: Vec<Line> = Vec::new();
-    for y in 0..area.height {
-        let row: String = (0..area.width)
-            .map(|x| buf.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "))
-            .collect::<String>()
-            .trim_end()
-            .to_string();
-        if !row.is_empty() {
-            lines.push(Line::from(row));
-        }
-    }
-    lines
 }

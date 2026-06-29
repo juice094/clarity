@@ -14,7 +14,11 @@ cargo test -p clarity-secrets --lib
 
 ## 关键文件
 
-- `src/lib.rs` — `SecretStore`, `SecretError`, encryption format
+- `src/lib.rs` — crate facade; re-exports `SecretStore`, `SecretError`, and format helpers
+- `src/error.rs` — `SecretError`
+- `src/format.rs` — `enc2:` format constants and helpers
+- `src/key_file.rs` — key file persistence and filesystem permissions (internal)
+- `src/store.rs` — `SecretStore` implementation and tests
 
 ## 约定
 

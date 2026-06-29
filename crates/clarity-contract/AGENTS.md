@@ -19,6 +19,7 @@ cargo test -p clarity-contract --lib
 - `src/llm.rs` — `LlmProvider` trait、`LlmResponse`、`ProviderCapabilities`、`Pricing`
 - `src/error.rs` — `AgentError`、`ToolError`、`ContractResult`、路径消毒 `sanitize_path_str`
 - `src/federation.rs` — `FederationNode` trait、`FederationMessage`、`Capability`、`TaskSpec`
+- `src/claw_context.rs` — `ClawContextEvent`、`RoleContextId` 等 Claw 角色上下文共享事件
 - `src/capability.rs` — `CapabilityToken`、`TokenError`、沙箱/白名单/只读校验
 
 ## 约定

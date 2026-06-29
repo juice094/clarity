@@ -35,18 +35,17 @@ crates/
 ├── clarity-subagents      # Sub-agent executor + parallel scheduler
 ├── clarity-thread-store   # Thread persistence abstraction; depends on clarity-rollout
 ├── clarity-rollout        # JSONL rollout persistence (API design inspired by Codex)
-├── clarity-openclaw       # OpenClaw/KimiClaw Gateway WebSocket client, device identity
 ├── clarity-secrets        # Encrypted secret storage (`enc2:`)
 ├── clarity-telemetry      # Unified telemetry
 ├── clarity-core           # Agent loop, Approval, Skill, MCP integration
 ├── clarity-gateway        # Axum HTTP/WebSocket server, Web UI, session store
 ├── clarity-egui           # Desktop GUI (eframe/egui) — primary UI stack
 ├── clarity-tui            # ratatui terminal interface
-├── clarity-claw           # System-tray background monitor — Gateway WebSocket client only
+├── clarity-claw           # Unified client-side Claw node — UI-agnostic library + system-tray binary (Gateway WebSocket client, OpenClaw/KimiClaw compatibility, device discovery/identity/pairing, role-context sync)
 ├── clarity-headless       # Headless CLI for scripts/CI
 ├── clarity-mobile-core    # Mobile FFI core — UniFFI bridge for Android/iOS
 ├── clarity-slint          # Experimental Slint desktop GUI — excluded from default CI
-├── clarity-anthropic-proxy # Anthropic Messages API → DeepSeek proxy (utility binary)
+├── clarity-anthropic-proxy # Anthropic Messages API gateway (default DeepSeek device; protocol adapter in clarity-llm)
 └── clarity-tauri          # Archived — excluded from workspace build
 ```
 

@@ -34,7 +34,7 @@ fn main() {
     let request_id = first["requestId"].as_str().expect("requestId");
     println!("Approving pairing request: {}", request_id);
 
-    let client = clarity_openclaw::ClawClient::connect(&gateway_url, gateway_token);
+    let client = clarity_claw::ClawClient::connect(&gateway_url, gateway_token);
 
     thread::sleep(Duration::from_secs(1));
 
@@ -49,10 +49,10 @@ fn main() {
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_openclaw::client::ClawResponse::Connected { .. } => {
+                clarity_claw::client::ClawResponse::Connected { .. } => {
                     println!("Connected to Gateway.");
                 }
-                clarity_openclaw::client::ClawResponse::Reply {
+                clarity_claw::client::ClawResponse::Reply {
                     id,
                     method: _,
                     ok,
@@ -69,7 +69,7 @@ fn main() {
                         }
                     }
                 }
-                clarity_openclaw::client::ClawResponse::Error(e) => {
+                clarity_claw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

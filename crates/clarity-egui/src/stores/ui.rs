@@ -41,6 +41,10 @@ pub struct UiStore {
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,
+    /// When `Some`, a theme-switch fade-in transition is in progress.
+    /// The stored `Instant` is the transition start time; the overlay fades
+    /// from black (t=0) to transparent (t=250ms).
+    pub theme_transition_start: Option<std::time::Instant>,
     /// Set to `Some(target)` when a shortcut or action requests keyboard
     /// focus on a specific UI element. Consumed and cleared by the renderer.
     pub focus_target: Option<FocusTarget>,
@@ -97,6 +101,7 @@ impl Default for UiStore {
             start: now,
             locale: crate::i18n::Locale::default(),
             theme: crate::theme::Theme::default(),
+            theme_transition_start: None,
             content_max_width: 0.0,
             right_rail_width: None,
             last_scroll_offset: 0.0,

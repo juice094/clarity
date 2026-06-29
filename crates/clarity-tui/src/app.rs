@@ -85,11 +85,19 @@ impl Message {
     /// messages invalidate on every chunk; static messages hit the cache.
     pub fn render_lines(&mut self) -> &[clarity_core::ui::RenderLine] {
         let hash = content_hash(&self.content);
-        if self.cached_lines.as_ref().map_or(true, |(h, _)| *h != hash) {
+        let needs_refresh = match &self.cached_lines {
+            Some((h, _)) => *h != hash,
+            None => true,
+        };
+        if needs_refresh {
             self.cached_lines = Some((hash, clarity_core::ui::markdown_to_lines(&self.content)));
         }
-        // SAFE: if-branch above guarantees cached_lines is Some.
-        &self.cached_lines.as_ref().unwrap().1
+        match &self.cached_lines {
+            Some((_, lines)) => lines,
+            // Empty fallback is unreachable because we just populated the cache,
+            // but it keeps the borrow checker happy without unwrap.
+            None => &[],
+        }
     }
 
     /// Estimate the number of rendered lines this message produces.

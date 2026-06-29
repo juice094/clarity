@@ -342,7 +342,7 @@ fn format_time_ago(timestamp: &str) -> String {
 pub struct SnapshotModal;
 
 impl crate::design_system::Panel for SnapshotModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "Snapshot"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

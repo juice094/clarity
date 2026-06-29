@@ -1,10 +1,12 @@
 //! File-based storage backend with atomic writes
 use crate::backends::StorageBackend;
-use crate::store::DecayConfig;
+use crate::bm25::IncrementalBm25Index;
+use crate::store::{DecayConfig, compute_decay_weight};
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -21,6 +23,12 @@ pub struct FileStore {
     next_id: Arc<AtomicI64>,
     meta_path: PathBuf,
     tags_index: Arc<DashMap<String, Vec<i64>>>,
+    /// In-memory BM25 index used to rank facts in `search_similar`.
+    /// ponytail: rebuilt lazily on first search if missing; replace with
+    /// persisted index if facts exceed a few thousand.
+    bm25_index: Arc<Mutex<IncrementalBm25Index>>,
+    /// Maps fact id to BM25 doc index.
+    bm25_id_map: Arc<DashMap<i64, usize>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +64,8 @@ impl FileStore {
             next_id: Arc::new(AtomicI64::new(1)),
             meta_path,
             tags_index: Arc::new(DashMap::new()),
+            bm25_index: Arc::new(Mutex::new(IncrementalBm25Index::new())),
+            bm25_id_map: Arc::new(DashMap::new()),
         };
 
         store.load_index().await?;
@@ -113,6 +123,12 @@ impl FileStore {
         }
 
         self.index.insert(fact_file.id, fact_file.clone());
+
+        {
+            let mut bm25 = self.bm25_index.lock();
+            let doc_idx = bm25.add_document(&fact_file.fact);
+            self.bm25_id_map.insert(fact_file.id, doc_idx);
+        }
 
         for tag in &fact_file.tags {
             self.tags_index
@@ -221,8 +237,15 @@ impl StorageBackend for FileStore {
         };
 
         self.write_fact_file(&fact_file).await?;
-        self.index.insert(id, fact_file);
+        self.index.insert(id, fact_file.clone());
         self.add_to_tags_index(id, tags);
+
+        {
+            let mut bm25 = self.bm25_index.lock();
+            let doc_idx = bm25.add_document(&fact_file.fact);
+            self.bm25_id_map.insert(id, doc_idx);
+        }
+
         self.save_metadata().await?;
 
         info!("Saved fact with id={}", id);
@@ -251,6 +274,12 @@ impl StorageBackend for FileStore {
         if let Some((_, fact_file)) = self.index.remove(&id) {
             self.remove_from_tags_index(id, &fact_file.tags);
             self.delete_fact_file(id).await?;
+
+            if let Some((_, doc_idx)) = self.bm25_id_map.remove(&id) {
+                let mut bm25 = self.bm25_index.lock();
+                bm25.remove_document(doc_idx);
+            }
+
             self.save_metadata().await?;
 
             info!("Deleted fact with id={}", id);
@@ -303,19 +332,12 @@ impl StorageBackend for FileStore {
     ) -> Result<Vec<Fact>> {
         let query_lower = query.to_lowercase();
         let mut scored = Vec::new();
-        let now = Utc::now();
-        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
 
         for entry in self.index.iter() {
             let ff = entry.value();
             if ff.fact.to_lowercase().contains(&query_lower) {
                 if let Some(fact) = self.get_fact(ff.id).await? {
-                    let weight = if decay.enabled {
-                        let age_days = (now - fact.created_at).num_days() as f64;
-                        (-lambda * age_days).exp()
-                    } else {
-                        1.0
-                    };
+                    let weight = compute_decay_weight(fact.created_at, decay);
                     scored.push((fact, weight));
                 }
             }
@@ -326,6 +348,39 @@ impl StorageBackend for FileStore {
 
         debug!("Found {} facts matching query '{}'", facts.len(), query);
         Ok(facts)
+    }
+
+    async fn search_similar(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<(Fact, f32)>> {
+        let query = query.to_string();
+        let scored_idx: Vec<(i64, f32)> = {
+            let bm25 = self.bm25_index.lock();
+            self.bm25_id_map
+                .iter()
+                .filter_map(|entry| {
+                    let id = *entry.key();
+                    let doc_idx = *entry.value();
+                    let score = bm25.score(&query, doc_idx);
+                    if score > 0.0 { Some((id, score)) } else { None }
+                })
+                .collect()
+        };
+
+        let mut scored: Vec<(Fact, f32)> = Vec::with_capacity(scored_idx.len());
+        for (id, score) in scored_idx {
+            if let Some(fact) = self.get_fact(id).await? {
+                let weight = compute_decay_weight(fact.created_at, decay) as f32;
+                scored.push((fact, score * weight));
+            }
+        }
+
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+        Ok(scored)
     }
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
@@ -389,6 +444,8 @@ impl StorageBackend for FileStore {
         let count = self.index.len();
         self.index.clear();
         self.tags_index.clear();
+        self.bm25_id_map.clear();
+        *self.bm25_index.lock() = IncrementalBm25Index::new();
 
         let mut entries = fs::read_dir(&self.dir).await.map_err(MemoryError::Io)?;
         while let Ok(Some(entry)) = entries.next_entry().await {

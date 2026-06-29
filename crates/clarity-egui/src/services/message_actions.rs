@@ -46,6 +46,7 @@ impl App {
                 // Truncate history after this message.
                 session.messages.truncate(idx + 1);
                 session.turn_heights.clear();
+                session.updated_at = crate::session::now_millis();
             }
         }
         self.chat_store.editing_message_idx = None;
@@ -95,6 +96,7 @@ impl App {
         // Remove the AI message and anything after it.
         session.messages.truncate(ai_idx);
         session.turn_heights.clear();
+        session.updated_at = crate::session::now_millis();
         // Re-submit.
         self.chat_store.input = query;
         self.send();

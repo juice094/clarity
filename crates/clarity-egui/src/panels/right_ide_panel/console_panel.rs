@@ -105,6 +105,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             let clear_label = app.t("Clear");
             if ui
                 .add_sized(
+                    // LAYOUT-EXEMPT: compact clear-button size; not part of the spacing grid.
                     [40.0, 20.0],
                     egui::Button::new(
                         egui::RichText::new(clear_label)
@@ -288,13 +289,14 @@ fn render_console_row(
 
 // ── Panel trait implementation ──
 
+/// Console panel renderer.
 pub struct ConsolePanel;
 
 impl crate::design_system::Panel for ConsolePanel {
-    fn title(&self) -> &str {
-        "Console"
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Console")
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        (app, ui);
+        render(app, ui);
     }
 }

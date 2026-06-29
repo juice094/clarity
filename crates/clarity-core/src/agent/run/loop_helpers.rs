@@ -1,38 +1,60 @@
 //! Helper functions for agent execution loops.
 
 use crate::error::AgentError;
+use clarity_contract::retry::RetryConfig;
 use clarity_contract::{Message, MessageRole};
 
-/// Retry an async operation with exponential backoff.
+/// Retry an async operation with exponential backoff + jitter.
 ///
 /// Only retries when the error is recoverable (`is_recoverable() == true`).
-/// Max retries = `max_retries`, with delays 1s, 2s, 4s, ...
-pub(crate) async fn retry_with_backoff<F, Fut, T>(
+/// Uses `RetryConfig` from `clarity-contract` for backoff calculation with
+/// ±25% random jitter to prevent thundering herd on LLM API rate limits.
+///
+/// A default `RetryConfig` is used when none is provided (10 retries,
+/// 1s initial, 5 min max).
+pub(crate) async fn retry_with_backoff<F, Fut, T>(f: F, max_retries: u32) -> Result<T, AgentError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, AgentError>>,
+{
+    let config = RetryConfig {
+        max_retries,
+        ..RetryConfig::default()
+    };
+    retry_with_config(f, &config).await
+}
+
+/// Retry an async operation using a custom `RetryConfig`.
+///
+/// Prefer this over `retry_with_backoff` when you need fine-grained control
+/// over backoff parameters (e.g., different intervals for streaming vs
+/// completion calls, or conservative settings for rate-limited providers).
+pub(crate) async fn retry_with_config<F, Fut, T>(
     mut f: F,
-    max_retries: u32,
+    config: &RetryConfig,
 ) -> Result<T, AgentError>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<T, AgentError>>,
 {
-    let mut retries = 0;
+    let mut attempt: u32 = 0;
     loop {
         match f().await {
             Ok(output) => return Ok(output),
             Err(err) if !err.is_recoverable() => return Err(err),
             Err(err) => {
-                if retries >= max_retries {
+                if config.is_exhausted(attempt) {
                     return Err(err);
                 }
-                retries += 1;
-                let delay = std::time::Duration::from_secs(2_u64.pow(retries - 1));
+                let delay = config.backoff_duration(attempt);
                 tracing::warn!(
                     "LLM call failed with recoverable error, retrying in {:?} (attempt {}/{})",
                     delay,
-                    retries,
-                    max_retries
+                    attempt + 1,
+                    config.max_retries
                 );
                 tokio::time::sleep(delay).await;
+                attempt += 1;
             }
         }
     }

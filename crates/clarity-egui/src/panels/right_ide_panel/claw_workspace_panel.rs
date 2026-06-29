@@ -127,3 +127,17 @@ fn resolve_workspace_root(bot_name: &str) -> PathBuf {
     };
     PathBuf::from(home).join(".claw").join(bot_name)
 }
+
+// ── Panel trait implementation ──
+
+/// Claw workspace panel renderer.
+pub struct ClawWorkspacePanel;
+
+impl crate::design_system::Panel for ClawWorkspacePanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Workspace")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
+    }
+}

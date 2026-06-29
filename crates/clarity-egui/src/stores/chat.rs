@@ -78,6 +78,14 @@ pub struct ChatStore {
     pub input_history: Vec<String>,
     /// Cursor into `input_history`. None = editing current draft.
     pub input_history_idx: Option<usize>,
+    /// Whether the find-in-session bar is open (Ctrl+F).
+    pub find_open: bool,
+    /// Current find query string.
+    pub find_query: String,
+    /// Indices of messages that match the current query.
+    pub find_matches: Vec<usize>,
+    /// Index into `find_matches` of the currently highlighted match.
+    pub find_current: usize,
 }
 
 impl Default for ChatStore {
@@ -104,6 +112,10 @@ impl Default for ChatStore {
             chunks_since_save: 0,
             input_history: Vec::new(),
             input_history_idx: None,
+            find_open: false,
+            find_query: String::new(),
+            find_matches: Vec::new(),
+            find_current: 0,
         }
     }
 }

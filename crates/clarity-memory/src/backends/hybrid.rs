@@ -1,7 +1,7 @@
 //! Hybrid storage - Hot cache + Cold storage
 use crate::backends::StorageBackend;
 use crate::backends::file::FileStore;
-use crate::store::DecayConfig;
+use crate::store::{DecayConfig, compute_decay_weight};
 use crate::types::{Fact, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -163,10 +163,25 @@ impl HybridStore {
     }
 }
 
+impl HybridStore {
+    /// Gracefully shut down the background sync task.
+    ///
+    /// Waits for the sync loop to observe the shutdown signal and exit.
+    /// If the store was created with `sync_interval_secs = 0`, this is a no-op.
+    pub async fn shutdown(mut self) {
+        self.shutdown.store(1, Ordering::Relaxed);
+        if let Some(handle) = self.sync_handle.take() {
+            let _ = handle.await;
+        }
+    }
+}
+
 impl Drop for HybridStore {
     fn drop(&mut self) {
         self.shutdown.store(1, Ordering::Relaxed);
         if let Some(handle) = self.sync_handle.take() {
+            // Drop cannot await; abort is the best-effort fallback.
+            // Callers should use `shutdown` for a graceful shutdown.
             handle.abort();
         }
     }
@@ -252,23 +267,48 @@ impl StorageBackend for HybridStore {
             .await?;
         let merged = self.merge_facts(cached, cold);
 
-        let now = Utc::now();
-        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
         let mut scored: Vec<(Fact, f64)> = merged
             .into_iter()
             .map(|fact| {
-                let weight = if decay.enabled {
-                    let age_days = (now - fact.created_at).num_days() as f64;
-                    (-lambda * age_days).exp()
-                } else {
-                    1.0
-                };
+                let weight = compute_decay_weight(fact.created_at, decay);
                 (fact, weight)
             })
             .collect();
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         let facts: Vec<Fact> = scored.into_iter().map(|(f, _)| f).take(limit).collect();
         Ok(facts)
+    }
+
+    async fn search_similar(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<(Fact, f32)>> {
+        // Delegate BM25 ranking to the cold file store and merge with cached facts.
+        let cold = self
+            .cold_storage
+            .search_similar(query, limit * 5, decay)
+            .await?;
+        let cold_ids: std::collections::HashSet<i64> =
+            cold.iter().map(|(fact, _)| fact.id).collect();
+
+        let query_lower = query.to_lowercase();
+        let cached: Vec<(Fact, f32)> = self
+            .cached_facts(|f| f.fact.to_lowercase().contains(&query_lower))
+            .into_iter()
+            .filter(|f| !cold_ids.contains(&f.id))
+            .map(|fact| {
+                let weight = compute_decay_weight(fact.created_at, decay) as f32;
+                (fact, weight)
+            })
+            .collect();
+
+        let mut scored = cold;
+        scored.extend(cached);
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+        Ok(scored)
     }
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {

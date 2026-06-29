@@ -6,29 +6,11 @@
 
 use crate::App;
 use crate::design_system::{self, Space};
-
-/// Export format options.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ExportFormat {
-    Markdown,
-    Json,
-    Html,
-}
-
-impl ExportFormat {
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Markdown => "Markdown",
-            Self::Json => "JSON",
-            Self::Html => "HTML",
-        }
-    }
-}
+use crate::stores::share::ExportFormat;
 
 /// Render the share panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
-    let _schema = ExportFormat::Markdown;
 
     // --- export format selector ---
     ui.label(
@@ -39,13 +21,13 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     );
     design_system::gap(ui, Space::S1);
 
-    for fmt in &[
+    for fmt in [
         ExportFormat::Markdown,
         ExportFormat::Json,
         ExportFormat::Html,
     ] {
         let active = app.ui_store.theme.clone();
-        let is_chosen = format_choice(app) == *fmt;
+        let is_chosen = format_choice(app) == fmt;
         let frame = egui::Frame::new()
             .fill(if is_chosen {
                 active.accent_subtle
@@ -68,7 +50,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.label(
-                    egui::RichText::new(app.t(fmt.label()))
+                    egui::RichText::new(app.t(fmt.label_key()))
                         .size(theme.text_sm)
                         .color(if is_chosen {
                             active.accent
@@ -78,7 +60,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 );
             });
         if frame.response.clicked() {
-            set_format_choice(app, *fmt);
+            set_format_choice(app, fmt);
         }
         design_system::gap(ui, Space::S0);
     }
@@ -97,6 +79,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let preview = generate_preview(app);
     egui::ScrollArea::vertical()
         .id_salt("share_preview")
+        // LAYOUT-EXEMPT: preview viewport height; tied to panel content, not spacing grid.
         .max_height(200.0)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
@@ -146,11 +129,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .clicked()
         {
             let content = generate_export(app);
-            let ext = match format_choice(app) {
-                ExportFormat::Markdown => "md",
-                ExportFormat::Json => "json",
-                ExportFormat::Html => "html",
-            };
+            let ext = format_choice(app).extension();
             let default_name = session_export_name(app, ext);
             let task = rfd::FileDialog::new()
                 .set_file_name(&default_name)
@@ -206,15 +185,12 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     );
 }
 
-// ── Stub format state — stored on UiStore for now, migrate to ShareStore when needed ──
-
-fn format_choice(_app: &App) -> ExportFormat {
-    // Reuse a hidden field; when we add ShareStore, extract from there.
-    ExportFormat::Markdown // default for now
+fn format_choice(app: &App) -> ExportFormat {
+    app.share_store.export_format
 }
 
-fn set_format_choice(_app: &mut App, _fmt: ExportFormat) {
-    // Reserved for ShareStore.
+fn set_format_choice(app: &mut App, fmt: ExportFormat) {
+    app.share_store.export_format = fmt;
 }
 
 // ── Export generators ──
@@ -320,13 +296,14 @@ fn html_escape(s: &str) -> String {
 
 // ── Panel trait implementation ──
 
+/// Share panel renderer.
 pub struct SharePanel;
 
 impl crate::design_system::Panel for SharePanel {
-    fn title(&self) -> &str {
-        "Share"
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Share")
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        (app, ui);
+        render(app, ui);
     }
 }

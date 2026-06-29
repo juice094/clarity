@@ -79,25 +79,24 @@ crates/
 ├── clarity-subagents      # 子代理执行器 + 并行调度器
 ├── clarity-thread-store   # Thread 持久化抽象；依赖 clarity-rollout
 ├── clarity-rollout        # JSONL rollout 持久化（设计受 Codex 启发）
-├── clarity-openclaw       # OpenClaw/KimiClaw Gateway WebSocket 客户端、设备身份
 ├── clarity-secrets        # 凭证加密与本地安全存储
 ├── clarity-telemetry      # 统一遥测
 ├── clarity-core           # 智能体循环（ReAct/Plan）、审批、Skill、MCP 整合
 ├── clarity-gateway        # Axum HTTP/WebSocket 服务器、Web UI、会话存储
 ├── clarity-egui           # 桌面 GUI（eframe/egui）—— 主 UI 栈
 ├── clarity-tui            # ratatui 终端界面
-├── clarity-claw           # 系统托盘后台守护进程（Gateway WebSocket 客户端）
+├── clarity-claw           # 统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制（Gateway WebSocket 客户端、OpenClaw/KimiClaw 兼容层、设备发现/身份/配对、角色上下文同步）
 ├── clarity-headless       # 脚本 / CI 用 Headless CLI
 ├── clarity-mobile-core    # 移动端 UniFFI FFI 核心（Android/iOS）
 ├── clarity-slint          # 桌面 GUI 实验栈（Slint），不参与默认 CI
-├── clarity-anthropic-proxy # Anthropic Messages API → DeepSeek 代理（工具二进制）
+├── clarity-anthropic-proxy # Anthropic Messages API 网关（默认 DeepSeek device，协议转换在 clarity-llm）
 └── clarity-tauri          # 已归档 — 不参与默认 workspace 构建
 ```
 
 **依赖方向**
 
 ```
-contract ← {wire, memory, mcp, llm, tools, channels, secrets, openclaw, rollout}
+contract ← {wire, memory, mcp, llm, tools, channels, secrets, rollout}
                ↑
           thread-store (→ rollout)
                                   ↓

@@ -1,7 +1,7 @@
 # Claw 协议策略
 
 > **Status**: 已决策 / 实施中（v0.3.4-rc）  
-> **Scope**: `clarity-claw`、`clarity-gateway`、`clarity-openclaw`、前端 Claw 连接  
+> **Scope**: `clarity-claw`、`clarity-gateway`、前端 Claw 连接  
 > **Decision**: Gateway WebSocket 是 Clarity 内部唯一协议；OpenClaw JSON-RPC 仅作为与外部 KimiClaw/OpenClaw Gateway 互通的 fallback。  
 > **Date**: 2026-06-20
 
@@ -17,7 +17,7 @@ Clarity 早期同时存在两种「Claw」连接方言：
 | **OpenClaw** | JSON-RPC over WebSocket | 外部 KimiClaw / OpenClaw Gateway `:18789` | 外部生态遗产 |
 
 两者在 egui 中曾被要求提供**完全一致**的体验，导致：
-- `clarity-openclaw` 同时维护 `GatewayClient` + `ClawClient` 两套 parser
+- `clarity-claw` 库同时维护 `GatewayClient` + `ClawClient` 两套 parser
 - UI 层需要知道 `chat.send` vs `sessions.send` 的区别
 - 协议细节（如 `use_sessions_send`）泄漏到 `App` 状态
 
@@ -36,11 +36,7 @@ clarity-claw ──┘         ▲
                           │
                Gateway WebSocket（唯一内部协议）
                           │
-                    clarity-openclaw
-                          │
-               OpenClaw JSON-RPC（外部 fallback）
-                          │
-                   外部 KimiClaw / OpenClaw
+              外部 KimiClaw / OpenClaw Gateway（可选外部 fallback）
 ```
 
 - `clarity-claw` ↔ `clarity-gateway`：Gateway WebSocket
@@ -84,13 +80,14 @@ clarity-claw ──┘         ▲
 
 ## 4. 代码影响
 
-### 4.1 `clarity-openclaw`
+### 4.1 `clarity-claw`（统一客户端节点）
 
 - `ClawConnectionManager` 保留自动探测能力
 - `ProtocolCommand::Chat` 不再携带 `use_sessions_send`
 - Gateway 管理器固定使用 `chat.send`
 - OpenClaw 管理器固定使用 `sessions.send`
 - OpenClaw 翻译层只保留基本聊天/历史/错误/配对映射，逐步移除对 Gateway 内部语义的模仿
+- 合并后 `clarity-claw` 既是 UI 无关的客户端库，也是系统托盘常驻二进制
 
 ### 4.2 前端
 
@@ -103,7 +100,7 @@ clarity-claw ──┘         ▲
 - **只做 Gateway WebSocket 客户端**；它是 Clarity 内部 mesh 的系统托盘常驻节点
 - 不与外部 KimiClaw/OpenClaw Gateway 直接交互
 - 不持有 OpenClaw JSON-RPC fallback
-- 外部互通由 `clarity-gateway` 侧的 `clarity-openclaw` 模块负责协议转换
+- 外部互通由 `clarity-claw` 库内的 OpenClaw/KimiClaw 兼容层负责协议转换
 - 当前任务/线程轮询仍走 Gateway HTTP admin 端点；聊天与角色上下文同步走 Gateway WebSocket
 
 ---
@@ -112,13 +109,13 @@ clarity-claw ──┘         ▲
 
 1. **合并 parser**：长期目标是把 `GatewayClient` 与 `ClawClient` 统一为单套实现，OpenClaw 仅保留一个薄翻译层
 2. **协议协商**：Gateway 可在握手时通过 `Sec-WebSocket-Protocol` 声明 `clarity-v1`，OpenClaw 端保持现有行为
-3. **外部互通**：若外部 OpenClaw Gateway 需要接入 Clarity mesh，由 clarity-openclaw 提供协议转换，而非让 mesh 迁就 OpenClaw 语义
+3. **外部互通**：若外部 OpenClaw Gateway 需要接入 Clarity mesh，由 `clarity-claw` 库内的 OpenClaw/KimiClaw 兼容层提供协议转换，而非让 mesh 迁就 OpenClaw 语义
 
 ---
 
 ## 6. 参考
 
-- `crates/clarity-openclaw/src/connection_manager.rs`
+- `crates/clarity-claw/src/connection_manager.rs`
 - `crates/clarity-egui/src/claw.rs`
 - `crates/clarity-egui/src/panels/right_ide_panel/claw_settings_panel.rs`
 - `docs/architecture/protocol-layer.md`

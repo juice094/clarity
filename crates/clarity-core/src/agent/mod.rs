@@ -27,8 +27,6 @@ pub mod lsp;
 pub mod ops;
 pub mod snapshot;
 pub mod tool_map;
-/// Tool parser module.
-pub mod tool_parser;
 
 mod construct;
 mod execution;
@@ -41,8 +39,11 @@ pub mod plan;
 // New code should prefer `use clarity_core::types::{Plan, PlanResult, PlanStep}`.
 pub use crate::types::{Plan, PlanResult, PlanStep};
 pub mod lifecycle;
+pub mod orchestrator;
 mod prompt;
 mod run;
+pub mod supervisor;
+pub mod tool_cache;
 mod tool_prompt_manager;
 mod turn_context;
 mod yolo_guardrails;
@@ -52,6 +53,7 @@ pub use clarity_contract::subagent::AgentExecutor;
 mod tests;
 
 use crate::agent::compaction_service::CompactionService;
+use crate::agent::orchestrator::ToolOrchestrator;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
 use crate::error::AgentError;
@@ -155,6 +157,10 @@ struct AgentInner {
     lsp_initialized: bool,
     /// Optional snapshot service for per-turn workspace snapshots.
     snapshot_service: Option<std::sync::Arc<snapshot::SnapshotService>>,
+    /// Optional tool orchestrator for concurrency-limited tool execution.
+    tool_orchestrator: Option<Arc<ToolOrchestrator>>,
+    /// Per-turn tool result cache (cleared at turn start).
+    tool_cache: tool_cache::ToolResultCache,
 }
 
 /// Simple mock LLM for testing
@@ -323,6 +329,20 @@ impl Agent {
         self.inner.read().approval_mode
     }
 
+    /// Get the tool orchestrator, if configured.
+    pub fn tool_orchestrator(&self) -> Option<Arc<ToolOrchestrator>> {
+        self.inner.read().tool_orchestrator.clone()
+    }
+
+    /// Set the tool orchestrator for concurrency-limited tool execution.
+    ///
+    /// When set, tool calls will acquire permits from this orchestrator before
+    /// executing, enforcing global concurrency limits and applying deterministic
+    /// jitter to prevent thundering herd on external resources.
+    pub fn set_tool_orchestrator(&self, orchestrator: Arc<ToolOrchestrator>) {
+        self.inner.write().tool_orchestrator = Some(orchestrator);
+    }
+
     /// Get the message count from the last completed turn.
     pub fn last_turn_message_count(&self) -> usize {
         self.inner.read().last_turn_message_count
@@ -459,6 +479,10 @@ impl Agent {
     /// Refresh the cached context snapshot (Git, active files, project metadata).
     /// Called at the start of each turn so the System Prompt reflects current state.
     pub async fn refresh_context(&self) {
+        // Clear the per-turn tool cache so stale results don't leak
+        // from the previous turn.
+        self.inner.write().tool_cache.clear();
+
         let working_dir = &self.config.working_dir;
 
         // 1. Git context

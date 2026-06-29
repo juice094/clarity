@@ -112,6 +112,7 @@ mod tests {
             turn_id: String::new(),
             id: "1".to_string(),
             result: "ok".to_string(),
+            display_result: None,
         });
 
         let ev: Event = rx.recv().await.unwrap();

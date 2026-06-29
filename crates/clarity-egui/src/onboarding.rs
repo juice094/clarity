@@ -402,7 +402,7 @@ fn start_model_download(app: &mut App) {
 pub struct OnboardingPanel;
 
 impl crate::design_system::Panel for OnboardingPanel {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "Onboarding"
     }
 

@@ -38,7 +38,6 @@ tags: [architecture, tech-stack, crates]
 | `clarity-wire` | lib | UI ↔ Agent 事件总线（SPMC）、`ViewCommand`/`WireMessage` | 跨前端通信唯一通道 |
 | `clarity-memory` | lib | SQLite/文件/混合记忆、BM25+向量、chunking、四级压缩 | feature `sqlite` / `embedding` |
 | `clarity-mcp` | lib | MCP 客户端：stdio / SSE / HTTP / WebSocket | 含命令校验安全层 |
-| `clarity-openclaw` | lib | OpenClaw/KimiClaw Gateway WebSocket 客户端、设备身份与发现 | 无前端依赖，可被多个入口复用 |
 | `clarity-llm` | lib | LLM provider 抽象 + 内置 provider + Candle GGUF | feature `local-llm` / `local-llm-cuda` |
 | `clarity-tools` | lib | 内置工具库：file / shell / web / devkit / team / task / … | 从 `clarity-core` 拆出 |
 | `clarity-secrets` | lib | ChaCha20-Poly1305 加密 Secret 存储（`enc2:`） | 用于 `models.toml` 加密 key |
@@ -51,12 +50,12 @@ tags: [architecture, tech-stack, crates]
 | `clarity-gateway` | bin/lib | Axum HTTP/WebSocket 服务端、Web IDE、session store | 双端口：18790 公共 / 18800 管理 |
 | `clarity-egui` | bin | 桌面 GUI（主前端栈），eframe + egui 纯 Rust | 替代已归档的 Tauri |
 | `clarity-tui` | bin | ratatui 终端界面 | 远程/SSH 优选 |
-| `clarity-claw` | bin | 系统托盘后台监控 | `tao`/`tray-icon` + OS 通知 |
+| `clarity-claw` | lib + bin | 统一客户端 Claw 节点：Gateway WebSocket 客户端、OpenClaw/KimiClaw JSON-RPC 兼容层、设备发现/身份/配对、角色上下文同步；二进制为系统托盘常驻节点 | UI 无关，可被多个入口复用 |
 | `clarity-headless` | bin | 无头 CLI（脚本 / CI 场景） | `--prompt` / `--file` / `--output json` |
 | `clarity-mobile-core` | lib | 移动端 UniFFI FFI 核心 | 暴露 Runtime/事件/配置/记忆接口给 Kotlin/Swift |
 | `clarity-slint` | bin | 桌面 GUI 实验栈，Slint | 不参与默认 CI |
 | `clarity-tauri` | bin | Tauri 前端 | **已归档**，被 workspace 排除 |
-| `clarity-anthropic-proxy` | bin | Anthropic Messages API → DeepSeek 代理 | 工具二进制 |
+| `clarity-anthropic-proxy` | bin | Anthropic Messages API 网关 | 默认 DeepSeek device；协议转换在 `clarity-llm::anthropic` |
 
 ---
 
@@ -70,7 +69,7 @@ tags: [architecture, tech-stack, crates]
                                             ▲
     ┌───────────┬──────────┬─────────┬──────┴──────┬──────────┬──────────┐
     ▼           ▼          ▼         ▼             ▼          ▼          ▼
-clarity-wire clarity-memory clarity-mcp clarity-openclaw clarity-llm clarity-tools clarity-channels
+clarity-wire clarity-memory clarity-mcp clarity-llm clarity-tools clarity-channels
 clarity-secrets clarity-rollout
     │
     ▼
@@ -85,11 +84,11 @@ clarity-core
     ▼
 {clarity-egui, clarity-tui, clarity-gateway, clarity-claw, clarity-headless, clarity-mobile-core}
 
-clarity-openclaw：OpenClaw 协议客户端；被 clarity-egui 等前端使用
+clarity-claw：统一客户端 Claw 节点（lib + bin）；库提供 Gateway WebSocket 客户端、OpenClaw/KimiClaw 兼容层、设备发现/身份/配对、角色上下文同步；二进制为系统托盘常驻节点
 clarity-telemetry：当前由 clarity-gateway 使用
 clarity-slint：实验栈，不参与默认 CI
 clarity-tauri：已归档，被 workspace 排除
-clarity-anthropic-proxy：Anthropic Messages API → DeepSeek 代理（工具二进制）
+clarity-anthropic-proxy：Anthropic Messages API 网关（默认 DeepSeek device；协议转换在 `clarity-llm::anthropic`）
 ```
 
 **不可违反的不变量**：

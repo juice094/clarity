@@ -27,7 +27,7 @@ cargo test -p clarity-wire --lib
 
 - **Stability tier**: Stable
   - Stable: API unlikely to change in minor releases
-- **MSRV**: 1.78.0
+- **MSRV**: 1.85（跟随 workspace）
 - **反向依赖禁止** (No reverse dependencies):
   - 不得依赖 clarity-core
 - **Library/binary classification**:

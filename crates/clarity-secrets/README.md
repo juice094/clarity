@@ -12,8 +12,19 @@ Encrypted secret storage for Clarity, backed by ChaCha20-Poly1305.
 ## 关键类型
 
 - `SecretStore` — encrypted store bound to a single key file
-- `SecretError` — error enum covering IO, hex, decryption, and format failures
+- `SecretError` — error enum covering IO, hex, encryption, decryption, and format failures
 - `KEY_SIZE` / `NONCE_SIZE` / `TAG_SIZE` / `CIPHER_PREFIX` — format constants
+
+## 模块结构
+
+```text
+src/
+├── lib.rs      # crate facade; re-exports public API
+├── error.rs    # SecretError
+├── format.rs   # enc2: constants and format helpers (is_encrypted, mask)
+├── key_file.rs # key file persistence and filesystem permissions (internal)
+└── store.rs    # SecretStore implementation and tests
+```
 
 ## 测试
 

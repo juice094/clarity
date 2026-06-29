@@ -671,6 +671,13 @@ pub fn toggle(ui: &mut egui::Ui, checked: &mut bool) -> bool {
             },
         );
     }
+    if response.has_focus() {
+        paint_focus_ring(
+            ui,
+            rect.expand(2.0),
+            egui::CornerRadius::same((h * 0.5) as u8 + 2),
+        );
+    }
     if response.clicked() {
         *checked = !*checked;
         true
@@ -752,8 +759,8 @@ pub fn search_box(ui: &mut egui::Ui, query: &mut String, hint: &str) -> bool {
                         .frame(false),
                 );
                 changed = resp.changed();
-                if !query.is_empty() {
-                    if ui
+                if !query.is_empty()
+                    && ui
                         .add(
                             egui::Button::new(
                                 egui::RichText::new(crate::theme::ICON_X)
@@ -764,10 +771,9 @@ pub fn search_box(ui: &mut egui::Ui, query: &mut String, hint: &str) -> bool {
                             .corner_radius(egui::CornerRadius::same(4)),
                         )
                         .clicked()
-                    {
-                        query.clear();
-                        changed = true;
-                    }
+                {
+                    query.clear();
+                    changed = true;
                 }
             });
         });
@@ -793,11 +799,12 @@ pub fn chip(
                 ui.label(egui::RichText::new(ic).size(t.text_xs).color(t.accent));
             }
             ui.label(egui::RichText::new(label).size(t.text_xs).color(t.text));
-            if show_remove {
-                if ui
+            if show_remove
+                && ui
                     .add(
                         egui::Button::new(
                             egui::RichText::new(crate::theme::ICON_X)
+                                // LAYOUT-EXEMPT: tiny inline remove icon size.
                                 .size(10.0)
                                 .color(t.text_dim),
                         )
@@ -805,9 +812,8 @@ pub fn chip(
                         .corner_radius(egui::CornerRadius::same(4)),
                     )
                     .clicked()
-                {
-                    removed = true;
-                }
+            {
+                removed = true;
             }
         })
     });
@@ -844,15 +850,15 @@ fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
 /// ```ignore
 /// struct SettingsPanel;
 /// impl Panel for SettingsPanel {
-///     fn title(&self) -> &str { "Settings" }
+///     fn title(&self, _app: &App) -> &str { "Settings" }
 ///     fn render(&mut self, app: &mut App, ui: &mut egui::Ui) {
 ///         // render using app state
 ///     }
 /// }
 /// ```
 pub trait Panel {
-    /// Human-readable panel name (used for shortcuts reference, debug).
-    fn title(&self) -> &str;
+    /// Human-readable panel name (used for header title, shortcuts reference, debug).
+    fn title(&self, app: &crate::App) -> &str;
     /// Render the panel into the given ui.
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui);
 }
@@ -919,7 +925,7 @@ mod tests {
         let rt = TextStyle::Mono.to_richtext(&t, "code");
         // RichText API is builder-only — verify via side effect that
         // Mono modifier is set and produces a valid RichText.
-        assert!(TextStyle::Mono.modifiers.mono);
+        const { assert!(TextStyle::Mono.modifiers.mono) };
         let _ = rt;
     }
 

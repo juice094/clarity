@@ -107,7 +107,13 @@ impl Tool for PlanTool {
     fn description(&self) -> &str {
         "Create and manage execution plans. A plan is an ordered list of steps \
          that breaks a complex task into manageable chunks. Use this before starting \
-         multi-step work to organize your approach and track progress."
+         multi-step work to organize your approach and track progress.\n\n\
+         Required parameters by action:\n\
+         - create: title, steps\n\
+         - get: plan_id\n\
+         - update_step: plan_id, step_id, step_status\n\
+         - delete: plan_id\n\
+         - list: (no additional parameters)"
     }
 
     fn parameters(&self) -> Value {
@@ -400,6 +406,33 @@ mod tests {
         let args = json!({"action": "get", "plan_id": plan_id});
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["progress"].as_str().unwrap(), "1/2");
+    }
+
+    #[tokio::test]
+    async fn test_plan_update_step_requires_step_id() {
+        let dir = std::env::temp_dir().join(format!("clarity_plans_{}", uuid::Uuid::new_v4()));
+        let tool = PlanTool::with_dir(dir.clone());
+        let ctx = ToolContext::new();
+
+        let args = json!({
+            "action": "create",
+            "title": "Test plan",
+            "steps": ["Step 1"]
+        });
+        let result = tool.execute(args, ctx.clone()).await.unwrap();
+        let plan_id = result["plan_id"].as_str().unwrap().to_string();
+
+        let args = json!({
+            "action": "update_step",
+            "plan_id": plan_id,
+            "step_status": "completed"
+        });
+        let err = tool.execute(args, ctx).await.unwrap_err().to_string();
+        assert!(
+            err.contains("step_id"),
+            "error should mention missing step_id: {}",
+            err
+        );
     }
 
     #[tokio::test]

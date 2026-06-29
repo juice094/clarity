@@ -197,11 +197,11 @@ C:/Users/22414/dev/clarity/
 | Crate | 边界 | 文档 | 测试 | 路线对齐 | 演进空间 | 备注 |
 |-------|------|------|------|---------|---------|------|
 | `clarity-slint` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | 实验性，不参与 CI |
-| `clarity-anthropic-proxy` | ✅ | ❌ | ✅ | ✅ | ⚠️ | 无 README/AGENTS，单一文件 |
+| `clarity-anthropic-proxy` | ✅ | ✅ | ✅ | ✅ | ⚠️ | 协议转换已下沉到 `clarity-llm::anthropic` |
 | `clarity-tauri` | — | ✅ | — | ❌ | — | 已归档 |
 
 **优化方向**：
-- `clarity-anthropic-proxy`：补 README/AGENTS；若长期维护，建议从单文件拆出协议转换模块。
+- `clarity-anthropic-proxy`：协议转换模块已下沉到 `clarity-llm::anthropic`；当前 crate 为薄壳二进制。
 - `clarity-slint`：明确是「技术储备」还是「即将废弃」；若前者，增加 CI 中的可选构建 job。
 - `clarity-tauri`：保持归档状态，禁止修改；目录保留仅供历史参考。
 
@@ -296,7 +296,7 @@ C:/Users/22414/dev/clarity/
 
 | 模块 | 优化项 | 预期收益 | 参考路线 |
 |------|--------|---------|---------|
-| `clarity-anthropic-proxy` | 补 README/AGENTS；拆出协议转换模块 | 文档完整 | Backend |
+| `clarity-anthropic-proxy` | 协议转换已下沉到 `clarity-llm::anthropic`；保持薄壳二进制 | 减少重复、统一抽象 | Backend |
 | `clarity-slint` | 明确实验定位；可选 CI job | 避免技术债累积 | Software Design |
 | `clarity-telemetry` | 增加 GreptimeDB 后端 CI 测试 | 提升遥测稳定性 | DevOps |
 | 全仓库 | 引入 `cargo llvm-cov` 覆盖率门禁 | 量化未覆盖区域 | QA |

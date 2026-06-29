@@ -19,10 +19,18 @@ fn save_target_session(app: &mut crate::App, session_id: &str) {
     } else if let Some(session) = app
         .session_store
         .sessions
-        .iter()
+        .iter_mut()
         .find(|s| s.id == session_id)
     {
-        let _ = crate::session::save_session_internal(session);
+        let now = crate::session::now_millis();
+        match crate::session::save_session_internal(session) {
+            Ok(()) => {
+                session.last_saved_at = now;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to save background session {}: {}", session.id, e);
+            }
+        }
     }
 }
 
@@ -94,6 +102,7 @@ pub fn on_reasoning_chunk(
                     last.blocks.push(ContentBlock::Think { steps: vec![text] });
                 }
                 last.cached_height = None;
+                session.updated_at = crate::session::now_millis();
                 return;
             }
         }
@@ -108,6 +117,7 @@ pub fn on_reasoning_chunk(
             lines: Vec::new(),
         };
         session.messages.push(msg);
+        session.updated_at = crate::session::now_millis();
     }
 }
 
@@ -275,6 +285,9 @@ pub fn on_chunk(
                     last.blocks.push(ContentBlock::Text { text: text.clone() });
                 }
                 // Deferred: prepare() will be called in on_done() after streaming ends.
+                // Bump updated_at so the auto-save timer can persist partial
+                // responses mid-stream, guarding against crash data loss.
+                session.updated_at = crate::session::now_millis();
                 return;
             }
         }
@@ -289,6 +302,7 @@ pub fn on_chunk(
             lines: Vec::new(),
         };
         session.messages.push(msg);
+        session.updated_at = crate::session::now_millis();
     }
 }
 
@@ -320,6 +334,7 @@ pub fn on_tool_start(
                     name,
                     args: arguments.to_string(),
                 });
+                session.updated_at = crate::session::now_millis();
                 return;
             }
         }
@@ -338,6 +353,7 @@ pub fn on_tool_start(
             lines: Vec::new(),
         };
         session.messages.push(msg);
+        session.updated_at = crate::session::now_millis();
     }
 }
 
@@ -442,6 +458,7 @@ pub fn on_tool_result(
             lines: Vec::new(),
         };
         session.messages.push(msg);
+        session.updated_at = crate::session::now_millis();
     }
 }
 
@@ -671,6 +688,7 @@ mod tests {
     use crate::ui::types::{Session, SessionContext, SessionLifecycle};
 
     fn make_session(id: &str) -> Session {
+        let now = now_millis();
         Session {
             id: id.into(),
             title: format!("Session {}", id),
@@ -680,7 +698,8 @@ mod tests {
             lifecycle: SessionLifecycle::Temporary,
             archived: false,
             messages: Vec::new(),
-            updated_at: now_millis(),
+            updated_at: now,
+            last_saved_at: now,
             turn_heights: Vec::new(),
             provider_state: HashMap::new(),
             in_flight: false,

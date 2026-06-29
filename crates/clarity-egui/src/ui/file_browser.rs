@@ -35,6 +35,7 @@ const SKIP_DIRS: &[&str] = &[
 /// `on_secondary_click` is called on right-click (context menu trigger).
 /// `selected_path` highlights the matching file row with an accent indicator.
 /// `name_filter` (case-insensitive substring match) hides non-matching entries.
+#[allow(clippy::too_many_arguments)]
 pub fn render_file_tree(
     ui: &mut egui::Ui,
     path: &Path,

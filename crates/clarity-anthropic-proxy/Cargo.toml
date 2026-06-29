@@ -14,7 +14,6 @@ path = "src/main.rs"
 [dependencies]
 # Internal — only the minimal set
 clarity-llm = { path = "../clarity-llm" }
-clarity-core = { workspace = true }
 clarity-contract = { path = "../clarity-contract" }
 
 # Web framework

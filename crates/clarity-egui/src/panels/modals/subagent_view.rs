@@ -147,7 +147,7 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
 pub struct SubagentViewModal;
 
 impl crate::design_system::Panel for SubagentViewModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "SubagentView"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

@@ -22,7 +22,9 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::broadcast;
 use tracing::{debug, error, trace, warn};
 
@@ -30,6 +32,9 @@ use tracing::{debug, error, trace, warn};
 /// B1: Increased from 1024 to 8192 to reduce RecvError::Lagged frequency
 /// under high-throughput streaming scenarios.
 const DEFAULT_CHANNEL_CAPACITY: usize = 8192;
+
+/// Default ring buffer capacity for event replay.
+const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1000;
 
 /// Streaming draft lifecycle event.
 /// Used by the UI to distinguish between loading states and actual content.
@@ -360,6 +365,86 @@ impl WireMessage {
     }
 }
 
+// ============================================================================
+// WireEventBuffer — Ring buffer for reconnection event replay
+// ============================================================================
+
+/// Ring buffer for historical wire events.
+///
+/// Supports `since(id)` for reconnection replay so that WebSocket clients
+/// can catch up on missed events after a disconnect without requiring a
+/// full state re-sync.
+///
+/// Uses `parking_lot::Mutex` so `push` is synchronous and can be called from
+/// non-async contexts (e.g., `WireSoulSide::send`).
+#[derive(Debug, Clone)]
+pub struct WireEventBuffer {
+    inner: Arc<parking_lot::Mutex<VecDeque<(u64, WireMessage)>>>,
+    capacity: usize,
+    next_id: Arc<AtomicU64>,
+}
+
+impl WireEventBuffer {
+    /// Create a new event buffer with default capacity.
+    pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_EVENT_BUFFER_CAPACITY)
+    }
+
+    /// Create a new event buffer with the given capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            inner: Arc::new(parking_lot::Mutex::new(VecDeque::with_capacity(capacity))),
+            capacity,
+            next_id: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    /// Push an event into the buffer, evicting the oldest if at capacity.
+    ///
+    /// Synchronous: called from `WireSoulSide::send` which is non-async.
+    /// Returns the assigned sequence ID.
+    pub fn push(&self, msg: WireMessage) -> u64 {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let mut buf = self.inner.lock();
+        if buf.len() >= self.capacity {
+            buf.pop_front();
+        }
+        buf.push_back((id, msg));
+        id
+    }
+
+    /// Return all events with id > `since_id`, in order.
+    pub fn since(&self, since_id: u64) -> Vec<WireMessage> {
+        let buf = self.inner.lock();
+        buf.iter()
+            .filter(|(id, _)| *id > since_id)
+            .map(|(_, msg)| msg.clone())
+            .collect()
+    }
+
+    /// Get the latest event id (0 if empty).
+    pub fn latest_id(&self) -> u64 {
+        let buf = self.inner.lock();
+        buf.back().map(|(id, _)| *id).unwrap_or(0)
+    }
+
+    /// Current number of buffered events.
+    pub fn len(&self) -> usize {
+        self.inner.lock().len()
+    }
+
+    /// Whether the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.inner.lock().is_empty()
+    }
+}
+
+impl Default for WireEventBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The main Wire struct that manages communication channels.
 ///
 /// `Wire` maintains two broadcast channels:
@@ -383,6 +468,8 @@ pub struct Wire {
     merged_sender: broadcast::Sender<WireMessage>,
     /// The soul side handle.
     soul_side: WireSoulSide,
+    /// Ring buffer for event replay on reconnection.
+    event_buffer: Arc<Mutex<WireEventBuffer>>,
 }
 
 impl Wire {
@@ -416,16 +503,22 @@ impl Wire {
         let (raw_sender, _) = broadcast::channel(capacity);
         let (merged_sender, _) = broadcast::channel(capacity);
 
+        let event_buffer = Arc::new(Mutex::new(WireEventBuffer::with_capacity(
+            DEFAULT_EVENT_BUFFER_CAPACITY,
+        )));
+
         let soul_side = WireSoulSide {
             raw_sender: raw_sender.clone(),
             merged_sender: merged_sender.clone(),
             merge_buffer: Arc::new(Mutex::new(None)),
+            event_buffer: event_buffer.clone(),
         };
 
         Self {
             raw_sender,
             merged_sender,
             soul_side,
+            event_buffer,
         }
     }
 
@@ -434,6 +527,22 @@ impl Wire {
     /// The soul side is used to send messages into the wire.
     pub fn soul_side(&self) -> &WireSoulSide {
         &self.soul_side
+    }
+
+    /// Get the latest event ID from the ring buffer (0 if empty).
+    ///
+    /// Clients can store this value and pass it to [`events_since`](Self::events_since)
+    /// on reconnection to catch up on missed events.
+    pub fn latest_event_id(&self) -> u64 {
+        self.event_buffer.lock().latest_id()
+    }
+
+    /// Get all events with id > `since_id` from the ring buffer.
+    ///
+    /// Used by WebSocket clients on reconnection to replay missed messages
+    /// without requiring a full state re-sync.
+    pub fn events_since(&self, since_id: u64) -> Vec<WireMessage> {
+        self.event_buffer.lock().since(since_id)
     }
 
     /// Consumes the Wire and returns the soul side.
@@ -511,7 +620,8 @@ impl Default for Wire {
 /// The Soul side of the Wire - used for producing messages.
 ///
 /// This handle allows sending messages into the wire. Messages are
-/// automatically sent to both the raw and merged channels.
+/// automatically sent to both the raw and merged channels and recorded
+/// in the event replay buffer.
 ///
 /// Uses interior mutability to allow sending from shared references.
 #[derive(Clone)]
@@ -520,6 +630,8 @@ pub struct WireSoulSide {
     merged_sender: broadcast::Sender<WireMessage>,
     /// Buffer for accumulating mergeable messages (protected by mutex for interior mutability).
     merge_buffer: Arc<Mutex<Option<WireMessage>>>,
+    /// Ring buffer for event replay on reconnection.
+    event_buffer: Arc<Mutex<WireEventBuffer>>,
 }
 
 impl WireSoulSide {
@@ -563,6 +675,9 @@ impl WireSoulSide {
         msg: WireMessage,
     ) -> Result<usize, broadcast::error::SendError<WireMessage>> {
         trace!("Sending wire message: {:?}", msg);
+
+        // Record the message in the event replay buffer.
+        self.event_buffer.lock().push(msg.clone());
 
         // Always send to raw channel immediately.
         let raw_count = match self.raw_sender.send(msg.clone()) {

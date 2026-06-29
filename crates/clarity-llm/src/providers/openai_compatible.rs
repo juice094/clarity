@@ -55,6 +55,27 @@ impl OpenAiCompatibleLlm {
         *self.api_key.write() = key.into();
     }
 
+    /// Test-only constructor that accepts a pre-built HTTP client.
+    ///
+    /// ponytail: used by mock tests to bypass system HTTP proxies that
+    /// would otherwise intercept 127.0.0.1 requests.
+    #[cfg(test)]
+    pub(crate) fn with_client(
+        api_key: impl Into<String>,
+        base_url: impl Into<String>,
+        model: impl Into<String>,
+        client: reqwest::Client,
+    ) -> Self {
+        Self {
+            api_key: Arc::new(parking_lot::RwLock::new(api_key.into())),
+            base_url: base_url.into(),
+            model: model.into(),
+            client,
+            prompt_cache_key: Arc::new(parking_lot::RwLock::new(None)),
+            response_format: Arc::new(parking_lot::RwLock::new(None)),
+        }
+    }
+
     /// Create from environment variables.
     pub fn from_env() -> Result<Self, AgentError> {
         let api_key = env::var("OPENAI_API_KEY")

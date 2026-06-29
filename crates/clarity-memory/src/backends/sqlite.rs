@@ -1,7 +1,7 @@
 //! SQLite storage backend with FTS5
 use crate::backends::StorageBackend;
 use crate::bm25::IncrementalBm25Index;
-use crate::store::DecayConfig;
+use crate::store::{DecayConfig, compute_decay_weight};
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -309,8 +309,6 @@ impl StorageBackend for SqliteStore {
                  WHERE facts_fts MATCH ?
                  ORDER BY fts.rank",
             )?;
-            let now = Utc::now();
-            let lambda = std::f64::consts::LN_2 / decay.half_life_days;
             let mut scored: Vec<(Fact, f64)> = Vec::new();
             let rows = stmt.query_map([&query], |row| {
                 let fact = Self::row_to_fact(row)?;
@@ -320,12 +318,7 @@ impl StorageBackend for SqliteStore {
 
             for row in rows {
                 let (fact, rank) = row?;
-                let weight = if decay.enabled {
-                    let age_days = (now - fact.created_at).num_days() as f64;
-                    (-lambda * age_days).exp()
-                } else {
-                    1.0
-                };
+                let weight = compute_decay_weight(fact.created_at, &decay);
                 scored.push((fact, rank * weight));
             }
             scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -464,19 +457,12 @@ impl StorageBackend for SqliteStore {
 
         // Step 3: Rerank candidates using the cached index
         let cache = self.bm25_cache.read();
-        let now = Utc::now();
-        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
         let mut scored: Vec<(Fact, f32)> = if let Some(ref c) = *cache {
             candidates
                 .into_iter()
                 .map(|fact| {
                     let bm25_score = c.score(&query, fact.id).unwrap_or(0.0);
-                    let weight = if decay.enabled {
-                        let age_days = (now - fact.created_at).num_days() as f64;
-                        (-lambda * age_days).exp() as f32
-                    } else {
-                        1.0
-                    };
+                    let weight = compute_decay_weight(fact.created_at, &decay) as f32;
                     (fact, bm25_score * weight)
                 })
                 .collect()
@@ -531,18 +517,11 @@ impl StorageBackend for SqliteStore {
         let fact_map: std::collections::HashMap<i64, Fact> =
             fetched.into_iter().map(|f| (f.id, f)).collect();
 
-        let now = Utc::now();
-        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
         let mut results: Vec<(Fact, f32)> = scored
             .into_iter()
             .filter_map(|(id, score)| {
                 fact_map.get(&id).map(|fact| {
-                    let weight = if decay.enabled {
-                        let age_days = (now - fact.created_at).num_days() as f64;
-                        (-lambda * age_days).exp() as f32
-                    } else {
-                        1.0
-                    };
+                    let weight = compute_decay_weight(fact.created_at, &decay) as f32;
                     (fact.clone(), score * weight)
                 })
             })

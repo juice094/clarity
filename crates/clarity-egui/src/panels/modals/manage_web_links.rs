@@ -114,7 +114,7 @@ pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context) {
 pub struct ManageWebLinksModal;
 
 impl crate::design_system::Panel for ManageWebLinksModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "ManageWebLinks"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

@@ -3,18 +3,8 @@ id: clarity-anthropic-proxy
 name: clarity-anthropic-proxy
 type: anthropic-proxy
 layer: utility
-depends_on:
-- clarity-contract
-- clarity-core
-- clarity-llm
-consumed_by: []
-title: clarity-anthropic-proxy
-description: Anthropic Messages API → DeepSeek proxy utility.
-tags:
-- anthropic-proxy
-- clarity
-- utility
-timestamp: '2026-06-26T11:28:50Z'
+depends_on: ["clarity-contract", "clarity-llm"]
+consumed_by: [""]
 ---
 
 # clarity-anthropic-proxy
@@ -23,9 +13,9 @@ Anthropic Messages API → DeepSeek proxy utility.
 
 ## Responsibilities
 
-- Translate Anthropic requests to DeepSeek
-- Tool/schema conversion
-- Streaming response adaptation
+- Expose Anthropic Messages API-compatible HTTP endpoint (`cc-proxy`).
+- Load DeepSeek device credentials and instantiate the DeepSeek device provider.
+- Delegate Anthropic request/response conversion to `clarity_llm::anthropic::AnthropicAdapter`.
 
 ## Notes
 

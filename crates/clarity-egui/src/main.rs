@@ -111,11 +111,11 @@ pub(crate) struct App {
     /// Track which device the current WebSocket is connected to.
     pub(crate) claw_ws_device_id: String,
     /// Cached Clarity device identity for OpenClaw device-paired auth.
-    pub(crate) claw_device_identity: Option<clarity_openclaw::DeviceIdentity>,
+    pub(crate) claw_device_identity: Option<clarity_claw::DeviceIdentity>,
     /// Cached paired-device token for the OpenClaw Gateway.
-    pub(crate) claw_device_token: Option<clarity_openclaw::PairedToken>,
+    pub(crate) claw_device_token: Option<clarity_claw::PairedToken>,
     /// Temporary WebSocket client used only for in-app pairing.
-    pub(crate) claw_pairing_client: Option<clarity_openclaw::ClawClient>,
+    pub(crate) claw_pairing_client: Option<clarity_claw::ClawClient>,
     /// Current state of the in-app pairing flow.
     pub(crate) claw_pairing_state: PairingState,
     /// OKF knowledge bundle browser state.
@@ -124,6 +124,10 @@ pub(crate) struct App {
     pub(crate) console_store: crate::stores::ConsoleStore,
     /// Local file browser state for the right-rail Files panel.
     pub(crate) files_store: crate::stores::FilesStore,
+    /// Export format and share options for the right-rail Share panel.
+    pub(crate) share_store: crate::stores::ShareStore,
+    /// Built-in and remote template library for the right-rail Templates panel.
+    pub(crate) template_store: crate::stores::TemplateStore,
     /// Panel transition animation state.
     pub(crate) panel_animation: crate::animation::PanelAnimationState,
 }
@@ -159,7 +163,7 @@ pub(crate) enum PairingState {
 }
 
 /// Return true if the URL's host is localhost/127.0.0.1.
-fn is_localhost_host(url: &str) -> bool {
+pub(crate) fn is_localhost_host(url: &str) -> bool {
     crate::claw::normalize_gateway_url(url)
         .trim_start_matches("ws://")
         .trim_start_matches("wss://")
@@ -383,6 +387,41 @@ impl App {
     ///   NOT swallowed by the drag.
     /// Render a panel with panic isolation (error boundary).
     /// Mimics React ErrorBoundary: a child panel panic does not crash the entire app.
+    /// Render a full-screen scrim that blocks background interaction when a
+    /// modal is open. Clicks are absorbed by the scrim; Tab without modifiers
+    /// requests focus on the first focusable element inside the modal to keep
+    /// keyboard navigation from leaking into background panels.
+    fn render_modal_scrim(&self, ctx: &egui::Context) {
+        let theme = self.ui_store.theme.clone();
+        let screen = ctx.screen_rect();
+        let scrim_id = egui::Id::new("modal_scrim");
+
+        // Absorb Tab / Shift+Tab so they cannot cycle focus into background
+        // panels. The modal itself handles Tab via its own widget hierarchy.
+        let tab_pressed = ctx.input(|i| i.key_pressed(egui::Key::Tab));
+        if tab_pressed {
+            // Let the modal's natural focus order handle it — just mark the
+            // scrim as having consumed the event so egui's default focus
+            // navigation doesn't move outside the modal area.
+            ctx.memory_mut(|m| {
+                m.request_focus(scrim_id);
+            });
+        }
+
+        // Close-on-Escape is already handled by the ShortcutAction::CloseModal
+        // dispatch path; the scrim does not duplicate that logic.
+
+        egui::Area::new(scrim_id)
+            .fixed_pos(screen.min)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                // Absorb all pointer events — clicks on the scrim are ignored.
+                ui.allocate_rect(screen, egui::Sense::click_and_drag());
+                ui.painter()
+                    .rect_filled(screen, egui::CornerRadius::ZERO, theme.overlay);
+            });
+    }
+
     fn render_safe<F>(&mut self, ctx: &egui::Context, name: &str, mut render: F)
     where
         F: FnMut(&mut Self, &egui::Context),
@@ -478,6 +517,10 @@ impl App {
         // stage are sized within the remaining width and cannot overlap it.
         self.render_safe(ctx, "right_rail", |app, ctx| app.render_right_rail(ctx));
 
+        // Status bar sits at the very bottom (declared first so it consumes the
+        // bottom-most slot). Shows git branch, agent status, and current model.
+        self.render_safe(ctx, "status_bar", |app, ctx| app.render_status_bar(ctx));
+
         // Input bar must be declared before the central/main stage so egui
         // reserves the correct bottom area.
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
@@ -493,6 +536,11 @@ impl App {
         // ── Modals (top-most, blocking) ──
         // Dispatch exclusively through `view_state.modal` (P1.5 migration).
         if let Some(modal) = self.view_state.modal {
+            // Render a scrim overlay that blocks background interaction and
+            // traps keyboard focus inside the modal. Clicks on the scrim are
+            // absorbed; Tab/Shift+Tab cycle within the modal boundary.
+            self.render_modal_scrim(ctx);
+
             use clarity_core::ui::ModalType;
             let name = match modal {
                 ModalType::CronCreate => "cron_create",
@@ -641,6 +689,98 @@ impl App {
     }
 
     /// Render the main stage (mutually exclusive central view).
+    /// Render a minimal status bar at the bottom of the window.
+    ///
+    /// Shows git branch (left), agent status + model name (right). Uses
+    /// `size_statusbar` from the theme so it respects font scaling.
+    fn render_status_bar(&mut self, ctx: &egui::Context) {
+        let theme = self.ui_store.theme.clone();
+        let left_w = if self.view_state.left_rail_expanded {
+            theme.size_sidebar
+        } else {
+            theme.size_sidebar_collapsed
+        };
+        let right_w = if self.view_state.right_rail_visible {
+            self.ui_store
+                .right_rail_width
+                .unwrap_or(theme.size_panel_right)
+        } else {
+            0.0
+        };
+
+        egui::TopBottomPanel::bottom("status_bar")
+            .exact_height(theme.size_statusbar)
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(
+                egui::Frame::new()
+                    .fill(theme.bg_accent)
+                    .stroke(egui::Stroke::new(1.0, theme.border))
+                    .inner_margin(egui::Margin::symmetric(
+                        theme.space_8 as i8,
+                        (theme.space_4 / 2.0) as i8,
+                    )),
+            )
+            .show(ctx, |ui| {
+                // Inset horizontally to match the main stage bounds.
+                let content_w = ui.available_width() - left_w - right_w;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(content_w, theme.size_statusbar),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        // Left: git branch / shell prompt.
+                        let prompt = &self.ui_store.shell_prompt;
+                        if !prompt.is_empty() {
+                            ui.label(
+                                egui::RichText::new(format!("⎇ {}", prompt))
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim),
+                            );
+                        }
+
+                        // Right: agent status + model.
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = theme.space_8;
+
+                            // Model name.
+                            let model = &self.settings_store.settings_edit.model;
+                            if !model.is_empty() && model != "auto" {
+                                ui.label(
+                                    egui::RichText::new(model.as_str())
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
+                                );
+                            }
+
+                            // Agent status dot + label.
+                            let (dot_color, label) = match self.chat_store.agent_status {
+                                crate::ui::types::AgentStatus::Online
+                                | crate::ui::types::AgentStatus::Unconfigured => {
+                                    (theme.status_online, "Ready")
+                                }
+                                crate::ui::types::AgentStatus::Busy => (theme.status_busy, "Busy"),
+                                crate::ui::types::AgentStatus::Offline => {
+                                    (theme.status_offline, "Offline")
+                                }
+                            };
+                            let dot_radius = theme.space_4 / 2.0;
+                            let (dot_rect, _) = ui.allocate_exact_size(
+                                egui::vec2(dot_radius * 2.0, dot_radius * 2.0),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter()
+                                .circle_filled(dot_rect.center(), dot_radius, dot_color);
+                            ui.label(
+                                egui::RichText::new(label)
+                                    .size(theme.text_xs)
+                                    .color(theme.text_muted),
+                            );
+                        });
+                    },
+                );
+            });
+    }
+
     fn render_main_stage(&mut self, ctx: &egui::Context) {
         // Views that do not render their own CentralPanel would otherwise expose
         // the raw window background (black on decorated-less Windows windows).
@@ -1041,25 +1181,25 @@ impl App {
                 self.decrease_font_scale();
                 true
             }
-            "toggle-console" => {
+            ids::TOGGLE_CONSOLE => {
                 self.view_state
                     .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
                 self.view_state
                     .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Console);
                 true
             }
-            "toggle-files" => {
+            ids::TOGGLE_FILES => {
                 self.view_state
                     .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
                 self.view_state
                     .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Files);
                 true
             }
-            "show-shortcuts" => {
+            ids::SHOW_SHORTCUTS => {
                 self.shortcuts_help_open = true;
                 true
             }
-            "toggle-share" => {
+            ids::TOGGLE_SHARE => {
                 self.view_state
                     .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
                 self.view_state
@@ -1114,7 +1254,137 @@ impl App {
     }
 
     fn render_chat_area(&mut self, ctx: &egui::Context) {
+        if self.chat_store.find_open {
+            self.update_find_matches();
+        }
         panels::chat::render_chat_area(self, ctx);
+    }
+
+    /// Search the active session's messages for `find_query` and populate
+    /// `find_matches` with the indices of matching messages.
+    fn update_find_matches(&mut self) {
+        let query = self.chat_store.find_query.clone();
+        self.chat_store.find_matches.clear();
+        if query.is_empty() {
+            self.chat_store.find_current = 0;
+            return;
+        }
+        let query_lower = query.to_lowercase();
+        if let Some(session) = self.session_store.active_session() {
+            for (i, msg) in session.messages.iter().enumerate() {
+                if msg.content.to_lowercase().contains(&query_lower) {
+                    self.chat_store.find_matches.push(i);
+                }
+            }
+        }
+        if self.chat_store.find_current >= self.chat_store.find_matches.len() {
+            self.chat_store.find_current = self.chat_store.find_matches.len().saturating_sub(1);
+        }
+    }
+
+    /// Render the find-in-session bar above the chat message list.
+    fn render_find_bar(&mut self, ui: &mut egui::Ui) {
+        let theme = self.ui_store.theme.clone();
+        let total = self.chat_store.find_matches.len();
+        let current = if total > 0 {
+            self.chat_store.find_current + 1
+        } else {
+            0
+        };
+
+        egui::Frame::new()
+            .fill(theme.bg_accent)
+            .stroke(egui::Stroke::new(1.0, theme.border))
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_8 as i8,
+                theme.space_4 as i8,
+            ))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    // Search input.
+                    let text_edit = ui.add(
+                        egui::TextEdit::singleline(&mut self.chat_store.find_query)
+                            .hint_text("Find in session…")
+                            .font(theme.font(theme.text_sm))
+                            .desired_width(ui.available_width() - 120.0)
+                            .frame(false),
+                    );
+                    if text_edit.changed() {
+                        self.chat_store.find_current = 0;
+                    }
+                    if text_edit.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        && total > 0
+                    {
+                        self.chat_store.find_current = (self.chat_store.find_current + 1) % total;
+                    }
+
+                    // Match counter: "2 of 5"
+                    let count_text = if self.chat_store.find_query.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{} of {}", current, total)
+                    };
+                    if !count_text.is_empty() {
+                        ui.label(
+                            egui::RichText::new(count_text)
+                                .size(theme.text_xs)
+                                .color(theme.text_muted),
+                        );
+                    }
+
+                    // Prev / Next buttons.
+                    if ui
+                        .add_enabled(
+                            total > 0,
+                            egui::Button::new(
+                                egui::RichText::new("▲")
+                                    .size(theme.text_xs)
+                                    .color(theme.text),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(4)),
+                        )
+                        .clicked()
+                    {
+                        self.chat_store.find_current = if self.chat_store.find_current > 0 {
+                            self.chat_store.find_current - 1
+                        } else {
+                            total.saturating_sub(1)
+                        };
+                    }
+                    if ui
+                        .add_enabled(
+                            total > 0,
+                            egui::Button::new(
+                                egui::RichText::new("▼")
+                                    .size(theme.text_xs)
+                                    .color(theme.text),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(4)),
+                        )
+                        .clicked()
+                    {
+                        self.chat_store.find_current =
+                            (self.chat_store.find_current + 1) % total.max(1);
+                    }
+
+                    // Close.
+                    if crate::widgets::icon_button_toolbar(
+                        ui,
+                        crate::theme::ICON_X,
+                        theme.text_sm,
+                        &theme,
+                    )
+                    .on_hover_text("Close find")
+                    .clicked()
+                    {
+                        self.chat_store.find_open = false;
+                    }
+                });
+            });
     }
 
     fn render_input_panel(&mut self, ctx: &egui::Context) {
@@ -1194,7 +1464,7 @@ impl App {
         let identity = self
             .claw_device_identity
             .clone()
-            .or_else(|| clarity_openclaw::DeviceIdentity::load_or_generate().ok());
+            .or_else(|| clarity_claw::DeviceIdentity::load_or_generate().ok());
         let Some(identity) = identity else {
             self.claw_pairing_state =
                 PairingState::Error("Failed to load or generate device identity".to_string());
@@ -1207,7 +1477,7 @@ impl App {
         let token = crate::settings::GuiSettings::resolve_api_key(&Some(conn.token.clone()))
             .unwrap_or_default();
         self.claw_pairing_state = PairingState::Requesting;
-        let client = clarity_openclaw::ClawClient::connect(&ws_url, &token);
+        let client = clarity_claw::ClawClient::connect(&ws_url, &token);
         let scopes = vec![
             "operator.admin".into(),
             "operator.read".into(),
@@ -1271,7 +1541,7 @@ impl App {
         }
 
         // Also persist a global paired-token file as a fallback for discovery.
-        let paired = clarity_openclaw::PairedToken {
+        let paired = clarity_claw::PairedToken {
             gateway_url: gateway_url.clone(),
             token: token.into(),
             device_token: Some(token.into()),
@@ -1279,7 +1549,7 @@ impl App {
             scopes: scopes.to_vec(),
             paired_at_ms: Utc::now().timestamp_millis(),
         };
-        if let Err(e) = clarity_openclaw::save_paired_token(&paired) {
+        if let Err(e) = clarity_claw::save_paired_token(&paired) {
             tracing::warn!("Failed to save paired token: {}", e);
         } else {
             self.claw_device_token = Some(paired);
@@ -1327,636 +1597,13 @@ impl eframe::App for App {
 
         self.tick_frame_counter(ctx);
 
-        // Sync live Claw device list (~2 Hz — cheap snapshot of pre-fetched data).
+        // Sync live Claw device list and manage Claw WebSocket lifecycle
+        // (~2 Hz — device snapshot, reconnect, response draining, pairing).
         if self.ui_store.frame_count % 30 == 0 {
-            let devices = self.device_state.snapshot();
-            if !devices.is_empty() {
-                self.ui_store.bot_instances = devices;
-                // ponytail: do not reset active_bot_id here. The currently
-                // connected device is driven by the active Claw session's role
-                // and affinity; the sidebar only mirrors the runtime state.
-            }
-
-            // Manage WebSocket connection: connect/reconnect when the active
-            // Claw session's resolved device changes or when the connection drops.
-            //
-            // For Claw sessions, use role-based routing to pick the best device.
-            // Non-Claw sessions must not keep a Claw WebSocket alive — unreachable
-            // remote OpenClaw devices can block the UI thread with synchronous TCP
-            // connects and prevent normal chat.
-            let active_session_is_claw = self
-                .session_store
-                .active_session()
-                .map(|s| matches!(s.context, crate::ui::types::SessionContext::Claw { .. }))
-                .unwrap_or(false);
-
-            if !active_session_is_claw && self.claw_ws.is_some() {
-                self.claw_ws = None;
-                self.claw_ws_device_id.clear();
-                self.ui_store.active_bot_id.clear();
-            }
-
-            // Capture the active Claw role (if any) so we can decide whether the
-            // user-selected bot is still valid for this session's role.
-            let active_role = if active_session_is_claw {
-                self.session_store
-                    .active_session()
-                    .and_then(|s| match &s.context {
-                        crate::ui::types::SessionContext::Claw { role, .. } => Some(role.clone()),
-                        _ => None,
-                    })
-            } else {
-                None
-            };
-
-            let picked_id = if let Some(ref role) = active_role {
-                self.session_store
-                    .active_session()
-                    .and_then(|s| match &s.context {
-                        crate::ui::types::SessionContext::Claw { affinity, .. } => self
-                            .device_state
-                            .pick_instance(role, affinity)
-                            .map(|b| b.id),
-                        _ => None,
-                    })
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
-
-            // Only reconnect when there is no handle or the selected device changed.
-            // If a handle already exists for the same device we keep it (OpenClaw has
-            // its own internal reconnect; Gateway is recreated only after an error
-            // clears the handle).
-            let should_reconnect = self.claw_ws.is_none() || picked_id != self.claw_ws_device_id;
-            if should_reconnect && !picked_id.is_empty() {
-                if let Some(remaining) = self.ui_store.is_in_backoff(&picked_id) {
-                    if self.ui_store.frame_count % 300 == 0 {
-                        tracing::debug!(
-                            device_id = %picked_id,
-                            ?remaining,
-                            "Claw device in reconnect backoff"
-                        );
-                    }
-                } else if let Some(conn) = self.device_state.connection(&picked_id) {
-                    // GatewayWebSocket (ZeroClaw) connections do not require a
-                    // token; OpenClaw still needs one.
-                    let token_required =
-                        conn.protocol == crate::claw::ClawProtocol::OpenClawJsonRpc;
-                    if !token_required || !conn.gateway_token.is_empty() {
-                        let ws_url = if conn.gateway_url.starts_with("ws://")
-                            || conn.gateway_url.starts_with("wss://")
-                        {
-                            conn.gateway_url.clone()
-                        } else {
-                            conn.gateway_url
-                                .replace("http://", "ws://")
-                                .replace("https://", "wss://")
-                        };
-
-                        // Decide whether this Gateway is local or remote.
-                        let is_remote = !is_localhost_host(&ws_url);
-
-                        // Prefer device-attested auth when a saved pairing
-                        // record matches this Gateway URL and we have a device
-                        // identity. Remote OpenClaw uses gateway-client/cli;
-                        // local KimiClaw uses the control-ui/webchat identity.
-                        // If no identity exists yet (e.g. first launch without a
-                        // prior pairing flow), generate one now so that the
-                        // connect handshake can present an Ed25519 signature.
-                        let identity = self.claw_device_identity.clone().or_else(|| {
-                            match clarity_openclaw::DeviceIdentity::load_or_generate() {
-                                Ok(id) => {
-                                    self.claw_device_identity = Some(id.clone());
-                                    Some(id)
-                                }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        "Failed to generate Claw device identity: {}",
-                                        e
-                                    );
-                                    None
-                                }
-                            }
-                        });
-                        let saved_pairing = self.claw_device_token.as_ref().and_then(|record| {
-                            if normalize_gateway_url(&record.gateway_url)
-                                == normalize_gateway_url(&ws_url)
-                            {
-                                Some(record)
-                            } else {
-                                None
-                            }
-                        });
-
-                        // Normalize the URL for the configured protocol family;
-                        // the connection manager will auto-detect the actual dialect
-                        // from the server's first message.
-                        let ws_url = if conn.protocol == crate::claw::ClawProtocol::GatewayWebSocket
-                            && !ws_url.ends_with("/ws")
-                        {
-                            format!("{}/ws", ws_url.trim_end_matches('/'))
-                        } else {
-                            ws_url
-                        };
-                        let ws_url = ws_url
-                            .replace("http://", "ws://")
-                            .replace("https://", "wss://");
-
-                        // Build auth for OpenClaw; Gateway dialect needs none.
-                        let auth = if conn.protocol == crate::claw::ClawProtocol::OpenClawJsonRpc {
-                            let token = match conn.auth_mode.as_deref() {
-                                Some("device_paired") => conn
-                                    .device_token
-                                    .clone()
-                                    .or_else(|| saved_pairing.map(|r| r.auth_token().to_string()))
-                                    .unwrap_or_else(|| conn.gateway_token.clone()),
-                                _ => conn.gateway_token.clone(),
-                            };
-                            if let Some(identity) = identity {
-                                if is_remote {
-                                    Some(clarity_openclaw::ClawAuth::TokenWithDevice {
-                                        token,
-                                        device: Box::new(identity),
-                                    })
-                                } else {
-                                    Some(clarity_openclaw::ClawAuth::DevicePaired {
-                                        device: Box::new(identity),
-                                        device_token: token,
-                                    })
-                                }
-                            } else {
-                                Some(clarity_openclaw::ClawAuth::TokenOnly { token })
-                            }
-                        } else {
-                            None
-                        };
-
-                        let manager = clarity_openclaw::ClawConnectionManager::connect_with_options(
-                            &ws_url,
-                            auth,
-                            conn.send_method,
-                        );
-                        self.claw_ws = Some(crate::claw::ClawClientHandle::new(manager));
-                        self.claw_ws_device_id = picked_id.clone();
-                        self.ui_store.clear_connect_backoff(&picked_id);
-
-                        // Preserve a user-selected bot as long as it still belongs
-                        // to the active Claw role. Otherwise default to the device
-                        // we actually connected to.
-                        let selection_still_valid = active_role
-                            .as_ref()
-                            .map(|role| {
-                                self.device_state
-                                    .has_device_in_role(role, &self.ui_store.active_bot_id)
-                            })
-                            .unwrap_or(false);
-                        if self.ui_store.active_bot_id.is_empty()
-                            || (!selection_still_valid && self.ui_store.active_bot_id != picked_id)
-                        {
-                            self.ui_store.active_bot_id = picked_id.clone();
-                        }
-                    }
-                } else {
-                    self.ui_store.record_connect_failure(&picked_id);
-                }
-            }
-
-            // Drain WebSocket responses (clone handle to avoid borrow conflicts).
-            {
-                let responses = self
-                    .claw_ws
-                    .as_ref()
-                    .map(|ws| ws.drain())
-                    .unwrap_or_default();
-
-                for event in responses {
-                    match event {
-                        crate::claw::ClawEvent::Connected {
-                            gateway_url,
-                            session_id,
-                        } => {
-                            self.push_toast(
-                                format!("Connected to Claw Gateway: {}", gateway_url),
-                                crate::ui::types::ToastLevel::Info,
-                            );
-                            self.device_state.record_success(&self.claw_ws_device_id, 0);
-                            if let Some(ref id) = session_id {
-                                self.ui_store.claw_gateway_session_id = id.clone();
-                                if let Some(ref ws) = self.claw_ws {
-                                    ws.get_history(&self.ui_store.claw_gateway_session_id);
-                                }
-                                // The Gateway assigns a concrete session id during
-                                // handshake. For OpenClaw/DevicePaired connections the
-                                // session_key in the Claw session context must match
-                                // this id, otherwise `sessions.send` targets a
-                                // non-existent key and returns an empty error payload.
-                                if let Some(session) = self.session_store.active_session_mut() {
-                                    if let crate::ui::types::SessionContext::Claw {
-                                        session_key,
-                                        ..
-                                    } = &mut session.context
-                                    {
-                                        *session_key = id.clone();
-                                    }
-                                }
-                                // Re-subscribe using the Gateway-assigned key so the
-                                // backend routes streamed responses to the correct
-                                // session.
-                                self.subscribe_claw_session(id);
-                            }
-                            // Auto-subscribe and fetch history after connect.
-                            // Use the active session's Claw session_key when available;
-                            // fall back to the legacy fixed key for non-Claw sessions.
-                            let session_key = self
-                                .session_store
-                                .active_session()
-                                .and_then(|s| match &s.context {
-                                    crate::ui::types::SessionContext::Claw {
-                                        session_key, ..
-                                    } => Some(session_key.clone()),
-                                    _ => None,
-                                })
-                                .unwrap_or_else(|| "agent:main:main".to_string());
-                            self.subscribe_claw_session(&session_key);
-
-                            // Trigger role-context sync when the active session is a
-                            // Claw session, so the UI converges with Gateway state.
-                            // OpenClaw uses syncthing-rust for role-context sync, so we
-                            // skip the WebSocket sync for that dialect.
-                            let is_openclaw = self.active_claw_protocol()
-                                == Some(crate::claw::ClawProtocol::OpenClawJsonRpc);
-                            if !is_openclaw {
-                                if let Some(session) = self.session_store.active_session() {
-                                    if let crate::ui::types::SessionContext::Claw { role, .. } =
-                                        &session.context
-                                    {
-                                        let device_id = self
-                                            .claw_device_identity
-                                            .as_ref()
-                                            .map(|id| id.device_id())
-                                            .unwrap_or_else(|| self.claw_ws_device_id.clone());
-                                        if let Some(ref ws) = self.claw_ws {
-                                            ws.sync_role_context(role, None, &device_id);
-                                        }
-                                    }
-                                }
-                            }
-                            // Pin the active Claw session to this device so the
-                            // connection manager keeps routing to the new instance.
-                            if let Some(session) = self.session_store.active_session_mut() {
-                                if let crate::ui::types::SessionContext::Claw { affinity, .. } =
-                                    &mut session.context
-                                {
-                                    *affinity = crate::ui::types::DeviceAffinity::Specific(
-                                        self.claw_ws_device_id.clone(),
-                                    );
-                                }
-                            }
-                            // Remember this device as the last successful pick for
-                            // the active session's role.
-                            if let Some(session) = self.session_store.active_session() {
-                                if let crate::ui::types::SessionContext::Claw { role, .. } =
-                                    &session.context
-                                {
-                                    self.device_state
-                                        .set_last_picked(role, &self.claw_ws_device_id);
-                                }
-                            }
-                        }
-                        crate::claw::ClawEvent::StreamChunk(text) => {
-                            if !text.trim().is_empty() {
-                                let session_id = self
-                                    .chat_store
-                                    .claw_in_flight_session_id
-                                    .clone()
-                                    .unwrap_or_else(|| {
-                                        self.session_store.active_session_id.clone()
-                                    });
-                                let _ = self
-                                    .ui_tx
-                                    .send(crate::ui::types::UiEvent::Chunk { session_id, text });
-                            }
-                        }
-                        crate::claw::ClawEvent::Done => {
-                            let session_id = self
-                                .chat_store
-                                .claw_in_flight_session_id
-                                .take()
-                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
-                            let _ = self
-                                .ui_tx
-                                .send(crate::ui::types::UiEvent::Done { session_id });
-                        }
-                        crate::claw::ClawEvent::WirePayload(payload) => {
-                            let session_id = self
-                                .chat_store
-                                .claw_in_flight_session_id
-                                .clone()
-                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
-                            crate::services::wire_dispatcher::dispatch_wire_payload(
-                                &payload,
-                                &session_id,
-                                &self.ui_tx,
-                            );
-                        }
-                        crate::claw::ClawEvent::History {
-                            session_key,
-                            messages,
-                        } => {
-                            let count = messages.len();
-                            self.push_toast(
-                                format!("Loaded {} messages from session", count),
-                                crate::ui::types::ToastLevel::Info,
-                            );
-                            self.ui_store.claw_history = messages
-                                .iter()
-                                .map(|m| format!("[{}] {}", m.role, m.content))
-                                .collect();
-                            // Merge Gateway history into the target Claw session,
-                            // falling back to the active session for legacy responses
-                            // that do not carry a session_key.
-                            let target_id = session_key
-                                .as_deref()
-                                .and_then(|key| self.claw_session_id_by_key(key))
-                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
-                            if let Some(session) = self.session_store.session_mut(&target_id) {
-                                let existing: std::collections::HashSet<String> =
-                                    session.messages.iter().map(|m| m.content.clone()).collect();
-                                for gm in messages {
-                                    let role = if gm.role == "user" {
-                                        Role::User
-                                    } else {
-                                        Role::Agent
-                                    };
-                                    let content = gm.content.clone();
-                                    if content.is_empty() || existing.contains(&content) {
-                                        continue;
-                                    }
-                                    let mut msg = Message {
-                                        role,
-                                        content: content.clone(),
-                                        blocks: vec![ContentBlock::Text { text: content }],
-                                        timestamp: Instant::now(),
-                                        parsed: vec![],
-                                        cached_height: None,
-                                        is_error: false,
-                                        lines: Vec::new(),
-                                    };
-                                    msg.prepare();
-                                    session.messages.push(msg);
-                                }
-                                if !session.messages.is_empty() {
-                                    session.updated_at = crate::session::now_millis();
-                                    self.save_current_session();
-                                }
-                            }
-                        }
-                        crate::claw::ClawEvent::PairingResult {
-                            device_id,
-                            approved,
-                            token,
-                            scopes,
-                        } => {
-                            if approved {
-                                self.push_toast(
-                                    format!(
-                                        "Claw device {} paired (scopes: {})",
-                                        &device_id[..device_id.len().min(8)],
-                                        scopes.join(",")
-                                    ),
-                                    crate::ui::types::ToastLevel::Info,
-                                );
-                                tracing::info!(
-                                    device_id = %device_id,
-                                    ?token,
-                                    ?scopes,
-                                    "OpenClaw pairing approved"
-                                );
-                            } else {
-                                self.push_toast(
-                                    format!(
-                                        "Claw device {} pairing pending approval",
-                                        &device_id[..device_id.len().min(8)]
-                                    ),
-                                    crate::ui::types::ToastLevel::Info,
-                                );
-                                tracing::info!(device_id = %device_id, "OpenClaw pairing pending");
-                            }
-                        }
-                        crate::claw::ClawEvent::RoleContextSynced {
-                            role_id,
-                            session_key,
-                            events,
-                            online_devices,
-                            ..
-                        } => {
-                            let count = events.len();
-                            if count > 0 {
-                                tracing::info!(
-                                    role = %role_id,
-                                    count,
-                                    "Role context synced from Gateway"
-                                );
-                                // Merge missing events into every Claw session that
-                                // matches the role (or the single session identified by
-                                // session_key when the backend provides it). This avoids
-                                // dumping a role's history into whatever session happens
-                                // to be active at arrival time.
-                                let active_id = self.session_store.active_session_id.clone();
-                                let target_ids: Vec<String> = session_key
-                                    .as_deref()
-                                    .and_then(|key| self.claw_session_id_by_key(key))
-                                    .map(|id| vec![id])
-                                    .unwrap_or_else(|| self.claw_session_ids_by_role(&role_id));
-                                for id in target_ids {
-                                    if let Some(session) = self.session_store.session_mut(&id) {
-                                        if let crate::ui::types::SessionContext::Claw {
-                                            session_key,
-                                            ..
-                                        } = &session.context
-                                        {
-                                            let role_ctx = clarity_openclaw::mesh::merge_events(
-                                                clarity_contract::RoleContextId::new(
-                                                    session_key.clone(),
-                                                ),
-                                                &events,
-                                            );
-                                            let existing: std::collections::HashSet<String> =
-                                                session
-                                                    .messages
-                                                    .iter()
-                                                    .map(|m| m.content.clone())
-                                                    .collect();
-                                            let mut appended = false;
-                                            for m in role_ctx.messages {
-                                                if m.content.is_empty()
-                                                    || existing.contains(&m.content)
-                                                {
-                                                    continue;
-                                                }
-                                                let role = if m.role == "user" {
-                                                    Role::User
-                                                } else {
-                                                    Role::Agent
-                                                };
-                                                let content = m.content.clone();
-                                                let mut msg = Message {
-                                                    role,
-                                                    content: content.clone(),
-                                                    blocks: vec![ContentBlock::Text {
-                                                        text: content,
-                                                    }],
-                                                    timestamp: Instant::now(),
-                                                    parsed: vec![],
-                                                    cached_height: None,
-                                                    is_error: false,
-                                                    lines: Vec::new(),
-                                                };
-                                                msg.prepare();
-                                                session.messages.push(msg);
-                                                appended = true;
-                                            }
-                                            if appended {
-                                                session.updated_at = crate::session::now_millis();
-                                                if id == active_id {
-                                                    self.save_current_session();
-                                                } else {
-                                                    let _ = crate::session::save_session_internal(
-                                                        session,
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if !online_devices.is_empty() {
-                                tracing::info!(
-                                    role = %role_id,
-                                    devices = ?online_devices,
-                                    "Online Claw devices"
-                                );
-                            }
-                        }
-                        crate::claw::ClawEvent::ReconnectPending { .. } => {
-                            let failed_device = self.claw_ws_device_id.clone();
-                            if !failed_device.is_empty() {
-                                self.device_state.record_failure(&failed_device);
-                                self.device_state.update_status(
-                                    &failed_device,
-                                    crate::stores::ui::BotStatus::Offline,
-                                );
-                                self.push_toast(
-                                    format!(
-                                        "Claw device {} went offline; failing over",
-                                        failed_device
-                                    ),
-                                    crate::ui::types::ToastLevel::Warn,
-                                );
-                            }
-                            self.chat_store.claw_in_flight_session_id = None;
-                            self.claw_ws = None;
-                            self.claw_ws_device_id.clear();
-                            continue;
-                        }
-                        crate::claw::ClawEvent::Error(e) => {
-                            tracing::warn!("Claw WebSocket error: {}", e);
-                            let surfaced_msg = format!("OpenClaw connection error: {}", e);
-                            if self.ui_store.should_surface_claw_error(&surfaced_msg) {
-                                let session_id = self
-                                    .chat_store
-                                    .claw_in_flight_session_id
-                                    .take()
-                                    .unwrap_or_else(|| {
-                                        self.session_store.active_session_id.clone()
-                                    });
-                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error {
-                                    session_id,
-                                    message: surfaced_msg,
-                                });
-                            }
-                            let failed_device = self.claw_ws_device_id.clone();
-                            if !failed_device.is_empty() {
-                                self.device_state.record_failure(&failed_device);
-                            }
-                            self.claw_ws = None;
-                            self.claw_ws_device_id.clear();
-                            if !failed_device.is_empty() {
-                                let (count, _next) =
-                                    self.ui_store.record_connect_failure(&failed_device);
-                                if count >= 5 {
-                                    self.device_state.update_status(
-                                        &failed_device,
-                                        crate::stores::ui::BotStatus::Offline,
-                                    );
-                                    self.push_toast(
-                                        format!(
-                                            "Claw device {} failed 5 times; marked offline",
-                                            failed_device
-                                        ),
-                                        crate::ui::types::ToastLevel::Warn,
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Drain the temporary pairing client.
-            if let Some(client) = self.claw_pairing_client.as_ref() {
-                for resp in client.drain() {
-                    match resp {
-                        clarity_openclaw::client::ClawResponse::PairingResult {
-                            device_id,
-                            approved,
-                            token,
-                            scopes,
-                        } => {
-                            if approved {
-                                if let Some(t) = token {
-                                    self.finish_openclaw_pairing(&device_id, &t, &scopes);
-                                } else {
-                                    self.claw_pairing_state = PairingState::Error(
-                                        "Pairing approved but no token returned".to_string(),
-                                    );
-                                    self.claw_pairing_client = None;
-                                }
-                            } else {
-                                self.push_toast(
-                                    format!(
-                                        "Device {} pairing pending approval",
-                                        &device_id[..device_id.len().min(8)]
-                                    ),
-                                    crate::ui::types::ToastLevel::Info,
-                                );
-                            }
-                        }
-                        clarity_openclaw::client::ClawResponse::Error(e) => {
-                            self.claw_pairing_state = PairingState::Error(e.clone());
-                            self.claw_pairing_client = None;
-                            self.push_toast(
-                                format!("Pairing failed: {}", e),
-                                crate::ui::types::ToastLevel::Error,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            // Time out pairing requests after 120 seconds.
-            if let PairingState::Waiting { since, .. } = self.claw_pairing_state {
-                if since.elapsed() > std::time::Duration::from_secs(120) {
-                    self.claw_pairing_state = PairingState::Error("Pairing timed out".to_string());
-                    self.claw_pairing_client = None;
-                    self.push_toast(
-                        "Pairing timed out".to_string(),
-                        crate::ui::types::ToastLevel::Error,
-                    );
-                }
-            }
+            self.manage_claw_connection();
+            self.drain_claw_ws_responses();
+            self.drain_pairing_responses();
+            self.timeout_claw_pairing();
         }
 
         // Refresh shell prompt (~1 Hz) to track cwd / git branch changes.
@@ -2009,6 +1656,24 @@ impl eframe::App for App {
 
         self.handle_file_drops(ctx);
 
+        // ── Find-in-session (Ctrl+F) — lightweight toggle, not routed through
+        //    the ShortcutAction system to keep the dispatch path simple. ──
+        if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl)
+            && !shortcuts::is_modal_open(self)
+        {
+            self.chat_store.find_open = !self.chat_store.find_open;
+            if self.chat_store.find_open {
+                self.chat_store.find_query.clear();
+                self.chat_store.find_matches.clear();
+                self.chat_store.find_current = 0;
+                self.ui_store.focus_target = Some(FocusTarget::ChatInput);
+            }
+        }
+        // Close find bar on Escape (before CloseModal for layering reasons).
+        if self.chat_store.find_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.chat_store.find_open = false;
+        }
+
         // ── Global keyboard shortcuts (P0.5.C.1: unified dispatch) ──
         // All shortcut actions and CommandPalette entries route through
         // App::dispatch_command(&str) using ids from clarity_core::ui::ids.
@@ -2024,6 +1689,20 @@ impl eframe::App for App {
         }
 
         self.poll_periodic_checks();
+
+        // ── Auto-save: persist active session every 30 frames (~0.5 s) when
+        //    modified. Guards against data loss on crash between explicit saves.
+        if self.ui_store.frame_count % 30 == 0 {
+            let needs_save = self
+                .session_store
+                .active_session()
+                .map(|s| s.updated_at > s.last_saved_at)
+                .unwrap_or(false);
+            if needs_save {
+                self.save_current_session();
+            }
+        }
+
         self.sync_agent_status();
         self.sync_tray_status();
         self.apply_frame_state(ctx);
@@ -2048,6 +1727,30 @@ impl eframe::App for App {
             if let Some(cmd_id) = self.command_palette.show(ctx, &theme, &commands) {
                 self.dispatch_command(&cmd_id);
             }
+        }
+
+        // ── Theme-switch fade transition (250 ms) ──
+        if let Some(start) = self.ui_store.theme_transition_start {
+            let elapsed = start.elapsed().as_secs_f32();
+            let duration = 0.25;
+            if elapsed >= duration {
+                self.ui_store.theme_transition_start = None;
+            } else {
+                // Ease-out: alpha goes from opaque to transparent.
+                let t = elapsed / duration;
+                let alpha = 1.0 - crate::animation::ease_out_cubic(t);
+                let screen = ctx.screen_rect();
+                let fg = ctx.layer_painter(egui::LayerId::new(
+                    egui::Order::Foreground,
+                    egui::Id::new("theme_transition_overlay"),
+                ));
+                fg.rect_filled(
+                    screen,
+                    egui::CornerRadius::ZERO,
+                    egui::Color32::from_black_alpha((alpha * 255.0) as u8),
+                );
+            }
+            ctx.request_repaint();
         }
     }
 

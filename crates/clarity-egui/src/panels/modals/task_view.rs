@@ -133,7 +133,7 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
 pub struct TaskViewModal;
 
 impl crate::design_system::Panel for TaskViewModal {
-    fn title(&self) -> &str {
+    fn title(&self, _app: &crate::App) -> &str {
         "TaskView"
     }
     fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {

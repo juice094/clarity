@@ -41,6 +41,10 @@ async fn handle_socket(
 ) {
     let session_id = SessionId::new();
     info!("WebSocket connected: session_id={}", session_id);
+    state
+        .metrics
+        .messages_received
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     // 创建持久化会话
     if let Err(e) = state
@@ -78,6 +82,44 @@ async fn handle_socket(
                             use_wire: true,
                         } => {
                             handle_chat_with_wire(&state, &session_id, message, &mut sender).await;
+                        }
+                        WsRequest::Subscribe { since_event_id } => {
+                            let since = since_event_id.unwrap_or(0);
+                            info!(
+                                "WebSocket {} subscribed to events, since_id={}",
+                                session_id, since
+                            );
+                            // Replay buffered events.
+                            let buffered = state.event_wire.events_since(since);
+                            for msg in &buffered {
+                                let payload = match serde_json::to_value(msg) {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        error!(
+                                            "Failed to serialize wire message for replay: {}",
+                                            e
+                                        );
+                                        continue;
+                                    }
+                                };
+                                let envelope = WsResponse::WireMessage { payload };
+                                if let Ok(text) = serde_json::to_string(&envelope)
+                                    && sender.send(WsMessage::Text(text)).await.is_err()
+                                {
+                                    warn!("WebSocket closed during event replay");
+                                    return;
+                                }
+                            }
+                            // Send the current latest id so the client can track.
+                            let latest = state.event_wire.latest_event_id();
+                            let ack = WsResponse::EventAck {
+                                latest_event_id: latest,
+                            };
+                            if let Ok(text) = serde_json::to_string(&ack)
+                                && sender.send(WsMessage::Text(text)).await.is_err()
+                            {
+                                warn!("Failed to send EventAck");
+                            }
                         }
                         request => {
                             let response = handle_request(&state, &session_id, request).await;
@@ -174,8 +216,20 @@ async fn handle_chat_with_wire(
 
     let mut ui_side = wire.ui_side(false);
     let merge_tx_wire = merge_tx.clone();
+    let shared_wire = state.event_wire.clone();
+    let metrics = state.metrics.clone();
     let wire_task = tokio::spawn(async move {
         while let Some(msg) = ui_side.recv().await {
+            // Forward to the shared wire for cross-connection event replay.
+            // The shared wire's WireEventBuffer records every message with a
+            // sequence number for reconnection catch-up.
+            let _ = shared_wire.soul_side().send(msg.clone());
+
+            // Track per-message metrics.
+            metrics
+                .messages_sent
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             // Wrap every streaming WireMessage in the unified WsResponse envelope
             // so the WebSocket always emits a single schema.
             let payload = match serde_json::to_value(&msg) {
@@ -261,6 +315,15 @@ pub enum WsRequest {
         /// Whether to stream wire events.
         #[serde(default)]
         use_wire: bool,
+    },
+    /// Subscribe to streaming events with optional replay.
+    ///
+    /// If `since_event_id` is provided, the gateway replays buffered events
+    /// from the shared Wire ring buffer before starting live streaming.
+    Subscribe {
+        /// Last event id known to the client (0 for all buffered events).
+        #[serde(default)]
+        since_event_id: Option<u64>,
     },
     /// Client keep-alive ping.
     Ping,
@@ -398,6 +461,11 @@ pub enum WsResponse {
     WireMessage {
         /// The original WireMessage payload.
         payload: serde_json::Value,
+    },
+    /// Acknowledgement after event replay with the latest event id.
+    EventAck {
+        /// Latest event id from the shared wire buffer.
+        latest_event_id: u64,
     },
     /// Role-context sync response.
     RoleContextSynced {
@@ -537,6 +605,13 @@ async fn handle_request(
                         error: format!("Agent execution error: {}", e),
                     }
                 }
+            }
+        }
+        WsRequest::Subscribe { since_event_id: _ } => {
+            // Subscribe is handled in handle_socket for streaming; this arm is
+            // reached when a non-streaming client sends Subscribe.
+            WsResponse::EventAck {
+                latest_event_id: state.event_wire.latest_event_id(),
             }
         }
         WsRequest::Ping => WsResponse::Pong,

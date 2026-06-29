@@ -7,56 +7,14 @@
 
 use crate::App;
 use crate::stores::FocusTarget;
-
-/// A built-in work template.
-pub(crate) struct BuiltInTemplate {
-    name: &'static str,
-    description: &'static str,
-    icon: &'static str,
-    prompt: &'static str,
-}
-
-/// Hardcoded template library. When the remote template marketplace
-/// ships, these move to a `TemplateStore` that merges built-in and
-/// remote sources.
-const BUILT_IN_TEMPLATES: &[BuiltInTemplate] = &[
-    BuiltInTemplate {
-        name: "Code Review",
-        description: "Review code for bugs, security issues, and style violations",
-        icon: crate::theme::ICON_CHECK,
-        prompt: "Please review the following code for bugs, security issues, and style violations. Provide specific, actionable feedback:\n\n```\n\n```",
-    },
-    BuiltInTemplate {
-        name: "Bug Fix",
-        description: "Investigate and fix a bug described below",
-        icon: crate::theme::ICON_WARNING,
-        prompt: "I need to fix a bug:\n\n**Steps to reproduce:**\n\n**Expected behavior:**\n\n**Actual behavior:**\n\n**Environment:**\n\nPlease investigate the root cause and propose a fix.",
-    },
-    BuiltInTemplate {
-        name: "New Feature",
-        description: "Implement a new feature from specification",
-        icon: crate::theme::ICON_PLUS,
-        prompt: "Please implement the following feature:\n\n**Goal:**\n\n**Requirements:**\n\n**Acceptance criteria:**\n\n",
-    },
-    BuiltInTemplate {
-        name: "Refactor",
-        description: "Restructure existing code without changing behavior",
-        icon: crate::theme::ICON_WRENCH,
-        prompt: "Please refactor the following code to improve clarity, performance, and maintainability without changing its external behavior:\n\n**Current issues:**\n\n**Target patterns:**\n\n",
-    },
-    BuiltInTemplate {
-        name: "Write Tests",
-        description: "Generate unit and integration tests for existing code",
-        icon: crate::theme::ICON_FILE_CODE,
-        prompt: "Please write comprehensive tests for the following code. Include:\n- Unit tests for edge cases\n- Integration tests where appropriate\n- Any necessary test fixtures\n\n",
-    },
-];
+use crate::stores::template::BuiltInTemplate;
 
 /// Render the templates panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
     // Pre-translate button label to avoid mutable borrow conflict.
     let inject_label = app.t("Inject").to_string();
+    let templates: Vec<BuiltInTemplate> = app.template_store.built_in.clone();
 
     // --- built-in templates ---
     ui.label(
@@ -71,69 +29,8 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         .id_salt("template_list")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            for tmpl in BUILT_IN_TEMPLATES {
-                let _card = egui::Frame::new()
-                    .fill(theme.surface)
-                    .stroke(egui::Stroke::new(1.0, theme.border))
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::symmetric(
-                        theme.space_12 as i8,
-                        theme.space_8 as i8,
-                    ))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(tmpl.icon)
-                                    .font(theme.font_icon(theme.text_md))
-                                    .color(theme.accent),
-                            );
-                            crate::design_system::gap(ui, crate::design_system::Space::S1);
-                            ui.vertical(|ui| {
-                                ui.label(
-                                    egui::RichText::new(tmpl.name)
-                                        .size(theme.text_sm)
-                                        .strong()
-                                        .color(theme.text),
-                                );
-                                ui.label(
-                                    egui::RichText::new(tmpl.description)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                );
-                            });
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui
-                                        .add_sized(
-                                            [64.0, 24.0],
-                                            egui::Button::new(
-                                                egui::RichText::new(&inject_label)
-                                                    .size(theme.text_xs)
-                                                    .color(theme.text_strong),
-                                            )
-                                            .fill(theme.accent)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            )),
-                                        )
-                                        .clicked()
-                                    {
-                                        app.chat_store.input = tmpl.prompt.to_string();
-                                        app.ui_store.focus_target = Some(FocusTarget::ChatInput);
-                                        let toast_msg = app.t("Template injected").to_string();
-                                        crate::handlers::system::push_toast(
-                                            &mut app.ui_store,
-                                            &toast_msg,
-                                            crate::ui::types::ToastLevel::Info,
-                                        );
-                                    }
-                                },
-                            );
-                        });
-                    });
-
+            for tmpl in &templates {
+                render_template_card(app, ui, tmpl, &inject_label, &theme);
                 crate::design_system::gap(ui, crate::design_system::Space::S1);
             }
         });
@@ -164,33 +61,81 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     );
 }
 
-// === Extension point type stubs ===
-
-/// Remote template from the marketplace. Reserved for future backend integration.
-#[allow(dead_code)]
-pub struct RemoteTemplate {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub author: String,
-    pub downloads: u64,
-    pub tags: Vec<String>,
+fn render_template_card(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    tmpl: &BuiltInTemplate,
+    inject_label: &str,
+    theme: &crate::theme::Theme,
+) {
+    let _card = egui::Frame::new()
+        .fill(theme.surface)
+        .stroke(egui::Stroke::new(1.0, theme.border))
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .inner_margin(egui::Margin::symmetric(
+            theme.space_12 as i8,
+            theme.space_8 as i8,
+        ))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(tmpl.icon)
+                        .font(theme.font_icon(theme.text_md))
+                        .color(theme.accent),
+                );
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
+                ui.vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new(tmpl.name)
+                            .size(theme.text_sm)
+                            .strong()
+                            .color(theme.text),
+                    );
+                    ui.label(
+                        egui::RichText::new(tmpl.description)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_sized(
+                            [theme.space_16 * 4.0, theme.size_input],
+                            egui::Button::new(
+                                egui::RichText::new(inject_label)
+                                    .size(theme.text_xs)
+                                    .color(theme.text_strong),
+                            )
+                            .fill(theme.accent)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
+                        app.chat_store.input = tmpl.prompt.to_string();
+                        app.ui_store.focus_target = Some(FocusTarget::ChatInput);
+                        let toast_msg = app.t("Template injected").to_string();
+                        crate::handlers::system::push_toast(
+                            &mut app.ui_store,
+                            &toast_msg,
+                            crate::ui::types::ToastLevel::Info,
+                        );
+                    }
+                });
+            });
+        });
 }
 
-/// Template CRUD placeholder. Reserved for future backend integration.
-#[allow(dead_code)]
-pub struct TemplateStore {
-    pub built_in: Vec<BuiltInTemplate>,
-    pub remote_templates: Option<Vec<RemoteTemplate>>,
-    pub search_query: String,
-}
+// ── Panel trait implementation ──
 
-impl Default for TemplateStore {
-    fn default() -> Self {
-        Self {
-            built_in: Vec::new(),
-            remote_templates: None,
-            search_query: String::new(),
-        }
+/// Templates panel renderer.
+pub struct TemplatesPanel;
+
+impl crate::design_system::Panel for TemplatesPanel {
+    fn title(&self, app: &crate::App) -> &str {
+        app.t("Templates")
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render(app, ui);
     }
 }

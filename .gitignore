@@ -1,4 +1,5 @@
 /target
+/.archive/
 *.db
 *.db-journal
 *.log
