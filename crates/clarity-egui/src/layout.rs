@@ -8,7 +8,6 @@
 //! with one-way responsive collapse rules.
 
 use crate::App;
-use clarity_core::ui::SidePanel;
 
 /// Computed widths for the main screen regions.
 ///
@@ -94,7 +93,6 @@ fn compute_metrics(app: &App, ctx: &egui::Context) -> LayoutMetrics {
         app.ui_store.theme.size_panel_right,
         app.view_state.left_rail_expanded,
         app.view_state.right_rail_visible,
-        app.view_state.right,
     )
 }
 
@@ -105,7 +103,6 @@ fn compute_metrics_raw(
     size_panel_right: f32,
     left_rail_expanded: bool,
     right_rail_visible: bool,
-    right: Option<SidePanel>,
 ) -> LayoutMetrics {
     // S6 Phase D: the left chrome is a single fixed-width navigation tree.
     let left_rail_w = if left_rail_expanded {
@@ -119,14 +116,7 @@ fn compute_metrics_raw(
     } else {
         0.0
     };
-    // Legacy right panels (Team/Task migrated to RightRailPanel, Dashboard
-    // to main stage). The content guard can still collapse remaining legacy
-    // panels independently.
-    let legacy_right_w = match right {
-        Some(SidePanel::PreviewDrawer) | Some(SidePanel::SubAgentProgress) => size_panel_right,
-        _ => 0.0,
-    };
-    let content_w = current_width - left_rail_w - left_panel_w - right_rail_w - legacy_right_w;
+    let content_w = current_width - left_rail_w - left_panel_w - right_rail_w;
 
     LayoutMetrics {
         left_rail_w,
@@ -152,7 +142,6 @@ mod tests {
             240.0, // right rail
             true,  // left expanded
             true,  // right visible
-            None,
         );
         assert_eq!(m.left_rail_w, 144.0);
         // Content is tight but left rail is preserved.
@@ -163,31 +152,23 @@ mod tests {
     fn content_area_increases_when_left_collapsed_manually() {
         let m = compute_metrics_raw(
             800.0, 144.0, 240.0, false, // left collapsed
-            true, None,
+            true,
         );
         assert_eq!(m.left_rail_w, 0.0);
         assert!(m.content_w > 500.0);
     }
 
     #[test]
-    fn right_rail_and_legacy_right_are_counted_separately() {
-        let m = compute_metrics_raw(
-            1200.0,
-            144.0,
-            240.0,
-            true,
-            true,
-            Some(SidePanel::SubAgentProgress),
-        );
+    fn right_rail_consumes_width() {
+        let m = compute_metrics_raw(1200.0, 144.0, 240.0, true, true);
         assert_eq!(m.left_rail_w, 144.0);
         assert_eq!(m.right_rail_w, 240.0);
-        // legacy right panel occupies additional width on top of right rail
-        assert_eq!(m.content_w, 1200.0 - 144.0 - 240.0 - 240.0);
+        assert_eq!(m.content_w, 1200.0 - 144.0 - 240.0);
     }
 
     #[test]
     fn content_too_narrow_detects_underflow() {
-        let m = compute_metrics_raw(400.0, 144.0, 240.0, true, true, None);
+        let m = compute_metrics_raw(400.0, 144.0, 240.0, true, true);
         assert!(m.content_too_narrow(480.0));
     }
 }

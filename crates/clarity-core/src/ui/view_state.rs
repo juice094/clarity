@@ -34,10 +34,6 @@ pub enum AppView {
     Settings,
     /// System dashboard.
     Dashboard,
-    /// Gantt / timeline view.
-    Gantt,
-    /// Task board (full-screen).
-    TaskBoard,
 }
 
 /// Side panel type — supports left/right overlays in GUI; TUI achieves the

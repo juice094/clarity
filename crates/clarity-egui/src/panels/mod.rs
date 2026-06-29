@@ -8,27 +8,23 @@
 //!   - `settings/`        — center modal (settings tabs)
 //!   - `modals/`          — top-layer blocking dialogs
 //!   - `system/`          — global overlays (toast, dashboard)
-//!   - `legacy/`          — panels awaiting redesign or integration into the new layout
+//!   - `mcp.rs` / `skill.rs` — floating overlay panels
 //!
-//! Backward-compatibility re-exports are provided at the bottom so existing
-//! call sites (e.g. `panels::approval`) keep compiling during migration.
+//! The `legacy/` directory was removed in S6 cleanup. Gantt and TaskBoard
+//! panels had no UI navigation path (dead code). MCP and Skill overlays
+//! were promoted to top-level `panels/` modules.
 
 pub mod bot_bar;
 pub mod chat;
-pub mod legacy;
+pub mod mcp;
 pub mod modals;
 pub mod navigation_tree;
 pub mod right_ide_panel;
 pub mod settings;
+pub mod skill;
 pub mod system;
 
-// -----------------------------------------------------------------------------
-// Backward-compatibility re-exports (remove once all call sites are migrated)
-// -----------------------------------------------------------------------------
-pub use legacy::gantt;
-pub use legacy::mcp;
-pub use legacy::skill;
-pub use legacy::task_board;
+// Re-exports for backward compatibility at existing call sites.
 pub use modals::approval;
 pub use modals::cron_create;
 pub use modals::snapshot;

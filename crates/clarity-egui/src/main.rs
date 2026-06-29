@@ -784,12 +784,9 @@ impl App {
     fn render_main_stage(&mut self, ctx: &egui::Context) {
         // Views that do not render their own CentralPanel would otherwise expose
         // the raw window background (black on decorated-less Windows windows).
-        // Fill the stage with `theme.bg` first; Chat/TaskBoard already do
-        // this themselves, so skip them to avoid double CentralPanel.
-        let self_renders_central = matches!(
-            self.view_state.main,
-            clarity_core::ui::AppView::Chat | clarity_core::ui::AppView::TaskBoard
-        );
+        // Fill the stage with `theme.bg` first; Chat already does this itself,
+        // so skip it to avoid double CentralPanel.
+        let self_renders_central = matches!(self.view_state.main, clarity_core::ui::AppView::Chat);
         if !self_renders_central {
             // The unified background painter already fills the main stage; only
             // guarantee a transparent central panel exists for child widgets.
@@ -808,8 +805,6 @@ impl App {
             clarity_core::ui::AppView::Chat => self.render_chat_area(ctx),
             clarity_core::ui::AppView::Settings => self.render_settings_panel(ctx),
             clarity_core::ui::AppView::Dashboard => self.render_dashboard_panel(ctx),
-            clarity_core::ui::AppView::Gantt => self.render_gantt_panel(ctx),
-            clarity_core::ui::AppView::TaskBoard => self.render_task_board(ctx),
         }
     }
 
@@ -1413,14 +1408,6 @@ impl App {
 
     fn render_dashboard_panel(&mut self, ctx: &egui::Context) {
         panels::dashboard::render_dashboard_panel(self, ctx);
-    }
-
-    fn render_gantt_panel(&mut self, ctx: &egui::Context) {
-        panels::gantt::render_gantt_panel(self, ctx);
-    }
-
-    fn render_task_board(&mut self, ctx: &egui::Context) {
-        panels::task_board::render_task_board(self, ctx);
     }
 
     fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
