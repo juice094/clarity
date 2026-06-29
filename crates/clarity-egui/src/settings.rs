@@ -68,7 +68,15 @@ pub struct OpenClawConnection {
     /// WebSocket URL of the Gateway, e.g. `ws://host:18789`.
     pub gateway_url: String,
     /// Admin or device token used for authentication.
-    pub token: String,
+    /// Encrypted on disk via the same serde layer as `api_key`.
+    /// `#[serde(default)]` + `Option` so the serde helpers (which operate on
+    /// `Option<String>`) work transparently.
+    #[serde(
+        default,
+        serialize_with = "serialize_api_key",
+        deserialize_with = "deserialize_api_key"
+    )]
+    pub token: Option<String>,
     /// How the token is combined with the local device identity.
     #[serde(default)]
     pub auth_mode: OpenClawAuthMode,
@@ -76,7 +84,13 @@ pub struct OpenClawConnection {
     #[serde(default = "default_openclaw_enabled")]
     pub enabled: bool,
     /// Optional device-specific token for `DevicePaired` mode.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Encrypted on disk via the same serde layer as `api_key`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_api_key",
+        deserialize_with = "deserialize_api_key"
+    )]
     pub device_token: Option<String>,
     /// Optional session key override for this remote OpenClaw connection.
     ///
@@ -102,7 +116,7 @@ impl Default for OpenClawConnection {
         Self {
             name: "Remote OpenClaw".into(),
             gateway_url: String::new(),
-            token: String::new(),
+            token: None,
             auth_mode: OpenClawAuthMode::default(),
             enabled: true,
             device_token: None,
@@ -111,6 +125,76 @@ impl Default for OpenClawConnection {
         }
     }
 }
+
+// ============================================================================
+// API key encryption — transparent serde layer
+// ============================================================================
+
+/// Serialize `api_key`: encrypt with `clarity_secrets` so the value on disk is
+/// always `enc2:<ciphertext>`, never plaintext.
+pub fn serialize_api_key<S: serde::Serializer>(
+    val: &Option<String>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match val {
+        None => s.serialize_none(),
+        Some(plaintext) if plaintext.is_empty() => s.serialize_none(),
+        Some(plaintext) => {
+            // Skip encryption if already an enc2: blob (idempotent).
+            if plaintext.starts_with("enc2:") {
+                return s.serialize_str(plaintext);
+            }
+            let encrypted = encrypt_api_key_value(plaintext).unwrap_or_else(|e| {
+                tracing::warn!("Failed to encrypt api_key for storage: {}", e);
+                // Fall back to plaintext rather than losing the key.
+                plaintext.clone()
+            });
+            s.serialize_str(&encrypted)
+        }
+    }
+}
+
+/// Deserialize `api_key`: if the value starts with `enc2:`, decrypt it.
+/// Plaintext keys (legacy or encryption-failure fallback) pass through as-is.
+pub fn deserialize_api_key<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<String>, D::Error> {
+    let raw: Option<String> = Option::<String>::deserialize(d)?;
+    match raw {
+        None => Ok(None),
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) if s.starts_with("enc2:") => {
+            let decrypted = decrypt_api_key_value(&s).unwrap_or_else(|e| {
+                tracing::warn!("Failed to decrypt stored api_key: {}", e);
+                // Return the raw enc2: blob so the user sees it needs re-entry.
+                s.clone()
+            });
+            Ok(Some(decrypted))
+        }
+        Some(plaintext) => {
+            // Legacy plaintext key — accept it, will be encrypted on next save.
+            Ok(Some(plaintext))
+        }
+    }
+}
+
+fn encrypt_api_key_value(plaintext: &str) -> Result<String, String> {
+    let store = clarity_llm::default_secret_store()
+        .map_err(|e| format!("secret store unavailable: {}", e))?;
+    let ciphertext = store.encrypt(plaintext).map_err(|e| e.to_string())?;
+    Ok(format!("enc2:{}", ciphertext))
+}
+
+fn decrypt_api_key_value(ciphertext: &str) -> Result<String, String> {
+    let blob = ciphertext.strip_prefix("enc2:").unwrap_or(ciphertext);
+    let store = clarity_llm::default_secret_store()
+        .map_err(|e| format!("secret store unavailable: {}", e))?;
+    store.decrypt(blob).map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// GuiSettings
+// ============================================================================
 
 /// Holds gui settings state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -125,7 +209,11 @@ pub struct GuiSettings {
     pub network_probe_url: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
-    #[serde(default)]
+    #[serde(
+        default,
+        serialize_with = "serialize_api_key",
+        deserialize_with = "deserialize_api_key"
+    )]
     pub api_key: Option<String>,
     #[serde(default)]
     pub active_profile: Option<String>,
@@ -341,7 +429,15 @@ impl GuiSettings {
         let merged = merge_json(existing, new);
 
         let content = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
-        std::fs::write(&path, content).map_err(|e| e.to_string())
+        // Atomic write: write to a temp file first, then rename into place.
+        // A crash during write leaves the original file intact.
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, &content).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, &path).map_err(|e| {
+            // Best-effort cleanup: if rename fails, remove the stale tmp.
+            let _ = std::fs::remove_file(&tmp);
+            format!("Failed to atomically save settings: {}", e)
+        })
     }
 }
 
@@ -656,7 +752,7 @@ approval_mode = "yolo"
         let conn = OpenClawConnection {
             name: "Remote Lab".into(),
             gateway_url: "ws://openclaw.example.com:18789".into(),
-            token: "${env:OPENCLAW_REMOTE_TOKEN}".into(),
+            token: Some("${env:OPENCLAW_REMOTE_TOKEN}".into()),
             auth_mode: OpenClawAuthMode::TokenWithDevice,
             enabled: true,
             device_token: Some("device-token".into()),
@@ -730,5 +826,91 @@ approval_mode = "yolo"
         let mut value = serde_json::json!({"model": "gpt-4o"});
         migrate_legacy_web_links(&mut value);
         assert!(value.get("web_links").is_none());
+    }
+
+    // =========================================================================
+    // Integration tests — filesystem persistence
+    // =========================================================================
+
+    /// Helper: save settings to a specific path instead of `config_path()`.
+    fn save_settings_to_path(settings: &GuiSettings, path: &std::path::Path) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let existing: serde_json::Value = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        let new = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+        let merged = merge_json(existing, new);
+        let content = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
+        std::fs::write(path, content).map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn save_settings_to_file_and_read_back() {
+        crate::test_util::with_temp_dir("settings_save_load", |tmp| {
+            let config_file = tmp.join("gui-settings.json");
+
+            let settings = GuiSettings {
+                provider: "test-provider".into(),
+                model: "test-model".into(),
+                theme: "oled".into(),
+                font_scale: Some(1.5),
+                ..GuiSettings::default()
+            };
+            save_settings_to_path(&settings, &config_file).expect("save should succeed");
+
+            assert!(config_file.exists(), "config file should exist after save");
+
+            // Read back and verify fields.
+            let raw = std::fs::read_to_string(&config_file).unwrap();
+            let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            assert_eq!(parsed["provider"], "test-provider");
+            assert_eq!(parsed["model"], "test-model");
+            assert_eq!(parsed["theme"], "oled");
+            assert_eq!(parsed["font_scale"], 1.5);
+
+            // Deserialize into GuiSettings and verify.
+            let loaded: GuiSettings = serde_json::from_str(&raw).unwrap();
+            assert_eq!(loaded.provider, "test-provider");
+            assert_eq!(loaded.theme, "oled");
+        });
+    }
+
+    #[test]
+    fn save_settings_preserves_unknown_fields() {
+        crate::test_util::with_temp_dir("settings_merge", |tmp| {
+            let config_file = tmp.join("gui-settings.json");
+
+            // Pre-create a config file with an unknown field alongside required fields.
+            let initial = serde_json::json!({
+                "provider": "openai",
+                "model": "gpt-4o",
+                "approval_mode": "interactive",
+                "theme": "dark",
+                "future_feature_flag": true,
+                "custom_plugin_config": {"enabled": true, "path": "/tmp/plugin"}
+            });
+            std::fs::write(
+                &config_file,
+                serde_json::to_string_pretty(&initial).unwrap(),
+            )
+            .unwrap();
+
+            // Load, modify theme, and save.
+            let loaded: GuiSettings =
+                serde_json::from_str(&std::fs::read_to_string(&config_file).unwrap()).unwrap();
+            let mut settings = loaded;
+            settings.theme = "tokyo_night".into();
+            save_settings_to_path(&settings, &config_file).expect("save should succeed");
+
+            // Verify unknown fields survived.
+            let raw = std::fs::read_to_string(&config_file).unwrap();
+            let after: serde_json::Value = serde_json::from_str(&raw).unwrap();
+            assert_eq!(after["theme"], "tokyo_night");
+            assert_eq!(after["future_feature_flag"], true);
+            assert_eq!(after["custom_plugin_config"]["enabled"], true);
+        });
     }
 }
