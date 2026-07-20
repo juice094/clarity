@@ -18,7 +18,7 @@
 
 uniffi::include_scaffolding!("clarity_mobile_core");
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,22 +42,22 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 /// Path to the persisted OpenClaw device identity inside the mobile data dir.
-fn device_identity_path(data_dir: &PathBuf) -> PathBuf {
+fn device_identity_path(data_dir: &Path) -> PathBuf {
     data_dir.join("claw-device.json")
 }
 
 /// Path to the persisted paired-device token inside the mobile data dir.
-fn paired_token_path(data_dir: &PathBuf) -> PathBuf {
+fn paired_token_path(data_dir: &Path) -> PathBuf {
     data_dir.join("claw-device-token.json")
 }
 
 /// Load or generate an Ed25519 device identity at the mobile data dir.
-fn load_or_generate_device_identity(data_dir: &PathBuf) -> Result<DeviceIdentity, String> {
+fn load_or_generate_device_identity(data_dir: &Path) -> Result<DeviceIdentity, String> {
     DeviceIdentity::load_or_generate_at(device_identity_path(data_dir))
 }
 
 /// Load a previously-saved paired token, if any.
-fn load_paired_token(data_dir: &PathBuf) -> Option<PairedToken> {
+fn load_paired_token(data_dir: &Path) -> Option<PairedToken> {
     match clarity_claw::device::load_paired_token_at(paired_token_path(data_dir)) {
         Ok(token) => token,
         Err(e) => {
@@ -68,7 +68,7 @@ fn load_paired_token(data_dir: &PathBuf) -> Option<PairedToken> {
 }
 
 /// Persist a paired token to the mobile data dir.
-fn save_paired_token(data_dir: &PathBuf, record: &PairedToken) -> Result<(), String> {
+fn save_paired_token(data_dir: &Path, record: &PairedToken) -> Result<(), String> {
     clarity_claw::device::save_paired_token_at(paired_token_path(data_dir), record)
 }
 
@@ -76,7 +76,7 @@ fn save_paired_token(data_dir: &PathBuf, record: &PairedToken) -> Result<(), Str
 /// when one exists for the target gateway URL.
 fn build_openclaw_transport(
     ws_url: &str,
-    data_dir: &PathBuf,
+    data_dir: &Path,
     gateway_token: Option<&str>,
 ) -> Arc<clarity_claw::TransportManager> {
     let gateway_token = gateway_token.unwrap_or("").to_string();
