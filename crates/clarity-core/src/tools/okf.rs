@@ -10,14 +10,25 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-/// Resolve a bundle path that may be absolute or relative to the working
-/// directory.
+/// Expand a leading `~` to the user's home directory (cross-platform).
+fn expand_tilde(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix('~') {
+        if let Some(home) = dirs::home_dir() {
+            let rest = rest.trim_start_matches(['/', '\\']);
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
+
+/// Resolve a bundle path that may be absolute, relative to the working
+/// directory, or start with `~`.
 fn resolve_bundle_path(path: &str, working_dir: &Path) -> PathBuf {
-    let p = Path::new(path);
-    if p.is_absolute() {
-        p.to_path_buf()
+    let expanded = expand_tilde(path);
+    if expanded.is_absolute() {
+        expanded
     } else {
-        working_dir.join(p)
+        working_dir.join(expanded)
     }
 }
 
@@ -495,5 +506,20 @@ mod tests {
 
         let outgoing = result["outgoing"].as_array().unwrap();
         assert!(outgoing.iter().any(|l| l["target"] == "metrics/mau"));
+    }
+
+    #[test]
+    fn test_resolve_bundle_path_expands_tilde() {
+        let home = dirs::home_dir().expect("home_dir should be available in tests");
+        let working_dir = std::path::PathBuf::from("/tmp");
+
+        assert_eq!(
+            resolve_bundle_path("~/test_bundle", &working_dir),
+            home.join("test_bundle")
+        );
+        assert_eq!(
+            resolve_bundle_path("~\\test_bundle", &working_dir),
+            home.join("test_bundle")
+        );
     }
 }

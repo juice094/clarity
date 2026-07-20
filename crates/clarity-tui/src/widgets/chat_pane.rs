@@ -7,13 +7,13 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
-use std::time::Instant;
+use std::time::Duration;
 
 /// Format an elapsed duration as a short relative time label.
 ///
 /// ponytail: use simple threshold buckets — no chrono, no i18n.
-fn relative_label(created: Instant) -> String {
-    let secs = created.elapsed().as_secs();
+fn relative_label(elapsed: Duration) -> String {
+    let secs = elapsed.as_secs();
     match secs {
         0..=5 => "just now".into(),
         6..=59 => format!("{}s ago", secs),
@@ -81,7 +81,7 @@ impl<'a> Widget for ChatPane<'a> {
                     if show_header {
                         lines.push(Line::from(""));
                         let time = Span::styled(
-                            format!(" {} ", relative_label(msg.created_at)),
+                            format!(" {} ", relative_label(msg.created_at.elapsed())),
                             Style::default().fg(Color::Rgb(100, 100, 120)),
                         );
                         lines.push(Line::from(vec![
@@ -126,7 +126,7 @@ impl<'a> Widget for ChatPane<'a> {
                                 .add_modifier(Modifier::BOLD),
                         );
                         let time = Span::styled(
-                            format!(" {} ", relative_label(msg.created_at)),
+                            format!(" {} ", relative_label(msg.created_at.elapsed())),
                             Style::default().fg(Color::Rgb(100, 100, 120)),
                         );
                         lines.push(Line::from(vec![
@@ -215,46 +215,33 @@ mod tests {
 
     #[test]
     fn relative_label_just_now() {
-        let now = Instant::now();
-        assert_eq!(relative_label(now), "just now");
+        assert_eq!(relative_label(Duration::ZERO), "just now");
     }
 
     #[test]
     fn relative_label_seconds() {
-        let ten_sec_ago = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
-        assert_eq!(relative_label(ten_sec_ago), "10s ago");
+        assert_eq!(relative_label(Duration::from_secs(10)), "10s ago");
     }
 
     #[test]
     fn relative_label_minutes() {
-        let five_min_ago = Instant::now()
-            .checked_sub(Duration::from_secs(300))
-            .unwrap();
-        assert_eq!(relative_label(five_min_ago), "5m ago");
+        assert_eq!(relative_label(Duration::from_secs(300)), "5m ago");
     }
 
     #[test]
     fn relative_label_hours() {
-        let three_hr_ago = Instant::now()
-            .checked_sub(Duration::from_secs(10800))
-            .unwrap();
-        assert_eq!(relative_label(three_hr_ago), "3h ago");
+        assert_eq!(relative_label(Duration::from_secs(10800)), "3h ago");
     }
 
     #[test]
     fn relative_label_days() {
-        let two_days_ago = Instant::now()
-            .checked_sub(Duration::from_secs(172800))
-            .unwrap();
-        assert_eq!(relative_label(two_days_ago), "2d ago");
+        assert_eq!(relative_label(Duration::from_secs(172800)), "2d ago");
     }
 
     #[test]
     fn relative_label_boundary_5_to_6() {
-        let at_5 = Instant::now().checked_sub(Duration::from_secs(5)).unwrap();
-        let at_6 = Instant::now().checked_sub(Duration::from_secs(6)).unwrap();
-        assert_eq!(relative_label(at_5), "just now");
-        assert_eq!(relative_label(at_6), "6s ago");
+        assert_eq!(relative_label(Duration::from_secs(5)), "just now");
+        assert_eq!(relative_label(Duration::from_secs(6)), "6s ago");
     }
 
     // ── Layout integration tests ──

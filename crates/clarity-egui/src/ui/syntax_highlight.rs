@@ -92,6 +92,10 @@ fn syntect_color_to_egui(c: syntect::highlighting::Color) -> egui::Color32 {
 
 /// Try to highlight code; if the language is unknown or parsing fails,
 /// returns plain monochrome lines (no syntax coloring).
+///
+/// Replaced by `egui_commonmark`'s built-in highlighter in the hot path; kept
+/// as a compatibility shim.
+#[allow(dead_code)]
 pub fn try_highlight(lang: &str, code: &str) -> Vec<Vec<(egui::Color32, String)>> {
     if lang.is_empty() || code.is_empty() {
         return code

@@ -7,10 +7,10 @@ impl App {
     /// otherwise fall back to the local `TaskStore`.
     pub(crate) fn refresh_tasks(&self) {
         let gateway_client = GatewayTaskClient::new();
-        let local_store = self.state.task_store.clone();
-        let tx = self.ui_tx.clone();
+        let local_store = self.context.state.task_store.clone();
+        let tx = self.context.ui_tx.clone();
 
-        self.runtime.spawn(async move {
+        self.context.runtime.spawn(async move {
             // Try Gateway first
             match gateway_client.list_tasks().await {
                 Ok(tasks) => {

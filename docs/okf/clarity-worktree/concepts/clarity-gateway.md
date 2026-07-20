@@ -18,7 +18,6 @@ Axum HTTP/WebSocket server and Web IDE.
 - Session store
 - SSE/WebSocket endpoints
 - MCP server exposure
-- Optional Anthropic Messages API (`/v1/messages`) via `anthropic-api` feature
 
 ## Notes
 

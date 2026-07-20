@@ -25,13 +25,15 @@ use clarity_contract::ToolCall;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::env;
+use std::error::Error;
+use std::time::Duration;
 
 /// Ollama LLM Provider
 #[derive(Debug, Clone)]
 pub struct OllamaProvider {
     base_url: String,
     model: String,
-    client: reqwest::Client,
+    pub(crate) client: reqwest::Client,
 }
 
 #[derive(Debug, Serialize)]
@@ -123,18 +125,22 @@ impl OllamaProvider {
     /// `model` is the Ollama model tag, e.g. `llama3` or `qwen`.
     pub fn new(base_url: impl Into<String>, model: impl Into<String>) -> Self {
         Self {
-            base_url: base_url.into(),
+            base_url: normalize_ollama_host(base_url.into()),
             model: model.into(),
-            client: shared_http_client(),
+            client: no_proxy_client(),
         }
     }
 
     /// Create from environment variables.
     ///
-    /// Optional: `OLLAMA_HOST` (default: "http://localhost:11434")
-    /// Optional: `OLLAMA_MODEL` (default: "llama3")
+    /// Optional: `OLLAMA_HOST` (default: "http://localhost:11434"). Supports
+    /// both bind-style values like `0.0.0.0:11434` (common when Ollama itself
+    /// was launched with `OLLAMA_HOST`) and full URLs like
+    /// `http://192.168.1.10:11434`.
     pub fn from_env() -> Result<Self, AgentError> {
-        let base_url = env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".into());
+        let base_url = normalize_ollama_host(
+            env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".into()),
+        );
         let model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3".into());
         Ok(Self::new(base_url, model))
     }
@@ -155,6 +161,27 @@ impl OllamaProvider {
             client,
         }
     }
+}
+
+/// Build a reqwest client that bypasses system proxies.
+///
+/// Local inference endpoints (Ollama, llama.cpp server, etc.) must not be
+/// routed through a system proxy — proxies often cannot reach localhost or
+/// misroute the request to a default upstream, producing 401 / builder errors.
+fn no_proxy_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(300))
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(10)
+        .no_proxy()
+        .build()
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                "failed to build no-proxy reqwest client ({}), using shared client",
+                e
+            );
+            shared_http_client()
+        })
 }
 
 fn convert_messages(messages: &[Message]) -> Vec<OllamaApiMessage> {
@@ -182,6 +209,25 @@ fn convert_messages(messages: &[Message]) -> Vec<OllamaApiMessage> {
 
 fn next_tool_call_id() -> String {
     format!("ollama_call_{}", rand::random::<u16>())
+}
+
+/// Normalize the value of `OLLAMA_HOST` so it is always an absolute URL that a
+/// client can connect to.
+///
+/// Ollama uses `OLLAMA_HOST` as its server bind address, so users often set it
+/// to `0.0.0.0:11434`. That is not a valid client target, so we prepend
+/// `http://` and rewrite `0.0.0.0` to `127.0.0.1`.
+fn normalize_ollama_host(host: String) -> String {
+    let host = host.trim();
+    if host.is_empty() {
+        return "http://localhost:11434".into();
+    }
+    let with_scheme = if host.contains("://") {
+        host.to_string()
+    } else {
+        format!("http://{}", host)
+    };
+    with_scheme.replace("http://0.0.0.0:", "http://127.0.0.1:")
 }
 
 #[async_trait]
@@ -219,7 +265,15 @@ impl LlmProvider for OllamaProvider {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| AgentError::Llm(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| {
+                let mut detail = format!("HTTP request failed: {}", e);
+                let mut source = e.source();
+                while let Some(s) = source {
+                    detail.push_str(&format!(" | caused by: {}", s));
+                    source = s.source();
+                }
+                AgentError::Llm(detail)
+            })?;
 
         let status = response.status();
         if !status.is_success() {

@@ -126,6 +126,12 @@ pub trait LlmProvider: Send + Sync {
         None
     }
 
+    /// Capture any authentication token that the provider obtained during its
+    /// lifecycle (e.g. a device-login token). Default returns None.
+    fn capture_auth_token(&self) -> Option<String> {
+        None
+    }
+
     /// Provider self-reported capabilities.
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {

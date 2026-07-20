@@ -219,6 +219,10 @@ pub struct RunSpec {
     /// The subagent's final response is validated against this schema
     /// (best-effort; unsupported providers fall back to unconstrained text).
     pub output_schema: Option<serde_json::Value>,
+    /// Capability tags requested for this run.
+    pub capabilities: Vec<String>,
+    /// Force read-only mode regardless of the agent type definition.
+    pub read_only: bool,
 }
 
 impl RunSpec {
@@ -235,6 +239,8 @@ impl RunSpec {
             capability_token: None,
             goal_tags: Vec::new(),
             output_schema: None,
+            capabilities: Vec::new(),
+            read_only: false,
         }
     }
 
@@ -286,6 +292,18 @@ impl RunSpec {
     /// 设置目标标签（Jumpy Predictor 路由决策用）
     pub fn with_goal_tags(mut self, tags: Vec<String>) -> Self {
         self.goal_tags = tags;
+        self
+    }
+
+    /// 设置能力标签。
+    pub fn with_capabilities(mut self, capabilities: Vec<String>) -> Self {
+        self.capabilities = capabilities;
+        self
+    }
+
+    /// 强制以只读模式运行子代理。
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
         self
     }
 }
@@ -658,6 +676,16 @@ pub struct AgentTypeDefinition {
     pub allowed_tools: Option<Vec<String>>,
     /// Default maximum iterations.
     pub max_iterations: usize,
+    /// Default model alias, e.g. `kimi-coding/kimi-for-coding`.
+    pub model: Option<String>,
+    /// Capability tags used for routing and UI labeling.
+    pub capabilities: Vec<String>,
+    /// Per-agent timeout in seconds.
+    pub timeout_seconds: Option<u64>,
+    /// Whether this agent is prohibited from mutating tools.
+    pub read_only: bool,
+    /// Maximum tokens to request from the LLM.
+    pub max_tokens: Option<usize>,
 }
 
 /// Registry for subagent types (LaborMarket).
@@ -690,6 +718,11 @@ impl LaborMarket {
             system_prompt: CODER_SYSTEM_PROMPT.to_string(),
             allowed_tools: None,
             max_iterations: 20,
+            model: None,
+            capabilities: vec!["code".to_string(), "write".to_string(), "debug".to_string()],
+            timeout_seconds: None,
+            read_only: false,
+            max_tokens: None,
         });
         self.register(AgentTypeDefinition {
             name: "explore".to_string(),
@@ -701,6 +734,11 @@ impl LaborMarket {
                 "grep".to_string(),
             ]),
             max_iterations: 10,
+            model: None,
+            capabilities: vec!["search".to_string(), "read".to_string()],
+            timeout_seconds: Some(120),
+            read_only: true,
+            max_tokens: Some(8192),
         });
         self.register(AgentTypeDefinition {
             name: "plan".to_string(),
@@ -713,6 +751,61 @@ impl LaborMarket {
                 "file_write".to_string(),
             ]),
             max_iterations: 5,
+            model: None,
+            capabilities: vec!["plan".to_string(), "design".to_string()],
+            timeout_seconds: Some(180),
+            read_only: false,
+            max_tokens: Some(16384),
+        });
+        self.register(AgentTypeDefinition {
+            name: "review".to_string(),
+            description: "Code reviewer for style, safety, and architectural adherence".to_string(),
+            system_prompt: REVIEW_SYSTEM_PROMPT.to_string(),
+            allowed_tools: Some(vec![
+                "file_read".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+            ]),
+            max_iterations: 5,
+            model: None,
+            capabilities: vec!["review".to_string(), "analyze".to_string()],
+            timeout_seconds: Some(180),
+            read_only: true,
+            max_tokens: Some(16384),
+        });
+        self.register(AgentTypeDefinition {
+            name: "simplify".to_string(),
+            description: "Code simplifier for clarity, consistency, and maintainability"
+                .to_string(),
+            system_prompt: SIMPLIFY_SYSTEM_PROMPT.to_string(),
+            allowed_tools: Some(vec![
+                "file_read".to_string(),
+                "file_write".to_string(),
+                "file_edit".to_string(),
+            ]),
+            max_iterations: 10,
+            model: None,
+            capabilities: vec!["refactor".to_string(), "simplify".to_string()],
+            timeout_seconds: Some(120),
+            read_only: false,
+            max_tokens: Some(8192),
+        });
+        self.register(AgentTypeDefinition {
+            name: "test".to_string(),
+            description: "Test coverage analyzer and test case generator".to_string(),
+            system_prompt: TEST_SYSTEM_PROMPT.to_string(),
+            allowed_tools: Some(vec![
+                "file_read".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+                "bash".to_string(),
+            ]),
+            max_iterations: 10,
+            model: None,
+            capabilities: vec!["test".to_string(), "analyze".to_string()],
+            timeout_seconds: Some(180),
+            read_only: true,
+            max_tokens: Some(8192),
         });
     }
 
@@ -748,24 +841,97 @@ Guidelines:
 - Test your changes when possible
 "#;
 
-const EXPLORE_SYSTEM_PROMPT: &str = r#"You are a codebase exploration assistant.
-Your task is to understand and explain code structure.
+const EXPLORE_SYSTEM_PROMPT: &str = r#"You are a fast read-only search agent. Your job is to locate code, files, and symbols across a codebase.
 
-Guidelines:
-- Use file_read, glob, grep to explore
-- Provide clear summaries
-- Ask questions if unclear
-- Focus on understanding, not changing
+Rules:
+- Only use read/search tools (Glob, Grep, Read). Never write, edit, or execute code.
+- When searching, prefer Grep for exact symbols and Glob for file patterns.
+- Read files conservatively — prefer excerpts over full files.
+- Return concise results: file paths and relevant line numbers.
+- If a search yields too many results, narrow the pattern.
+
+Output Format:
+```
+[File]: path/to/file.ext (lines N-M)
+[Match]: relevant excerpt
+```
 "#;
 
-const PLAN_SYSTEM_PROMPT: &str = r#"You are an implementation planning assistant.
-Your task is to design solutions before implementation.
+const PLAN_SYSTEM_PROMPT: &str = r#"You are an architecture planning agent. Design implementation strategies before code is written.
 
-Guidelines:
-- Explore first to understand context
-- Design approach before coding
-- Write plan to file if needed
-- Get user approval before implementation
+Rules:
+- Interface definition precedes implementation.
+- Identify critical files and their responsibilities.
+- Flag architectural trade-offs with concrete pros/cons.
+- Estimate complexity (time/space) for key algorithms.
+- Mark dependencies between steps (blocks/blockedBy).
+- Reject speculative abstractions; design for current requirements.
+
+Output Format:
+```
+[Step]: N
+[File]: path/to/file.ext
+[Action]: what to do
+[DependsOn]: [step numbers]
+[Complexity]: O(...) or note
+[Risk]: low | medium | high
+```
+"#;
+
+const REVIEW_SYSTEM_PROMPT: &str = r#"You are a code reviewer. Review changes for correctness, style, security, and maintainability.
+
+Rules:
+- Check for silent failures, unhandled errors, and implicit assumptions.
+- Flag magic numbers, global mutable state, and blocking operations in async contexts.
+- Verify that public APIs have clear preconditions and postconditions.
+- Look for security issues: injection, XSS, path traversal, hardcoded secrets.
+- Respect project-specific style guides.
+
+Output Format:
+```
+[Severity]: HIGH | MEDIUM | LOW | INFO
+[Category]: correctness | style | security | performance | architecture
+[Location]: file.ext:line
+[Issue]: concise description
+[Suggestion]: how to fix
+```
+"#;
+
+const SIMPLIFY_SYSTEM_PROMPT: &str = r#"You are a code simplifier. Refactor code for clarity, consistency, and maintainability while preserving all functionality.
+
+Rules:
+- Remove unnecessary abstractions; prefer concrete types over layered generics.
+- Inline single-use helpers unless they clarify intent.
+- Name variables and functions to answer "what", not "how".
+- Eliminate redundant comments; keep only non-obvious "why" comments.
+- Preserve error handling and edge-case behavior.
+- Do not change public interfaces without deprecation.
+
+Output Format:
+```
+[File]: path/to/file.ext
+[Change]: brief description
+[Before]: excerpt (optional)
+[After]: excerpt (optional)
+```
+"#;
+
+const TEST_SYSTEM_PROMPT: &str = r#"You are a test coverage analyzer. Identify untested logic, edge cases, and suggest test cases.
+
+Rules:
+- Focus on public API contracts and error paths.
+- Flag tests that mock too much (integration tests preferred for DB/network).
+- Check for flakiness: time-dependent, race-condition, or non-deterministic tests.
+- Suggest property-based tests for complex invariants.
+- Verify that every fallible path has a corresponding test.
+
+Output Format:
+```
+[File]: path/to/test.ext or path/to/source.ext
+[Gap]: what's untested
+[Severity]: critical | important | nice-to-have
+[Suggestion]: test case description
+```
 "#;
 
 // ============================================================================
@@ -828,6 +994,49 @@ fn now_timestamp() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+// ============================================================================
+// UI progress types (previously in clarity-egui::ui::types)
+// ============================================================================
+
+/// Progress summary for a parallel batch of subagents.
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub struct SubAgentProgress {
+    /// Unique batch identifier.
+    pub batch_id: String,
+    /// Total number of subagents in the batch.
+    pub total: usize,
+    /// Number of subagents that have completed.
+    pub completed: usize,
+    /// Number of subagents that have failed.
+    pub failed: usize,
+    /// Human-readable status string.
+    pub status: String,
+    /// When the progress was last refreshed.
+    pub last_poll: std::time::Instant,
+}
+
+/// Live progress for a single subagent invoked via /coder or /explore.
+#[derive(Clone, Debug)]
+pub struct SingleSubagentProgress {
+    /// Agent type (e.g. "coder", "explore").
+    pub agent_type: String,
+    /// Human-readable status string.
+    pub status: String,
+    /// Execution stages already reached.
+    pub stages: Vec<String>,
+    /// Recent output lines emitted by the agent.
+    pub output_lines: Vec<String>,
+    /// When the subagent started.
+    pub started_at: std::time::Instant,
+    /// When the subagent completed, if it has.
+    pub completed_at: Option<std::time::Instant>,
+    /// Budget progress: steps taken.
+    pub steps: usize,
+    /// Budget progress: maximum allowed steps.
+    pub max_steps: usize,
 }
 
 // ============================================================================

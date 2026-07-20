@@ -14,6 +14,7 @@
 //! - Animations / spinner graphics (call site can wrap this widget).
 //! - Persisting draft content (state is cleared on `DraftClear` / turn end).
 
+use crate::design_system::{self, TextStyle};
 use crate::theme::Theme;
 use crate::ui::types::DraftStatus;
 
@@ -50,29 +51,17 @@ fn render_progress(ui: &mut egui::Ui, theme: &Theme, text: &str) {
     // with a spinner, icon, or styled row without changing the data contract.
     ui.horizontal(|ui| {
         ui.set_row_height(theme.text_base + theme.space_8);
-        ui.label(
-            egui::RichText::new(text)
-                .color(theme.text_dim)
-                .size(theme.text_sm),
-        );
+        design_system::text(ui, text, TextStyle::Small);
     });
 }
 
-fn render_content(ui: &mut egui::Ui, theme: &Theme, text: &str) {
+fn render_content(ui: &mut egui::Ui, _theme: &Theme, text: &str) {
     // Reasoning / thinking content. Currently rendered as muted text.
     // Future designs may collapse this, show it in a side panel, or style it
     // as a "<think>" block.
-    egui::Frame::new()
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .inner_margin(egui::Margin::same(theme.space_12 as i8))
-        .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(text)
-                    .color(theme.text_muted)
-                    .size(theme.text_sm),
-            );
-        });
+    design_system::surface_panel(ui, |ui| {
+        design_system::text(ui, text, TextStyle::Body);
+    });
 }
 
 // ============================================================================

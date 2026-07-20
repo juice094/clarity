@@ -382,6 +382,22 @@ pub async fn chat_completions(
     let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, Some(driver));
     tokio::spawn(controller.run());
 
+    // Serialize this HTTP chat turn with WebSocket turns. The shared Agent
+    // clones share the same inner state; without serialization, concurrent
+    // chat.send requests fail with "Agent is already running a turn".
+    let turn_permit = match state.agent_turn_sem.clone().acquire_owned().await {
+        Ok(p) => p,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Agent turn queue is closed"
+                })),
+            )
+                .into_response();
+        }
+    };
+
     let last_user_query = req
         .messages
         .iter()
@@ -410,7 +426,11 @@ pub async fn chat_completions(
             .find(|m| m.role == "user")
             .map(|m| m.content.clone());
 
+        // Hold the turn permit until the stream completes. Dropping it inside
+        // on_complete releases the next queued turn as early as possible.
+        let turn_permit = Arc::new(parking_lot::Mutex::new(Some(turn_permit)));
         let on_complete = move |final_text: String| {
+            let _ = turn_permit.lock().take();
             if let (Some(s), Some(uc)) = (sid.clone(), last_user_content.clone()) {
                 let store = store.clone();
                 tokio::spawn(async move {
@@ -429,6 +449,8 @@ pub async fn chat_completions(
 
         chat_completion_sse_stream(req.model.clone(), event_rx, on_complete).into_response()
     } else {
+        // Non-streaming: turn_permit is held until the handler returns.
+        let _turn_permit = turn_permit;
         // Non-streaming: accumulate chunks until Complete/Error.
         let mut content = String::new();
         let mut error_msg: Option<String> = None;

@@ -30,6 +30,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Internal crates
 clarity-core = { path = "crates/clarity-core" }
 clarity-mcp = { path = "crates/clarity-mcp" }
+clarity-ui = { path = "crates/clarity-ui" }
+clarity-shell = { path = "crates/clarity-shell" }
+clarity-apps = { path = "crates/clarity-apps" }
+clarity-chrome = { path = "crates/clarity-chrome" }
+
+# egui ecosystem (unified versions for all UI crates; latest stable line)
+egui = { version = "0.35.0", features = ["serde"] }
+eframe = { version = "0.35.0", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
+egui_extras = { version = "0.35.0", features = ["all_loaders"] }
+egui_commonmark = "0.24.0"
+egui_dock = "0.20.1"
+egui_kittest = "0.35.0"
+lucide-icons = "1.14"
 
 # Additional shared dependencies
 regex = "1.10"

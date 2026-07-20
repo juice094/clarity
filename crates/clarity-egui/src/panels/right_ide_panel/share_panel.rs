@@ -7,10 +7,11 @@
 use crate::App;
 use crate::design_system::{self, Space};
 use crate::stores::share::ExportFormat;
+use clarity_ui::widgets::button::Button;
 
 /// Render the share panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // --- export format selector ---
     ui.label(
@@ -26,9 +27,10 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         ExportFormat::Json,
         ExportFormat::Html,
     ] {
-        let active = app.ui_store.theme.clone();
+        let active = app.context.ui_store.theme.clone();
         let is_chosen = format_choice(app) == fmt;
-        let frame = egui::Frame::new()
+        let frame = clarity_ui::design_system::Elevation::Elevated
+            .frame(&active)
             .fill(if is_chosen {
                 active.accent_subtle
             } else {
@@ -49,14 +51,15 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             ))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
-                ui.label(
-                    egui::RichText::new(app.t(fmt.label_key()))
-                        .size(theme.text_sm)
-                        .color(if is_chosen {
-                            active.accent
-                        } else {
-                            active.text
-                        }),
+                clarity_ui::design_system::text_with_color(
+                    ui,
+                    app.t(fmt.label_key()),
+                    clarity_ui::design_system::TextStyle::Body,
+                    if is_chosen {
+                        active.accent
+                    } else {
+                        active.text
+                    },
                 );
             });
         if frame.response.clicked() {
@@ -83,19 +86,15 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         .max_height(200.0)
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            let _frame = egui::Frame::new()
-                .fill(theme.code_block_bg)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::same(theme.space_8 as i8))
-                .show(ui, |ui| {
-                    ui.set_min_width(ui.available_width());
-                    ui.label(
-                        egui::RichText::new(&preview)
-                            .size(theme.text_xs)
-                            .color(theme.text_dim)
-                            .monospace(),
-                    );
-                });
+            crate::design_system::code_frame(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(
+                    egui::RichText::new(&preview)
+                        .size(theme.text_xs)
+                        .color(theme.text_dim)
+                        .monospace(),
+                );
+            });
         });
 
     design_system::gap(ui, Space::S3);
@@ -105,7 +104,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         if ui
             .add_sized(
                 [ui.available_width(), theme.size_input],
-                egui::Button::new(app.t("Copy to Clipboard")),
+                Button::new(app.t("Copy to Clipboard")).primary(),
             )
             .clicked()
         {
@@ -113,7 +112,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             ui.ctx().copy_text(content);
             let toast_msg = app.t("Copied to clipboard").to_string();
             crate::handlers::system::push_toast(
-                &mut app.ui_store,
+                &mut app.context.ui_store,
                 &toast_msg,
                 crate::ui::types::ToastLevel::Info,
             );
@@ -124,7 +123,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         if ui
             .add_sized(
                 [ui.available_width(), theme.size_input],
-                egui::Button::new(app.t("Save to File")),
+                Button::new(app.t("Save to File")).primary(),
             )
             .clicked()
         {
@@ -136,7 +135,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .save_file();
             // SAFE: spawn on runtime so rfd modal doesn't block the egui frame.
             let content_clone = content.clone();
-            app.runtime.spawn(async move {
+            app.context.runtime.spawn(async move {
                 if let Some(path) = task {
                     let _ = std::fs::write(&path, &content_clone);
                 }
@@ -155,14 +154,8 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     );
     design_system::gap(ui, Space::S1);
 
-    ui.add_enabled_ui(false, |ui| {
-        ui.set_min_width(ui.available_width());
-        if ui
-            .button(app.t("Copy Share Link"))
-            .on_disabled_hover_text(app.t("Requires Gateway server with sharing enabled"))
-            .clicked()
-        {}
-    });
+    ui.add_enabled(false, Button::new(app.t("Copy Share Link")).ghost())
+        .on_disabled_hover_text(app.t("Requires Gateway server with sharing enabled"));
 
     design_system::gap(ui, Space::S0);
 
@@ -186,17 +179,18 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn format_choice(app: &App) -> ExportFormat {
-    app.share_store.export_format
+    app.context.share_store.export_format
 }
 
 fn set_format_choice(app: &mut App, fmt: ExportFormat) {
-    app.share_store.export_format = fmt;
+    app.context.share_store.export_format = fmt;
 }
 
 // ── Export generators ──
 
 fn session_export_name(app: &App, ext: &str) -> String {
     let title = app
+        .context
         .session_store
         .active_session()
         .map(|s| s.title.clone())
@@ -226,7 +220,7 @@ fn generate_export(app: &App) -> String {
 }
 
 fn generate_export_inner(app: &App, fmt: ExportFormat) -> String {
-    let session = match app.session_store.active_session() {
+    let session = match app.context.session_store.active_session() {
         Some(s) => s,
         None => return app.t("No active session").to_string(),
     };

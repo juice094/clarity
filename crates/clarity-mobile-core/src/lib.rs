@@ -23,27 +23,122 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use clarity_contract::ApprovalMode;
+use clarity_claw::device::{DeviceIdentity, PairedToken};
+use clarity_claw::types::OpenClawSendMethod;
+use clarity_contract::TransportAuth;
 use clarity_core::agent::{Agent, AgentConfig, LlmProvider};
+use clarity_core::approval::{
+    ApprovalMode, ApprovalRequest, ApprovalResponse, ApprovalRuntime, ApprovalSource,
+    InMemoryApprovalRuntime,
+};
 use clarity_core::registry::ToolRegistry;
+use clarity_core::tools::{AskUserTool, ThinkTool, WebFetchTool, WebSearchTool};
 use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OpenAiCompatibleLlm};
 use clarity_memory::SessionStore;
 use clarity_wire::{Wire, WireMessage};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
-/// Supported cloud LLM providers.
+/// Path to the persisted OpenClaw device identity inside the mobile data dir.
+fn device_identity_path(data_dir: &PathBuf) -> PathBuf {
+    data_dir.join("claw-device.json")
+}
+
+/// Path to the persisted paired-device token inside the mobile data dir.
+fn paired_token_path(data_dir: &PathBuf) -> PathBuf {
+    data_dir.join("claw-device-token.json")
+}
+
+/// Load or generate an Ed25519 device identity at the mobile data dir.
+fn load_or_generate_device_identity(data_dir: &PathBuf) -> Result<DeviceIdentity, String> {
+    DeviceIdentity::load_or_generate_at(device_identity_path(data_dir))
+}
+
+/// Load a previously-saved paired token, if any.
+fn load_paired_token(data_dir: &PathBuf) -> Option<PairedToken> {
+    match clarity_claw::device::load_paired_token_at(paired_token_path(data_dir)) {
+        Ok(token) => token,
+        Err(e) => {
+            tracing::warn!("Failed to load paired token: {}", e);
+            None
+        }
+    }
+}
+
+/// Persist a paired token to the mobile data dir.
+fn save_paired_token(data_dir: &PathBuf, record: &PairedToken) -> Result<(), String> {
+    clarity_claw::device::save_paired_token_at(paired_token_path(data_dir), record)
+}
+
+/// Build an OpenClaw transport, automatically using a saved paired device token
+/// when one exists for the target gateway URL.
+fn build_openclaw_transport(
+    ws_url: &str,
+    data_dir: &PathBuf,
+    gateway_token: Option<&str>,
+) -> Arc<clarity_claw::TransportManager> {
+    let gateway_token = gateway_token.unwrap_or("").to_string();
+
+    // If we already have a device token for this gateway, reconnect with
+    // device-paired auth so chat.send is authorized.
+    if let Some(paired) = load_paired_token(data_dir) {
+        if paired.gateway_url == ws_url {
+            if let Some(device_token) = paired.device_token.clone() {
+                match load_or_generate_device_identity(data_dir) {
+                    Ok(device_identity) => {
+                        let auth = TransportAuth {
+                            token: Some(gateway_token.clone()),
+                            device_token: Some(device_token),
+                            ..Default::default()
+                        };
+                        tracing::info!(
+                            "OpenClaw reconnecting with device-paired auth for {}",
+                            ws_url
+                        );
+                        return Arc::new(clarity_claw::TransportManager::openclaw_with_device(
+                            ws_url,
+                            auth,
+                            OpenClawSendMethod::ChatSend,
+                            device_identity,
+                        ));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load device identity for paired reconnect: {}. Falling back to token-only.",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    let auth = TransportAuth {
+        token: Some(gateway_token),
+        ..Default::default()
+    };
+    Arc::new(clarity_claw::TransportManager::openclaw(
+        ws_url,
+        auth,
+        OpenClawSendMethod::ChatSend,
+    ))
+}
+
+/// Supported LLM providers.
 #[derive(Clone, Debug)]
 pub enum ProviderType {
     /// OpenAI-compatible provider.
     OpenAi,
     /// Moonshot Kimi.
     Kimi,
-    /// DeepSeek.
+    /// DeepSeek official API.
     Deepseek,
     /// Anthropic Claude.
     Anthropic,
+    /// DeepSeek device-login (App) protocol.
+    DeepseekDevice,
 }
 
 /// LLM provider profile supplied by the host mobile OS.
@@ -57,6 +152,14 @@ pub struct ProviderProfile {
     pub api_key: String,
     /// Optional custom base URL.
     pub base_url: Option<String>,
+    /// Mobile phone number for DeepSeek device-login protocol.
+    pub mobile: Option<String>,
+    /// Password for DeepSeek device-login protocol.
+    pub password: Option<String>,
+    /// Enable web search for providers that support it.
+    pub search_enabled: bool,
+    /// Enable reasoning mode for providers that support it.
+    pub reasoning_enabled: bool,
 }
 
 /// Runtime configuration passed from the host mobile OS.
@@ -66,6 +169,11 @@ pub struct MobileConfig {
     pub data_dir: String,
     /// Default provider profile used for new conversations.
     pub default_provider: ProviderProfile,
+    /// Optional URL of a remote Clarity Gateway to use instead of the local
+    /// agent. When set, the runtime operates in Gateway remote mode.
+    pub gateway_url: Option<String>,
+    /// Authentication token for the remote Gateway.
+    pub gateway_token: Option<String>,
 }
 
 /// Summary of a conversation thread.
@@ -77,6 +185,17 @@ pub struct ThreadSummary {
     pub title: Option<String>,
     /// ISO-8601 update timestamp.
     pub updated_at: String,
+}
+
+/// A single message loaded from a thread's history.
+#[derive(Clone, Debug)]
+pub struct ChatMessage {
+    /// Message role, e.g. "user" or "assistant".
+    pub role: String,
+    /// Message content.
+    pub content: String,
+    /// ISO-8601 timestamp.
+    pub timestamp: String,
 }
 
 /// Events flowing from the Rust core to the mobile UI.
@@ -96,6 +215,13 @@ pub enum UiEvent {
         /// Text chunk.
         text: String,
     },
+    /// A reasoning/thinking chunk from a reasoning model (streaming).
+    ReasoningPart {
+        /// Turn identifier.
+        turn_id: String,
+        /// Reasoning text chunk.
+        text: String,
+    },
     /// The model wants to call a tool.
     ToolCall {
         /// Turn identifier.
@@ -106,6 +232,19 @@ pub enum UiEvent {
         name: String,
         /// JSON-encoded arguments.
         arguments_json: String,
+    },
+    /// A tool call needs user approval before executing.
+    ApprovalRequest {
+        /// Approval request identifier.
+        request_id: String,
+        /// Turn identifier.
+        turn_id: String,
+        /// Tool name.
+        tool_name: String,
+        /// JSON-encoded arguments.
+        arguments_json: String,
+        /// Optional description of why approval is needed.
+        description: Option<String>,
     },
     /// A tool finished executing.
     ToolResult {
@@ -151,25 +290,152 @@ pub enum UiEvent {
         /// Human-readable error message.
         message: String,
     },
+    /// A device pairing request was resolved by the gateway.
+    DevicePaired {
+        /// Device identifier.
+        device_id: String,
+        /// Whether the request was approved.
+        approved: bool,
+        /// Device token for subsequent reconnects, if approved.
+        token: Option<String>,
+        /// Granted scopes, if approved.
+        scopes: Vec<String>,
+    },
 }
 
 /// A handle to the mobile Clarity runtime.
 ///
 /// All FFI calls go through this object. The internal state is kept opaque to
 /// mobile consumers; they only send commands and poll events.
-pub struct MobileRuntime {
-    /// Tokio runtime for async operations.
-    rt: Arc<Runtime>,
+/// State for Gateway remote mode.
+struct RemoteState {
+    /// Managed transport to the remote Gateway.
+    transport: Arc<clarity_claw::TransportManager>,
+    /// WebSocket URL used for this remote connection.
+    gateway_url: String,
+    /// Admin/gateway token used to authenticate the connection.
+    gateway_token: String,
+    /// Currently active thread id.
+    current_thread_id: Mutex<String>,
+    /// Turn id used to attribute streaming response events.
+    last_turn_id: Arc<Mutex<String>>,
+}
+
+/// State for local agent mode.
+struct LocalState {
     /// The core Agent.
     agent: Arc<Agent>,
+    /// Active LLM provider. Kept alongside the Agent so the mobile UI can
+    /// query provider-side state (e.g. cached device-login tokens) without
+    /// reaching into the Agent internals.
+    provider: Mutex<Arc<dyn LlmProvider>>,
     /// Wire for soul → UI events.
     wire: Arc<Wire>,
     /// Local session store for conversation history.
     session_store: SessionStore,
     /// Currently active thread id.
     current_thread_id: Mutex<String>,
+    /// Approval runtime shared with the Agent.
+    approval_runtime: Arc<MobileApprovalRuntime>,
+}
+
+/// Approval runtime that forwards requests to the mobile UI and waits for
+/// a response via an async channel.
+///
+/// ponytail: wraps InMemoryApprovalRuntime so we do not re-implement request
+/// storage and timeout logic; we only add the UI event bridge.
+pub struct MobileApprovalRuntime {
+    inner: InMemoryApprovalRuntime,
+    event_tx: Mutex<Option<mpsc::Sender<UiEvent>>>,
+}
+
+impl MobileApprovalRuntime {
+    fn new() -> Self {
+        Self {
+            inner: InMemoryApprovalRuntime::new(),
+            event_tx: Mutex::new(None),
+        }
+    }
+
+    fn set_event_tx(&self, tx: mpsc::Sender<UiEvent>) {
+        *self.event_tx.lock() = Some(tx);
+    }
+}
+
+#[async_trait::async_trait]
+impl ApprovalRuntime for MobileApprovalRuntime {
+    async fn create_request(
+        &self,
+        tool_call: &clarity_contract::ToolCall,
+        source: ApprovalSource,
+        description: Option<String>,
+        _diff_preview: Option<String>,
+    ) -> Result<String, clarity_core::error::AgentError> {
+        let id = self
+            .inner
+            .create_request(tool_call, source.clone(), description.clone(), None)
+            .await?;
+
+        let turn_id = match source {
+            ApprovalSource::ForegroundTurn { turn_id, .. } => turn_id,
+            _ => String::new(),
+        };
+        // Drop the lock guard before await so the future stays Send.
+        let maybe_tx = self.event_tx.lock().clone();
+        if let Some(tx) = maybe_tx {
+            let _ = tx
+                .send(UiEvent::ApprovalRequest {
+                    request_id: id.clone(),
+                    turn_id,
+                    tool_name: tool_call.function.name.clone(),
+                    arguments_json: tool_call.function.arguments.clone(),
+                    description,
+                })
+                .await;
+        }
+
+        Ok(id)
+    }
+
+    async fn wait_for_response(
+        &self,
+        request_id: &str,
+    ) -> Result<ApprovalResponse, clarity_core::error::AgentError> {
+        self.inner.wait_for_response(request_id).await
+    }
+
+    async fn resolve(
+        &self,
+        request_id: &str,
+        response: ApprovalResponse,
+    ) -> Result<(), clarity_core::error::AgentError> {
+        self.inner.resolve(request_id, response).await
+    }
+
+    fn list_pending(&self) -> Vec<ApprovalRequest> {
+        self.inner.list_pending()
+    }
+}
+
+/// A handle to the mobile Clarity runtime.
+///
+/// Supports two modes of operation:
+/// - **Local agent mode**: runs `clarity-core` directly in the mobile process.
+/// - **Gateway remote mode**: connects to a remote `clarity-gateway` over its
+///   native WebSocket protocol and relays chat through it.
+pub struct MobileRuntime {
+    /// Tokio runtime for async operations.
+    rt: Arc<Runtime>,
+    /// Local agent state, present only when not in remote mode.
+    local: Option<LocalState>,
+    /// Remote Gateway state, present only when `gateway_url` is configured.
+    remote: Option<RemoteState>,
+    /// Sender used to inject UI events from either mode.
+    event_tx: tokio::sync::mpsc::Sender<UiEvent>,
     /// Receiver for UI events produced by the event forwarder task.
     event_rx: Mutex<tokio::sync::mpsc::Receiver<UiEvent>>,
+    /// Mobile data directory used for persisting device identity and tokens.
+    data_dir: PathBuf,
 }
 
 impl MobileRuntime {
@@ -180,6 +446,30 @@ impl MobileRuntime {
     /// Panics if the tokio runtime, data directory, or session store cannot be
     /// initialized. Mobile callers should treat this as a fatal startup failure.
     pub fn new(config: MobileConfig) -> Self {
+        // Initialize a tracing subscriber so Rust logs reach Android logcat / host stderr.
+        // On Android, use the logcat layer; otherwise fall back to stderr formatting.
+        #[cfg(all(target_os = "android", feature = "android-logs"))]
+        {
+            use tracing_subscriber::layer::SubscriberExt;
+            use tracing_subscriber::util::SubscriberInitExt;
+            let filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| {
+                    tracing_subscriber::filter::EnvFilter::new(
+                        "clarity_mobile_core=debug,clarity_claw=debug,info",
+                    )
+                });
+            let _ = tracing_subscriber::registry()
+                .with(tracing_android::layer("ClarityRust").expect("android log layer"))
+                .with(filter)
+                .try_init();
+        }
+        #[cfg(not(all(target_os = "android", feature = "android-logs")))]
+        {
+            let _ = tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::DEBUG)
+                .try_init();
+        }
+
         let data_dir = PathBuf::from(&config.data_dir);
         std::fs::create_dir_all(&data_dir)
             .unwrap_or_else(|e| panic!("Failed to create data dir {}: {}", data_dir.display(), e));
@@ -187,55 +477,153 @@ impl MobileRuntime {
         let rt = Arc::new(
             Runtime::new().unwrap_or_else(|e| panic!("Failed to create tokio runtime: {}", e)),
         );
+        // Enter the runtime on this thread so that transport constructors that use
+        // `tokio::spawn` (e.g. `clarity_claw::TransportManager`) attach to it.
+        let _rt_guard = rt.enter();
 
-        let wire = Arc::new(Wire::new());
-        let provider = build_provider(&config.default_provider)
-            .unwrap_or_else(|e| panic!("Failed to build default LLM provider: {}", e));
-
-        // Mobile MVP: no file-system tools. The agent runs in chat-only mode.
-        let registry = ToolRegistry::new();
-        let agent_config = AgentConfig::new()
-            .with_max_iterations(5)
-            .with_working_dir(data_dir.clone());
-        let agent = Arc::new(
-            Agent::with_config(registry, agent_config)
-                .with_llm(provider)
-                .with_approval_mode(ApprovalMode::Yolo)
-                .with_wire(wire.clone()),
-        );
-
-        let sessions_dir = data_dir.join("sessions");
-        std::fs::create_dir_all(&sessions_dir).unwrap_or_else(|e| {
-            panic!(
-                "Failed to create sessions dir {}: {}",
-                sessions_dir.display(),
-                e
-            )
-        });
-        let session_store = SessionStore::new(&sessions_dir)
-            .unwrap_or_else(|e| panic!("Failed to create session store: {}", e));
-
-        // Spawn a task that forwards WireMessages to a bounded channel consumed
-        // by the mobile UI via [poll_event].
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(256);
-        let mut ui_side = wire.ui_side(true);
-        rt.spawn(async move {
-            while let Some(msg) = ui_side.recv().await {
-                if let Some(event) = map_wire_message(msg) {
-                    if event_tx.send(event).await.is_err() {
-                        break;
+        let event_tx_clone = event_tx.clone();
+
+        let gateway_url = config
+            .gateway_url
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let (local, remote) = if let Some(url) = gateway_url {
+            let gateway_token = config.gateway_token.clone().unwrap_or_default();
+
+            // Auto-detect OpenClaw by URL scheme so the same mobile UI works
+            // with both Clarity-native Gateways (ws://) and Kimi/Gray OpenClaw
+            // Gateways (openclaw://). Strip the scheme before passing to the
+            // WebSocket layer, which only understands ws/wss.
+            let (transport, connection_url): (Arc<clarity_claw::TransportManager>, String) =
+                if let Some(rest) = url.strip_prefix("openclaw://") {
+                    let ws_url = format!("ws://{}", rest);
+                    let t = build_openclaw_transport(
+                        &ws_url,
+                        &data_dir,
+                        Some(gateway_token.as_str()).filter(|s| !s.is_empty()),
+                    );
+                    (t, ws_url)
+                } else if let Some(rest) = url.strip_prefix("openclaws://") {
+                    let ws_url = format!("wss://{}", rest);
+                    let t = build_openclaw_transport(
+                        &ws_url,
+                        &data_dir,
+                        Some(gateway_token.as_str()).filter(|s| !s.is_empty()),
+                    );
+                    (t, ws_url)
+                } else {
+                    (
+                        Arc::new(clarity_claw::TransportManager::gateway(&url)),
+                        url.clone(),
+                    )
+                };
+
+            let transport_clone = transport.clone();
+            let last_turn_id = Arc::new(Mutex::new(String::new()));
+            let last_turn_id_clone = last_turn_id.clone();
+            rt.spawn(async move {
+                loop {
+                    for ev in transport_clone.drain() {
+                        let turn_id = last_turn_id_clone.lock().clone();
+                        if let Some(event) = map_transport_event(ev, Some(&turn_id)) {
+                            if event_tx_clone.send(event).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            });
+
+            (
+                None,
+                Some(RemoteState {
+                    transport,
+                    gateway_url: connection_url,
+                    gateway_token,
+                    current_thread_id: Mutex::new(String::new()),
+                    last_turn_id,
+                }),
+            )
+        } else {
+            let wire = Arc::new(Wire::new());
+            let provider = build_provider(&config.default_provider)
+                .unwrap_or_else(|e| panic!("Failed to build default LLM provider: {}", e));
+            let provider_for_state = provider.clone();
+
+            // Mobile-safe tool set: reasoning, web, and ask_user only.
+            // File/shell tools are excluded to avoid sandbox escape on mobile.
+            let registry = ToolRegistry::new();
+            let _ = registry.register(ThinkTool::new());
+            let _ = registry.register(WebSearchTool::new());
+            let _ = registry.register(WebFetchTool::new());
+            let _ = registry.register(AskUserTool::new());
+
+            let approval_runtime = Arc::new(MobileApprovalRuntime::new());
+            approval_runtime.set_event_tx(event_tx.clone());
+
+            let agent_config = AgentConfig::new()
+                .with_max_iterations(5)
+                .with_working_dir(data_dir.clone());
+            let agent = Arc::new(
+                Agent::with_config(registry, agent_config)
+                    .with_llm(provider)
+                    .with_approval_mode(ApprovalMode::Smart)
+                    .with_approval_runtime(approval_runtime.clone())
+                    .with_wire(wire.clone()),
+            );
+
+            let sessions_dir = data_dir.join("sessions");
+            std::fs::create_dir_all(&sessions_dir).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create sessions dir {}: {}",
+                    sessions_dir.display(),
+                    e
+                )
+            });
+            let session_store = SessionStore::new(&sessions_dir)
+                .unwrap_or_else(|e| panic!("Failed to create session store: {}", e));
+
+            // Spawn a task that forwards WireMessages to the bounded channel.
+            // Use the raw channel so every event (including mergeable ContentParts)
+            // is delivered immediately without waiting for a merged-channel flush.
+            let mut ui_side = wire.ui_side(false);
+            rt.spawn(async move {
+                while let Some(msg) = ui_side.recv().await {
+                    tracing::debug!("wire forwarder received msg variant");
+                    if let Some(event) = map_wire_message(msg) {
+                        tracing::info!("wire forwarder mapped event variant");
+                        if event_tx_clone.send(event).await.is_err() {
+                            break;
+                        }
                     }
                 }
-            }
-        });
+                tracing::warn!("wire forwarder loop ended");
+            });
+
+            (
+                Some(LocalState {
+                    agent,
+                    provider: Mutex::new(provider_for_state),
+                    wire,
+                    session_store,
+                    current_thread_id: Mutex::new(String::new()),
+                    approval_runtime,
+                }),
+                None,
+            )
+        };
 
         Self {
             rt,
-            agent,
-            wire,
-            session_store,
-            current_thread_id: Mutex::new(String::new()),
+            local,
+            remote,
+            event_tx,
             event_rx: Mutex::new(event_rx),
+            data_dir,
         }
     }
 
@@ -261,82 +649,275 @@ impl MobileRuntime {
     }
 
     /// List existing threads, most recently updated first.
+    ///
+    /// Titles are derived from the first user message; threads with no messages
+    /// are omitted from the list.
     pub fn list_threads(&self) -> Vec<ThreadSummary> {
-        let ids = self.session_store.get_session_ids();
-        let mut summaries = Vec::new();
-        for id in ids {
-            let messages = self.session_store.get_messages(&id).unwrap_or_default();
-            let updated_at = messages
-                .last()
-                .map(|m| m.timestamp.to_rfc3339())
-                .unwrap_or_else(|| Utc::now().to_rfc3339());
-            summaries.push(ThreadSummary {
-                thread_id: id,
-                title: None,
-                updated_at,
-            });
+        if let Some(local) = &self.local {
+            let ids = local.session_store.get_session_ids();
+            let mut summaries = Vec::new();
+            for id in ids {
+                let messages = local.session_store.get_messages(&id).unwrap_or_default();
+                if messages.is_empty() {
+                    continue;
+                }
+                let updated_at = messages
+                    .last()
+                    .map(|m| m.timestamp.to_rfc3339())
+                    .unwrap_or_else(|| Utc::now().to_rfc3339());
+                let title = messages
+                    .iter()
+                    .find(|m| m.role == "user")
+                    .map(|m| {
+                        let content = m.content.trim();
+                        if content.len() > 40 {
+                            format!("{}...", &content[..40])
+                        } else {
+                            content.to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| "Chat".to_string());
+                summaries.push(ThreadSummary {
+                    thread_id: id,
+                    title: Some(title),
+                    updated_at,
+                });
+            }
+            summaries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            summaries
+        } else {
+            // ponytail: remote Gateway thread listing is not yet implemented.
+            Vec::new()
         }
-        summaries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        summaries
     }
 
     /// Switch the active thread.
     pub fn switch_thread(&self, thread_id: String) {
         // Tracked: github.com/juice094/clarity/issues — load thread history into agent context.
-        *self.current_thread_id.lock() = thread_id.clone();
-        self.wire
-            .soul_side()
-            .send(WireMessage::ThreadActive {
-                thread_id,
-                title: None,
-            })
-            .ok();
+        if let Some(local) = &self.local {
+            *local.current_thread_id.lock() = thread_id.clone();
+            local
+                .wire
+                .soul_side()
+                .send(WireMessage::ThreadActive {
+                    thread_id,
+                    title: None,
+                })
+                .ok();
+        } else if let Some(remote) = &self.remote {
+            *remote.current_thread_id.lock() = thread_id.clone();
+        }
     }
 
     /// Get the active thread id.
     pub fn current_thread_id(&self) -> String {
-        self.current_thread_id.lock().clone()
+        if let Some(local) = &self.local {
+            local.current_thread_id.lock().clone()
+        } else if let Some(remote) = &self.remote {
+            remote.current_thread_id.lock().clone()
+        } else {
+            String::new()
+        }
+    }
+
+    /// Load the messages of a thread from the local session store.
+    ///
+    /// Returns an empty list for unknown ids or when running in Gateway remote mode.
+    pub fn get_messages(&self, thread_id: String) -> Vec<ChatMessage> {
+        if let Some(local) = &self.local {
+            local
+                .session_store
+                .get_messages(&thread_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| ChatMessage {
+                    role: m.role,
+                    content: m.content,
+                    timestamp: m.timestamp.to_rfc3339(),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
     /// Update the LLM provider used for subsequent turns.
+    ///
+    /// Has no effect in Gateway remote mode.
     pub fn set_provider(&self, profile: ProviderProfile) {
-        let provider = match build_provider(&profile) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::error!("Failed to build LLM provider: {}", e);
-                return;
-            }
-        };
-        self.agent.set_llm(provider);
+        if let Some(local) = &self.local {
+            let provider = match build_provider(&profile) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::error!("Failed to build LLM provider: {}", e);
+                    return;
+                }
+            };
+            *local.provider.lock() = provider.clone();
+            local.agent.set_llm(provider);
+        }
+    }
+
+    /// Return the cached authentication token from the active provider, if any.
+    ///
+    /// For DeepSeek device-login this returns the token obtained after login,
+    /// which the mobile app can persist and reuse to avoid repeated PoW login.
+    pub fn last_auth_token(&self) -> Option<String> {
+        self.local
+            .as_ref()
+            .and_then(|local| local.provider.lock().capture_auth_token())
+    }
+
+    /// Resolve a pending approval request.
+    ///
+    /// Has no effect in Gateway remote mode.
+    pub fn approve(&self, request_id: String, allow: bool, remember: bool) {
+        if let Some(local) = &self.local {
+            let response = if allow {
+                if remember {
+                    ApprovalResponse::ApproveForSession
+                } else {
+                    ApprovalResponse::Approve
+                }
+            } else {
+                ApprovalResponse::Reject
+            };
+            let rt = local.approval_runtime.clone();
+            self.rt.spawn(async move {
+                if let Err(e) = rt.resolve(&request_id, response).await {
+                    tracing::error!("Failed to resolve approval request: {}", e);
+                }
+            });
+        }
+    }
+
+    /// Switch between Agent mode (Smart approval + tools) and direct Chat mode
+    /// (Yolo approval, fewer automatic tool invocations).
+    ///
+    /// Has no effect in Gateway remote mode.
+    pub fn set_agent_mode(&self, enabled: bool) {
+        if let Some(local) = &self.local {
+            let mode = if enabled {
+                ApprovalMode::Smart
+            } else {
+                ApprovalMode::Yolo
+            };
+            local.agent.set_approval_mode(mode);
+            tracing::info!("Mobile agent approval mode set to {:?}", mode);
+        }
     }
 
     /// Send a user message in the active thread.
     ///
     /// The response is delivered asynchronously via [`Self::poll_event`].
     pub fn send_message(&self, content: String) {
-        let thread_id = self.current_thread_id.lock().clone();
-        if thread_id.is_empty() {
-            tracing::error!("send_message called with no active thread");
-            return;
-        }
-
-        if let Err(e) = self
-            .session_store
-            .append_message(&thread_id, "user", &content)
-        {
-            tracing::error!("Failed to append user message: {}", e);
-            return;
-        }
-
-        let agent = self.agent.clone();
-        self.rt.spawn(async move {
-            let result = agent.run(&content).await;
-            if let Err(e) = result {
-                tracing::error!("Agent run failed: {}", e);
+        if let Some(local) = &self.local {
+            let thread_id = local.current_thread_id.lock().clone();
+            if thread_id.is_empty() {
+                tracing::error!("send_message called with no active thread");
+                return;
             }
-            // The returned string is also emitted through the Wire, so the UI
-            // gets streaming content; we intentionally ignore it here.
-        });
+
+            tracing::info!(
+                "send_message local thread_id={} len={}",
+                thread_id,
+                content.len()
+            );
+            if let Err(e) = local
+                .session_store
+                .append_message(&thread_id, "user", &content)
+            {
+                tracing::error!("Failed to append user message: {}", e);
+                return;
+            }
+            tracing::info!("send_message user message persisted");
+
+            let agent = local.agent.clone();
+            let event_tx = self.event_tx.clone();
+            self.rt.spawn(async move {
+                // Cap a single turn to prevent the UI from staying in "Thinking..."
+                // forever when a provider hangs or the network stalls.
+                tracing::info!("send_message spawning agent.run");
+                let result =
+                    tokio::time::timeout(Duration::from_secs(90), agent.run(&content)).await;
+                match result {
+                    Ok(Ok(resp)) => {
+                        tracing::info!("agent.run completed response_len={}", resp.len());
+                    }
+                    Ok(Err(e)) => {
+                        tracing::error!("Agent run failed: {}", e);
+                        let _ = event_tx
+                            .send(UiEvent::Error {
+                                code: "AGENT_RUN_FAILED".to_string(),
+                                message: e.to_string(),
+                            })
+                            .await;
+                    }
+                    Err(_) => {
+                        tracing::error!("Agent run timed out after 90s");
+                        let _ = event_tx
+                            .send(UiEvent::Error {
+                                code: "AGENT_RUN_TIMEOUT".to_string(),
+                                message: "Agent turn timed out".to_string(),
+                            })
+                            .await;
+                    }
+                }
+                // Streaming content is delivered through the Wire; the returned
+                // string is intentionally ignored here.
+            });
+        } else if let Some(remote) = &self.remote {
+            let thread_id = remote.current_thread_id.lock().clone();
+            if thread_id.is_empty() {
+                tracing::error!("send_message called with no active thread");
+                return;
+            }
+            let turn_id = format!("{}-{}", thread_id, Uuid::new_v4());
+            *remote.last_turn_id.lock() = turn_id.clone();
+
+            let event_tx = self.event_tx.clone();
+            let _ = self.rt.block_on(async {
+                event_tx
+                    .send(UiEvent::TurnBegin {
+                        turn_id: turn_id.clone(),
+                        user_input: content.clone(),
+                    })
+                    .await
+            });
+
+            let transport = remote.transport.clone();
+            self.rt.spawn(async move {
+                // OpenClaw/KimiClaw remote Gateways expect a session key like
+                // 'agent:main:main' rather than a local UUID. Use that as the
+                // default active session for remote Claw chat.
+                let openclaw_session_key = if thread_id.contains(':') {
+                    thread_id
+                } else {
+                    "agent:main:main".to_string()
+                };
+                let ctx = clarity_contract::MessageContext {
+                    session_key: Some(openclaw_session_key),
+                    message: content,
+                    ..Default::default()
+                };
+                if let Err(e) = transport.send_message(ctx).await {
+                    tracing::error!("Failed to send remote message: {}", e);
+                }
+            });
+        }
+    }
+
+    /// Stop an in-flight agent turn.
+    ///
+    /// Only applies to local agent mode; remote Gateway turns do not yet
+    /// support per-turn abort.
+    pub fn stop_turn(&self) {
+        if let Some(local) = &self.local {
+            local.agent.cancel();
+            // Cancel leaves the agent in the Stalled state; reset it so the next
+            // turn can start immediately.
+            local.agent.reset();
+        }
     }
 
     /// Poll for the next UI event.
@@ -350,6 +931,104 @@ impl MobileRuntime {
                 .await
                 .ok()
                 .flatten()
+        })
+    }
+
+    /// Request device pairing with an OpenClaw gateway.
+    ///
+    /// Generates or loads a persistent Ed25519 device identity, sends a
+    /// `device.pair.request` RPC over the current transport, then waits up to
+    /// 120 seconds for the gateway to approve the pairing. On success the
+    /// returned device token is persisted under the mobile data directory and
+    /// this method returns the token string.
+    ///
+    /// Returns `None` when the runtime is not in OpenClaw remote mode, when
+    /// pairing is unsupported by the transport, or when the approval timeout
+    /// expires.
+    pub fn request_pairing(&self) -> Option<String> {
+        let remote = self.remote.as_ref()?;
+        let data_dir = self.data_dir.clone();
+
+        let device_identity = match load_or_generate_device_identity(&data_dir) {
+            Ok(id) => id,
+            Err(e) => {
+                tracing::error!("Failed to load device identity: {}", e);
+                return None;
+            }
+        };
+
+        let device_id = device_identity.device_id();
+        let public_key = device_identity.public_key();
+
+        self.rt.block_on(async {
+            if let Err(e) = remote
+                .transport
+                .request_pairing(
+                    device_id.clone(),
+                    public_key,
+                    "clarity-mobile".into(),
+                    "ui".into(),
+                    "android".into(),
+                    "operator".into(),
+                    vec![
+                        "operator.admin".into(),
+                        "operator.read".into(),
+                        "operator.write".into(),
+                        "operator.approvals".into(),
+                        "operator.pairing".into(),
+                        "operator.talk.secrets".into(),
+                    ],
+                )
+                .await
+            {
+                tracing::error!("Failed to send pairing request: {}", e);
+                return None;
+            }
+
+            // Wait for the gateway to approve the pairing.
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+            loop {
+                let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+                if remaining.is_zero() {
+                    tracing::warn!("Device pairing approval timed out");
+                    return None;
+                }
+
+                for ev in remote.transport.drain() {
+                    if let clarity_contract::TransportEvent::DevicePaired {
+                        device_id: paired_device_id,
+                        approved,
+                        token,
+                        scopes,
+                    } = ev
+                    {
+                        if paired_device_id != device_id {
+                            continue;
+                        }
+                        if !approved {
+                            tracing::warn!("Device pairing was rejected");
+                            return None;
+                        }
+                        let device_token = token?;
+                        let paired = PairedToken {
+                            gateway_url: remote.gateway_url.clone(),
+                            token: remote.gateway_token.clone(),
+                            device_token: Some(device_token.clone()),
+                            role: "operator".into(),
+                            scopes,
+                            paired_at_ms: Utc::now().timestamp_millis(),
+                        };
+                        if let Err(e) = save_paired_token(&data_dir, &paired) {
+                            tracing::error!("Failed to save paired token: {}", e);
+                            return None;
+                        }
+                        tracing::info!("Device paired successfully; token persisted");
+                        return Some(device_token);
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
         })
     }
 }
@@ -384,10 +1063,17 @@ fn build_provider(profile: &ProviderProfile) -> anyhow::Result<Arc<dyn LlmProvid
                 .base_url
                 .clone()
                 .unwrap_or_else(|| "https://api.deepseek.com/v1".into());
+            // ponytail: official DeepSeek API has no direct search toggle;
+            // search_enabled is reserved for device-login and future Gateway routing.
+            let model = if profile.reasoning_enabled {
+                clarity_llm::deepseek::models::DEEPSEEK_REASONER
+            } else {
+                &profile.model
+            };
             Arc::new(DeepSeekProvider::new(
                 profile.api_key.clone(),
                 base_url,
-                profile.model.clone(),
+                model,
             ))
         }
         ProviderType::Anthropic => {
@@ -399,6 +1085,56 @@ fn build_provider(profile: &ProviderProfile) -> anyhow::Result<Arc<dyn LlmProvid
                 profile.api_key.clone(),
                 base_url,
                 profile.model.clone(),
+            ))
+        }
+        ProviderType::DeepseekDevice => {
+            // ponytail: device-login credentials take precedence over API key.
+            let options = clarity_llm::deepseek_device::DeepSeekDeviceOptions {
+                thinking_enabled: profile.reasoning_enabled,
+                search_enabled: profile.search_enabled,
+                model_type: if profile.reasoning_enabled {
+                    "expert".to_string()
+                } else {
+                    "default".to_string()
+                },
+            };
+            let credentials = if let (Some(mobile), Some(password)) =
+                (profile.mobile.as_ref(), profile.password.as_ref())
+            {
+                clarity_llm::deepseek_device::DeepSeekDeviceCredentials::Password {
+                    mobile: mobile.clone(),
+                    password: password.clone(),
+                }
+            } else if !profile.api_key.is_empty() {
+                clarity_llm::deepseek_device::DeepSeekDeviceCredentials::Token(
+                    profile.api_key.clone(),
+                )
+            } else {
+                anyhow::bail!("DeepSeek device-login requires mobile+password or a device token");
+            };
+            let is_password = matches!(
+                credentials,
+                clarity_llm::deepseek_device::DeepSeekDeviceCredentials::Password { .. }
+            );
+            let config = clarity_llm::deepseek_device::DeepSeekDeviceConfig {
+                base_url: profile
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://chat.deepseek.com".into()),
+                client_version: "2.1.8".to_string(),
+                device_id: "clarity-device".to_string(),
+                credentials,
+                options,
+            };
+            tracing::info!(
+                "built DeepSeekDeviceProvider base_url={} password_mode={} thinking={} search={}",
+                config.base_url,
+                is_password,
+                config.options.thinking_enabled,
+                config.options.search_enabled
+            );
+            Arc::new(clarity_llm::deepseek_device::DeepSeekDeviceProvider::new(
+                config,
             ))
         }
     };
@@ -417,7 +1153,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
             user_input,
         },
         WireMessage::ContentPart { turn_id, text } => UiEvent::ContentPart { turn_id, text },
-        WireMessage::ReasoningPart { turn_id, text } => UiEvent::ContentPart { turn_id, text },
+        WireMessage::ReasoningPart { turn_id, text } => UiEvent::ReasoningPart { turn_id, text },
         WireMessage::ToolCall {
             turn_id,
             id,
@@ -480,6 +1216,63 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
     })
 }
 
+/// Map a transport-agnostic event to a mobile UI event.
+///
+/// `turn_id` is used when the transport event does not carry its own turn
+/// identifier. If `None`, an empty placeholder is used; the caller should
+/// attribute the event to the active turn when possible.
+fn map_transport_event(
+    ev: clarity_contract::TransportEvent,
+    turn_id: Option<&str>,
+) -> Option<UiEvent> {
+    let turn_id = turn_id.map(String::from).unwrap_or_default();
+    Some(match ev {
+        clarity_contract::TransportEvent::Connected { .. } => UiEvent::StatusUpdate {
+            turn_id: turn_id.clone(),
+            message: "Connected to Gateway".into(),
+        },
+        clarity_contract::TransportEvent::ChatChunk { content } => UiEvent::ContentPart {
+            turn_id: turn_id.clone(),
+            text: content,
+        },
+        clarity_contract::TransportEvent::ReasoningChunk { content } => UiEvent::ReasoningPart {
+            turn_id: turn_id.clone(),
+            text: content,
+        },
+        clarity_contract::TransportEvent::Done => UiEvent::TurnEnd {
+            turn_id: turn_id.clone(),
+        },
+        clarity_contract::TransportEvent::Error { message } => UiEvent::Error {
+            code: "transport_error".into(),
+            message,
+        },
+        clarity_contract::TransportEvent::Reconnecting { reason, .. } => UiEvent::StatusUpdate {
+            turn_id: turn_id.clone(),
+            message: format!("Reconnecting: {}", reason),
+        },
+        clarity_contract::TransportEvent::Closed { reason } => UiEvent::StatusUpdate {
+            turn_id: turn_id.clone(),
+            message: format!("Connection closed: {:?}", reason),
+        },
+        clarity_contract::TransportEvent::DevicePaired {
+            device_id,
+            approved,
+            token,
+            scopes,
+        } => UiEvent::DevicePaired {
+            device_id,
+            approved,
+            token,
+            scopes,
+        },
+        // History and role-context events are not surfaced as chat UI events.
+        clarity_contract::TransportEvent::History { .. }
+        | clarity_contract::TransportEvent::RoleContextSynced { .. }
+        | clarity_contract::TransportEvent::WirePayload { .. }
+        | clarity_contract::TransportEvent::Unsupported { .. } => return None,
+    })
+}
+
 /// Returns the global runtime version string without needing a runtime handle.
 pub fn runtime_version() -> String {
     format!("clarity-mobile-core v{}", env!("CARGO_PKG_VERSION"))
@@ -494,6 +1287,34 @@ mod tests {
         let v = runtime_version();
         assert!(v.starts_with("clarity-mobile-core v"));
         assert!(v.contains(env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn test_remote_runtime_constructor_does_not_panic_on_unreachable_url() {
+        let data_dir = std::env::temp_dir()
+            .join("clarity-mobile-remote-test")
+            .to_string_lossy()
+            .to_string();
+        let _ = std::fs::remove_dir_all(&data_dir);
+        let profile = ProviderProfile {
+            provider: ProviderType::Deepseek,
+            model: "remote".into(),
+            api_key: "remote".into(),
+            base_url: None,
+            mobile: None,
+            password: None,
+            search_enabled: false,
+            reasoning_enabled: false,
+        };
+        let config = MobileConfig {
+            data_dir,
+            default_provider: profile,
+            gateway_url: Some("ws://127.0.0.1:1/ws".into()),
+            gateway_token: None,
+        };
+        // The constructor must return even if the remote endpoint is unreachable;
+        // connection failures are surfaced asynchronously through the event stream.
+        let _rt = MobileRuntime::new(config);
     }
 
     #[test]
@@ -518,5 +1339,52 @@ mod tests {
         assert!(
             matches!(event, UiEvent::ContentPart { turn_id, text } if turn_id == "t1" && text == "world")
         );
+    }
+
+    #[test]
+    fn test_map_transport_event_chat_chunk() {
+        let event = map_transport_event(
+            clarity_contract::TransportEvent::ChatChunk {
+                content: "hello".into(),
+            },
+            Some("turn-1"),
+        )
+        .expect("mapped");
+        assert!(
+            matches!(event, UiEvent::ContentPart { turn_id, text } if turn_id == "turn-1" && text == "hello")
+        );
+    }
+
+    #[test]
+    fn test_map_wire_message_reasoning_part() {
+        let msg = WireMessage::ReasoningPart {
+            turn_id: "t1".into(),
+            text: "thinking".into(),
+        };
+        let event = map_wire_message(msg).expect("mapped");
+        assert!(
+            matches!(event, UiEvent::ReasoningPart { turn_id, text } if turn_id == "t1" && text == "thinking")
+        );
+    }
+
+    #[test]
+    fn test_map_transport_event_reasoning_chunk() {
+        let event = map_transport_event(
+            clarity_contract::TransportEvent::ReasoningChunk {
+                content: "reasoning".into(),
+            },
+            Some("turn-1"),
+        )
+        .expect("mapped");
+        assert!(
+            matches!(event, UiEvent::ReasoningPart { turn_id, text } if turn_id == "turn-1" && text == "reasoning")
+        );
+    }
+
+    #[test]
+    fn test_map_transport_event_done() {
+        let event = map_transport_event(clarity_contract::TransportEvent::Done, Some("turn-1"))
+            .expect("mapped");
+        assert!(matches!(event, UiEvent::TurnEnd { turn_id } if turn_id == "turn-1"));
     }
 }

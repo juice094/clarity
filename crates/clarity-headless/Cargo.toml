@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+clarity-claw = { path = "../clarity-claw" }
 clarity-contract = { path = "../clarity-contract" }
 clarity-core = { path = "../clarity-core" }
 clarity-llm = { path = "../clarity-llm" }
@@ -16,6 +17,8 @@ chrono = { workspace = true }
 anyhow = "1.0"
 tracing = "0.1"
 dirs = "5.0"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
 
 [dev-dependencies]
 tempfile = "3.9"

@@ -9,6 +9,13 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
+/// Default configuration for the egui-facing knowledge field.
+fn default_knowledge_field() -> Arc<clarity_knowledge::KnowledgeField> {
+    Arc::new(clarity_knowledge::KnowledgeField::new(
+        clarity_knowledge::FieldConfig::default(),
+    ))
+}
+
 /// Parse approval mode string from settings into core enum.
 pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
     match mode {
@@ -47,6 +54,8 @@ pub struct AppState {
     /// Long-term memory store for cross-session fact retrieval.
     /// Initialized lazily in the background so it does not block window creation.
     pub memory_store: OnceLock<clarity_memory::MemoryStore>,
+    /// Shared knowledge field used by the agent and the Knowledge right-rail panel.
+    pub knowledge_field: Arc<clarity_knowledge::KnowledgeField>,
 }
 
 impl Default for AppState {
@@ -59,9 +68,11 @@ impl Default for AppState {
             approval_rt.clone(),
             mode,
         ));
+        let knowledge_field = default_knowledge_field();
         let mut agent = clarity_core::Agent::new(registry)
             .with_approval_runtime(mode_aware_rt.clone())
-            .with_approval_mode(mode);
+            .with_approval_mode(mode)
+            .with_knowledge_field(knowledge_field.clone());
 
         // Sprint X: Load KimiCLI-style agent.yaml if present in working directory
         if let Ok(working_dir) = std::env::current_dir() {
@@ -179,6 +190,7 @@ impl Default for AppState {
             bg_manager,
             mode_aware_approval_runtime: mode_aware_rt,
             memory_store: OnceLock::new(),
+            knowledge_field,
         }
     }
 }

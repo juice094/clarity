@@ -9,10 +9,12 @@ repository.workspace = true
 description = "Clarity Desktop GUI powered by egui — replaces Tauri"
 
 [dependencies]
-eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "x11"] }
-egui = "0.31"
-egui_extras = "0.31"  # StripBuilder declarative chrome layout; see S2.P1.x / EGUI_LAYOUT.md RULE 6.
-lucide-icons = "1.14"  # Lucide icon font (framework-agnostic LUCIDE_FONT_BYTES + Icon enum); see ADR-010.
+eframe = { workspace = true }
+egui = { workspace = true }
+egui_extras = { workspace = true }
+egui_commonmark = { workspace = true, features = ["better_syntax_highlighting"] }
+egui_dock = { workspace = true }
+lucide-icons = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -34,14 +36,19 @@ tray-icon = "0.24.1"
 webbrowser = "1"
 
 # Internal crates
+clarity-apps = { path = "../clarity-apps" }
 clarity-core = { path = "../clarity-core" }
+clarity-chrome = { path = "../clarity-chrome" }
+clarity-knowledge = { path = "../clarity-knowledge" }
 clarity-claw = { path = "../clarity-claw", default-features = false, features = ["mesh"] }
 clarity-contract = { path = "../clarity-contract" }
 clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory" }
+clarity-shell = { path = "../clarity-shell" }
 clarity-subagents = { path = "../clarity-subagents" }
 clarity-tools = { path = "../clarity-tools" }
 clarity-wire = { path = "../clarity-wire" }
+clarity-ui = { path = "../clarity-ui" }
 
 # Pretext text measurement. Pinned to a stable rev; update intentionally.
 pretext-core = { git = "https://github.com/juice094/pretext-rust.git", rev = "d90e6085383aa170a70c70e153222a95cae9e545" }
@@ -51,7 +58,7 @@ pretext-fontdb = { git = "https://github.com/juice094/pretext-rust.git", rev = "
 syntect = { version = "5", default-features = false, features = ["parsing", "default-syntaxes", "default-themes", "regex-fancy"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
+windows = { version = "0.62", features = ["Win32_Graphics_Dwm"] }
 
 # Optional SVG rendering support via resvg + tiny-skia (Mermaid diagrams, icons).
 resvg = { version = "0.44", optional = true }
@@ -66,6 +73,10 @@ svg = ["resvg", "tiny-skia"]
 [[bin]]
 name = "clarity-egui"
 path = "src/main.rs"
+
+[dev-dependencies]
+egui_kittest = { workspace = true, features = ["snapshot", "wgpu"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

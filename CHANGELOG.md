@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **前端架构审计与 5 项交互/性能改造（2026-07-06）**
+  - 输出结构化审计报告 `docs/planning/architecture-audit-2026-07-06.md`，覆盖模块边界、状态管理、UI 一致性、交互模式与性能热点。
+  - `clarity-core::ui::Router` 去重：重复路由不再无限压栈，`go_back` 行为更稳定。
+  - 虚拟列表高度缓存：`Session` 新增 `estimate_key` / `cached_total_height`，Idle 时缓存总高度；非 Idle 时才重建最后一 agent turn，降低长会话帧率抖动。
+  - 右 rail 同步硬化：`right_ide_panel` 切 tab 时用 `replace` 回写 `right_rail_router`，避免 `reset` 清空历史，维持单源真相。
+  - 语言持久化：`GuiSettings.language` 启动时恢复 locale；设置页切换语言后同步写回 settings 并触发保存。
+  - 左侧导航「Plugins」语义修正：点击后进入 Chat 并打开统一 plugin picker（与 composer `/` 一致），同时聚焦输入框。
+  - 新增 8 个单元测试覆盖路由去重、locale 编解码、语言持久化、虚拟列表缓存与导航渲染。
+
+- **统一运行时协议适配层（2026-07-04）**
+  - `clarity-contract` 新增 `transport` 模块，定义 `ClawTransport` trait 与统一消息类型（`TransportAuth`、`TransportCaps`、`MessageContext`、`TransportEvent`、`HistoryMessage`），为所有入口提供协议无关的运行时契约。
+  - `clarity-claw` 新增 `transports` 模块，实现 `GatewayWebSocketTransport` 与 `OpenClawTransport` 两个适配器，并通过 `TransportManager` 暴露同步轮询接口。
+  - `clarity-contract` 新增 `GovernedTransport<T>`，在单一封装层挂载认证校验、连接指标（`ConnectionMetrics`）与审计日志，所有 transport 入口统一治理。
+  - `clarity-headless acp-bridge --local-backend auto` 改为优先探测原生 Gateway `/ws`；探测失败后再回退到 `/openclaw/ws`，充分发挥 Clarity 自有协议能力。
+  - `clarity-mobile-core` 支持 Gateway 远程模式：`MobileConfig` 新增 `gateway_url` / `gateway_token`，配置后通过 `GovernedTransport<GatewayWebSocketTransport>` 连接桌面 Gateway，事件映射为 `UiEvent`。
+
+- **`clarity-gateway` 内建 OpenClaw 兼容服务端（2026-07-04）**
+  - 新增 `clarity-gateway::openclaw_server` 模块（`protocol` / `auth` / `state` / `handler`），在公共 API 端口暴露 `ws://127.0.0.1:18790/openclaw/ws`。
+  - 实现 OpenClaw v3 握手（`connect.challenge` → `connect` → `hello-ok`）与 admin token 认证，admin token 持久化在 `.clarity/openclaw-admin-token`。
+  - 支持方法：`chat.send`、`chat.history`、`chat.abort`、`sessions.list`、`sessions.preview`、`sessions.reset/delete/compact`、`device.pair.request/list` 以及 `ping`。
+  - `chat.send` 直接调用 Gateway 共享的 `Agent`；`device.pair.request` 自动批准并返回 device token，使 CLI/ACP bridge 可用配对身份重连。
+  - 协议帧类型从 `clarity-claw::openclaw_gateway::protocol` 上提到 `clarity-contract::openclaw_protocol`，服务端与客户端共享单一事实来源。
+  - `clarity-claw` 新增 `openclaw_ws_url()`：将 HTTP/WS URL 智能转换为 OpenClaw endpoint——Clarity Gateway（`:18790`）挂载到 `/openclaw/ws`，Kimi Desktop（`:18679`）保持根路径。
+  - `clarity-claw::discovery` 注册 `openclaw-clarity-gateway` 设备（`ws://127.0.0.1:18790/openclaw/ws`），读取 `.clarity/openclaw-admin-token` 作为默认 token。
+  - `clarity-headless acp-bridge --local-backend auto` 在检测不到 `~/.kimi_openclaw/openclaw.json` 时，自动回退到 `clarity-gateway` 的内建 OpenClaw endpoint；`--local-backend openclaw` 同样走 `/openclaw/ws`。
+  - 新增 24 个单元测试覆盖协议序列化、admin token 生命周期、设备配对校验、scope 检查、OpenClaw URL 规范化与 discovery 注册。
+
+- **OpenClaw Gateway 本地桥接与设备配对（2026-07-03）**
+  - `clarity-claw::openclaw_gateway` 新增 `device` 模块：`OpenClawDeviceApi`、`PairRequestResult`，封装 `device.pair.request` / `device.pair.list`。
+  - `clarity-claw::acp_bridge` 支持双本地后端：`LocalBackend::ClarityGateway`（原 Gateway WebSocket）和 `LocalBackend::OpenClawGateway`（Kimi Desktop 本地 JSON-RPC）。
+  - `clarity-headless acp-bridge` 新增 `--local-backend {auto|gateway|openclaw}`，默认 `auto`：检测到 `~/.kimi_openclaw/openclaw.json` 时自动桥接到 OpenClaw Gateway。
+  - `clarity-headless openclaw-pair` 新命令：使用 admin token 向本地 Kimi Desktop 请求设备配对，保存 `PairedToken` 与 device identity；后续 `acp-bridge` 会自动用配对身份连接以获取完整 scopes。
+  - 云端 `chat_id` 映射为本地 OpenClaw `session_key`（`agent:main:{chat_id}`，无 chat_id 时回退 `agent:main:main`）。
+  - ACP bridge OpenClaw 后端把本地 Gateway server 事件转发回云端，并把云端用户消息通过 `chat.send` 注入本地会话。
+
 - **S6-E egui 交互体验与生产级能力提升（2026-06-29）**
   - **崩溃恢复**：会话每 0.5s 自动保存（`updated_at > last_saved_at` 检测脏数据），保存失败推送 Error toast 通知用户，卡住轮次 5 分钟超时自动重置。
   - **状态栏**：底部 24px 状态栏显示 git 分支（⎇）、agent 在线状态（● Ready/Busy/Offline）、当前模型名，clip_rect 裁剪防止窄窗口溢出。
@@ -40,6 +75,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **状态栏布局错误**：模型名拼接在 git 分支后面而非右对齐，修复为弹性分隔符 + `allocate_new_ui` 精确定位。
 - **聊天区面板折叠抖动**：`compute_metrics_raw` 不再用 `right_rail_visible` 布尔门控清零宽度，改用 `ui_store.right_rail_width` 实际渲染值，关闭动画期间布局平滑收缩。
 - **Claw 设备连接状态残留**：`claw_device_token` 无配对流程时不保留 `Some` 状态，避免 UI 误认为已配对。
+
+- **Gateway `/ws` 聊天挂起与 turn 结束标记缺失（2026-07-06）**
+  - `crates/clarity-gateway/src/transports/gateway_ws.rs` 改为通过 `AgentController` + `ConversationChatDriver` 跑流式 turn，避免 `agent.run_streaming()` 在 Gateway 上下文因记忆检索路径挂起 60s。
+  - 新增 60s 超时保护，超时时中止 controller 并返回 `transport_error`。
+  - `crates/clarity-gateway/src/ws.rs` 新增 `WsResponse::Done`；`TransportEvent::Done` 现在会映射到该响应并发送给客户端，移动端才能收到 `TurnEnd` 停止 loading。
+  - `crates/clarity-gateway/src/transports/common.rs` 新增 `session_messages_to_contract_messages()`，为 chat driver 提供历史消息转换。
+
+- **Knowledge Field 真实 vault 搜索召回修复（2026-07-07）**
+  - 修复 `KnowledgeField::search` 返回 0 结果：tag 节点通过 spreading activation 占据 `top_activated` 前列，过滤后文件节点被全部丢弃。改为 `top_activated` 先过滤 file 节点再取 top k，并让 `search` 在每次查询前重置激活状态。
+  - 修复搜索排名：直接命中现在按 retriever score 优先返回，图传播邻居仅填充剩余位置，避免最相关文件被高激活邻居淹没。
+  - 修复 `make_snippet` 中文多字节字符切片 panic（`field.rs` 与 `retrieval.rs` 双处）。
+  - 修复 frontmatter YAML 解析失败导致整文件被跳过：现在解析失败时仅跳过 frontmatter，仍索引正文。
+  - `clarity-memory` BM25 / TF-IDF tokenizer 支持单个 CJK 汉字，使中文 vault 正文可被检索召回。
+  - 新增 `examples/vault_index_qa.rs` 用于真实 vault 索引与召回诊断。
+  - 新增回归测试覆盖中文标题/正文搜索、多字节 snippet、frontmatter 容错。
 
 - **可靠性基础设施 — syncthing-rust 生产模式融合（2026-06-29）**
   - `clarity-contract` 新增 `retry` 模块：`RetryConfig`（指数退避+抖动）、`ExponentialBackoff`、`RestartPolicy`、`RestartConfig`（任务监督）、`ConnectionState`（连接状态机）、`AddressType`（URL 风格序列化）、`HeartbeatConfig`（传输感知心跳）、`ConnectionMetrics`（无锁原子计数器）

@@ -12,12 +12,21 @@ use clarity_core::background::TaskInfo;
 use std::collections::HashMap;
 use std::time::Instant;
 
+// P1c: chat-specific UI state types now live in `clarity-apps::chat` so the
+// sub-application can own them. Re-export here to avoid updating every import
+// site in a single pass.
+pub use clarity_apps::chat::{
+    AgentStatus, Attachment, ContextItem, ContextSource, DraftStatus, GatewayStatus,
+    PlanStepStatus, ToolCallInfo, ToolCallStatus,
+};
+
 // ============================================================================
 // Shared UI Types — extracted from main.rs for modularity
 // ============================================================================
 
 /// ui event variants.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum UiEvent {
     Chunk {
         session_id: String,
@@ -274,80 +283,13 @@ pub enum UiEvent {
         /// Loaded bundle on success, error message on failure.
         result: Result<clarity_core::okf::OkfBundle, String>,
     },
+    /// One or more files in the watched external markdown vault changed.
+    KnowledgeVaultEvents(Vec<clarity_knowledge::WatcherEvent>),
 }
 
-/// Transient draft indicator state for the current agent turn.
-///
-/// This is intentionally separate from `Message` so the UI team can decide
-/// later whether to render it inside the agent bubble, above the composer,
-/// or in a side panel — without touching event/handler code.
-#[derive(Clone, Debug, Default)]
-pub enum DraftStatus {
-    /// No draft indicator is currently shown.
-    #[default]
-    None,
-    /// Model is still preparing a response. `text` is a short label such as
-    /// "thinking...", "analyzing...", or "searching...".
-    Progress { text: String },
-    /// Optional reasoning content emitted by the model before the final answer.
-    /// The UI may choose to show this inline, collapsed, or not at all.
-    Content { text: String },
-}
-
-/// Progress summary for a parallel batch of subagents.
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct SubAgentProgress {
-    pub batch_id: String,
-    pub total: usize,
-    pub completed: usize,
-    pub failed: usize,
-    pub status: String,
-    pub last_poll: std::time::Instant,
-}
-
-/// Live progress for a single subagent invoked via /coder or /explore.
-#[derive(Clone, Debug)]
-pub struct SingleSubagentProgress {
-    pub agent_type: String,
-    pub status: String,
-    pub stages: Vec<String>,
-    pub output_lines: Vec<String>,
-    pub started_at: std::time::Instant,
-    pub completed_at: Option<std::time::Instant>,
-    /// Budget progress: steps taken.
-    pub steps: usize,
-    /// Budget progress: maximum allowed steps.
-    pub max_steps: usize,
-}
-
-/// Live tracker for an executing plan.
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct PlanExecutionTracker {
-    pub title: String,
-    pub steps: Vec<PlanStepTracker>,
-}
-
-/// Holds plan step tracker state.
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct PlanStepTracker {
-    pub id: String,
-    pub description: String,
-    pub status: PlanStepStatus,
-}
-
-/// Lifecycle status variants for plan step.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[allow(dead_code)]
-pub enum PlanStepStatus {
-    Pending,
-    Running,
-    Success,
-    Failed,
-    Skipped,
-}
+// P1c: subagent progress types now live in clarity-contract so they can be
+// shared by clarity-apps without a circular dependency on clarity-egui.
+pub use clarity_contract::subagent::{SingleSubagentProgress, SubAgentProgress};
 
 /// Code-change statistics for a completed session.
 ///
@@ -389,6 +331,16 @@ pub struct Session {
     pub last_saved_at: u64,
     /// Cached heights for aggregated agent turns.
     pub turn_heights: Vec<Option<f32>>,
+    /// Runtime-only reusable buffer for virtual-list height estimates.
+    /// Cleared and reused each frame instead of reallocating a Vec.
+    pub estimate_buffer: Vec<f32>,
+    /// Runtime-only reusable buffer for line-mode flat-line offsets.
+    pub line_offset_buffer: Vec<usize>,
+    /// Runtime-only cache key for `estimate_total_height`.
+    /// Tuple: (unit count, max width, editing index, turn state).
+    pub estimate_key: Option<(usize, f32, Option<usize>, clarity_core::ui::TurnState)>,
+    /// Runtime-only cached total height from `estimate_total_height`.
+    pub cached_total_height: Option<f32>,
     /// Opaque provider-side state blobs, keyed by provider id.
     /// Clarity does not interpret the contents; stateful providers use this to
     /// resume server-side sessions across app restarts.
@@ -477,14 +429,22 @@ impl Message {
         if !self.blocks.is_empty() {
             self.content = Self::blocks_to_markdown(&self.blocks);
         }
-        self.parsed = crate::ui::markdown::parse_markdown(&self.content);
-        self.lines = clarity_core::ui::markdown_to_lines(&self.content);
-        // Map default AgentMessage → UserMessage for user-authored content.
-        if self.role == Role::User {
-            for line in &mut self.lines {
-                if let clarity_core::ui::RenderLine::Text { role, .. } = line {
-                    if *role == clarity_core::ui::LineRole::AgentMessage {
-                        *role = clarity_core::ui::LineRole::UserMessage;
+        if self.content.is_empty() {
+            self.parsed.clear();
+            self.lines.clear();
+        } else {
+            self.parsed = crate::ui::markdown::parse_markdown(&self.content);
+            #[cfg(feature = "line-mode")]
+            {
+                self.lines = clarity_core::ui::markdown_to_lines(&self.content);
+                // Map default AgentMessage → UserMessage for user-authored content.
+                if self.role == Role::User {
+                    for line in &mut self.lines {
+                        if let clarity_core::ui::RenderLine::Text { role, .. } = line {
+                            if *role == clarity_core::ui::LineRole::AgentMessage {
+                                *role = clarity_core::ui::LineRole::UserMessage;
+                            }
+                        }
                     }
                 }
             }
@@ -537,23 +497,6 @@ pub enum Role {
     /// Rendered as subtle center-aligned pills distinct from both
     /// user and agent messages.
     System,
-}
-
-/// Lifecycle status variants for agent.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum AgentStatus {
-    Online,
-    Busy,
-    Unconfigured,
-    Offline,
-}
-
-/// Lifecycle status variants for gateway.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum GatewayStatus {
-    Online,
-    Offline,
-    Checking,
 }
 
 // ============================================================================
@@ -737,108 +680,14 @@ pub struct Project {
     pub has_workspace: bool,
 }
 
-/// Holds tool call info state.
-#[derive(Clone)]
-pub struct ToolCallInfo {
-    pub id: String,
-    pub name: String,
-    pub status: ToolCallStatus,
-    pub result: Option<String>,
-}
-
-/// Lifecycle status variants for tool call.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ToolCallStatus {
-    Running,
-    Success,
-    Error,
-    Warning,
-}
-
-impl ToolCallInfo {
-    /// UI-layer heuristic: infer status from result text when the raw status
-    /// is already terminal (non-Running).
-    pub fn inferred_status(&self) -> ToolCallStatus {
-        match self.status {
-            ToolCallStatus::Running => ToolCallStatus::Running,
-            _ => {
-                if let Some(ref result) = self.result {
-                    let lower = result.to_lowercase();
-                    if lower.contains("panic")
-                        || lower.contains("unreachable")
-                        || lower.contains("fatal")
-                    {
-                        return ToolCallStatus::Error;
-                    }
-                    if lower.contains("error")
-                        || lower.contains("failed")
-                        || lower.contains("fail")
-                        || lower.contains("exception")
-                    {
-                        return ToolCallStatus::Warning;
-                    }
-                    ToolCallStatus::Success
-                } else {
-                    self.status
-                }
-            }
-        }
-    }
-}
-
-/// Holds attachment state.
-#[derive(Clone, Debug)]
-pub struct Attachment {
-    pub path: std::path::PathBuf,
-    pub name: String,
-}
-
-/// A context item collected via `#` quick-add in the input field.
-/// Displayed as a chip/tag and injected as system context before the user
-/// message is sent to the LLM.
-#[derive(Clone, Debug)]
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
-pub struct ContextItem {
-    pub source: ContextSource,
-    /// Short display label (e.g. "main.rs:42-58").
-    pub display: String,
-    /// Actual content injected into the prompt.
-    pub payload: String,
-}
-
-/// Origin of a context item collected via `#` quick-add.
-#[derive(Clone, Debug)]
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
-pub enum ContextSource {
-    /// A file (optionally with line range).
-    File {
-        path: String,
-        start_line: Option<usize>,
-        end_line: Option<usize>,
-    },
-    /// A code symbol (function, class, etc.) identified by LSP.
-    Code { symbol: String, file: String },
-    /// All content from a directory.
-    Folder { path: String },
-    /// Terminal command output.
-    Terminal { command: String },
-    /// Web page content.
-    Web { url: String },
-    // === Extension points (reserved for future backend features) ===
-    /// Documentation reference. Reserved.
-    Documentation { url: String },
-    /// Semantic codebase search result. Reserved.
-    Codebase { query: String },
-    /// Git diff against a base branch. Reserved for GitHub integration.
-    GitDiff { base_branch: String },
-}
-
 /// Holds toast state.
 #[derive(Clone, Debug)]
 pub struct Toast {
     pub message: String,
     pub level: ToastLevel,
     pub created_at: std::time::Instant,
+    /// When set, the toast is fading out and will be removed once the fade completes.
+    pub dismissed_at: Option<std::time::Instant>,
 }
 
 /// toast level variants.
@@ -856,7 +705,10 @@ pub enum ToastLevel {
 // ============================================================================
 
 /// inline span variants.
+///
+/// Kept as part of the [`RenderBlock`] compatibility shim.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum InlineSpan {
     Text(String),
     Bold(String),
@@ -865,7 +717,13 @@ pub enum InlineSpan {
 }
 
 /// render block variants.
+///
+/// Kept as a compatibility shim; the hot-path renderer now uses
+/// [`crate::ui::markdown::render_markdown`]. Several fields are intentionally
+/// retained for backward compatibility even though only a subset is read by
+/// height estimation and layout helpers.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum RenderBlock {
     Paragraph(Vec<InlineSpan>),
     Heading(u8, Vec<InlineSpan>),
@@ -906,13 +764,6 @@ pub enum PreviewItem {
         url: String,
         content: String,
     },
-}
-
-/// Holds web tab state.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct WebTab {
-    pub title: String,
-    pub url: String,
 }
 
 // NOTE: FocusTarget re-export moved to stores/mod.rs to support the library target.

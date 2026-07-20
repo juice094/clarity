@@ -10,6 +10,25 @@
 #[cfg(feature = "svg")]
 mod inner {
     use egui::{ColorImage, TextureHandle, TextureOptions};
+    use std::collections::HashMap;
+    use std::hash::{Hash, Hasher};
+    use std::sync::{Mutex, OnceLock};
+
+    /// Global content-addressed cache for rasterized SVG textures. The key
+    /// covers the raw SVG bytes and requested pixel size so identical inputs
+    /// reuse the same GPU texture across frames.
+    static SVG_TEXTURE_CACHE: OnceLock<Mutex<HashMap<u64, TextureHandle>>> = OnceLock::new();
+    /// Rough cap on the number of distinct SVG textures kept alive. When the
+    /// cache exceeds this it is cleared; in practice diagrams are few and large.
+    const SVG_CACHE_CAP: usize = 64;
+
+    fn svg_cache_key(svg_data: &[u8], width: u32, height: u32) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        hasher.write(svg_data);
+        width.hash(&mut hasher);
+        height.hash(&mut hasher);
+        hasher.finish()
+    }
 
     /// Rasterize raw SVG data to an `egui::ColorImage` at the given pixel size.
     ///
@@ -33,7 +52,8 @@ mod inner {
 
         let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height())?;
         let transform = tiny_skia::Transform::from_scale(scale, scale);
-        resvg::render(&tree, transform, &mut pixmap);
+        let mut pixmap_mut = pixmap.as_mut();
+        resvg::render(&tree, transform, &mut pixmap_mut);
 
         // Convert tiny-skia RGBA → egui ColorImage RGBA.
         let pixels: Vec<egui::Color32> = pixmap
@@ -45,19 +65,32 @@ mod inner {
         Some(ColorImage {
             size: [pixmap.width() as usize, pixmap.height() as usize],
             pixels,
+            source_size: egui::Vec2::new(pixmap.width() as f32, pixmap.height() as f32),
         })
     }
 
     /// Rasterize an SVG and upload it as a texture, returning the handle.
+    ///
+    /// Identical `(svg_data, width, height)` inputs reuse the existing texture,
+    /// avoiding repeated rasterization and GPU upload.
     pub fn svg_texture(
         ctx: &egui::Context,
         svg_data: &[u8],
         width: u32,
         height: u32,
     ) -> Option<TextureHandle> {
+        let key = svg_cache_key(svg_data, width, height);
+        let cache = SVG_TEXTURE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        {
+            let locked = cache.lock().unwrap();
+            if let Some(handle) = locked.get(&key) {
+                return Some(handle.clone());
+            }
+        }
+
         let image = svg_to_color_image(svg_data, width, height)?;
         let handle = ctx.load_texture(
-            format!("svg_{}", svg_data.len()),
+            format!("svg_{key}"),
             image,
             TextureOptions {
                 magnification: egui::TextureFilter::Linear,
@@ -65,6 +98,12 @@ mod inner {
                 ..Default::default()
             },
         );
+
+        let mut locked = cache.lock().unwrap();
+        if locked.len() >= SVG_CACHE_CAP {
+            locked.clear();
+        }
+        locked.insert(key, handle.clone());
         Some(handle)
     }
 }
@@ -117,26 +156,17 @@ pub fn render_svg_or_fallback(
         ui.add(img);
     } else {
         // Fallback: centered text label in a subtle frame.
-        let theme = crate::design_system::theme(ui.ctx());
-        let frame = egui::Frame::new()
-            .fill(theme.surface)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-            .inner_margin(egui::Margin::symmetric(
-                theme.space_16 as i8,
-                theme.space_12 as i8,
-            ))
-            .show(ui, |ui| {
-                ui.set_min_size(egui::vec2(max_width.min(200.0), max_height.min(100.0)));
-                ui.vertical_centered(|ui| {
-                    crate::design_system::gap(ui, crate::design_system::Space::S4);
-                    ui.label(
-                        egui::RichText::new(fallback_label)
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
-                    );
-                    crate::design_system::gap(ui, crate::design_system::Space::S4);
-                });
+        crate::design_system::surface_panel(ui, |ui| {
+            ui.set_min_size(egui::vec2(max_width.min(200.0), max_height.min(100.0)));
+            ui.vertical_centered(|ui| {
+                crate::design_system::gap(ui, crate::design_system::Space::S4);
+                crate::design_system::text(
+                    ui,
+                    fallback_label,
+                    crate::design_system::TextStyle::Body,
+                );
+                crate::design_system::gap(ui, crate::design_system::Space::S4);
             });
-        let _ = frame;
+        });
     }
 }

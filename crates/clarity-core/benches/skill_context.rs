@@ -1,3 +1,6 @@
+//! Criterion benchmarks for skill parsing and context building.
+#![allow(missing_docs)]
+
 use clarity_core::skills::SkillLoader;
 use criterion::{Criterion, criterion_group, criterion_main};
 

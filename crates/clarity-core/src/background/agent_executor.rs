@@ -86,6 +86,11 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
                 system_prompt: AgentConfig::default().system_prompt,
                 allowed_tools: None,
                 max_iterations: spec.max_iterations.unwrap_or(10),
+                model: None,
+                capabilities: Vec::new(),
+                timeout_seconds: None,
+                read_only: false,
+                max_tokens: None,
             });
 
         // Filter tools if the type definition restricts them.
@@ -186,6 +191,11 @@ mod tests {
             system_prompt: "You are a custom test agent.".to_string(),
             allowed_tools: Some(vec!["file_read".to_string()]),
             max_iterations: 3,
+            model: None,
+            capabilities: Vec::new(),
+            timeout_seconds: None,
+            read_only: false,
+            max_tokens: None,
         });
 
         let executor =

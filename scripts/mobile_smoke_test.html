@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clarity Gateway Mobile Smoke Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1rem; }
+    input, button { font-size: 1rem; padding: 0.5rem; margin: 0.25rem 0; width: 100%; box-sizing: border-box; }
+    #log { white-space: pre-wrap; background: #f4f4f4; padding: 0.5rem; border-radius: 4px; min-height: 10rem; }
+    .ok { color: green; }
+    .err { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Clarity Gateway Mobile Smoke Test</h1>
+  <p>
+    Edit the Gateway URL below to point to this PC (e.g.
+    <code>ws://10.3.118.208:18790/openclaw/ws</code>) and tap Connect.
+  </p>
+  <input id="url" type="text" value="ws://127.0.0.1:18790/openclaw/ws" />
+  <input id="token" type="text" placeholder="admin token (optional)" />
+  <button id="connect">Connect</button>
+  <button id="send" disabled>Send "hello"</button>
+  <button id="close" disabled>Close</button>
+  <h2>Log</h2>
+  <div id="log"></div>
+
+  <script>
+    const urlInput = document.getElementById('url');
+    const tokenInput = document.getElementById('token');
+    const connectBtn = document.getElementById('connect');
+    const sendBtn = document.getElementById('send');
+    const closeBtn = document.getElementById('close');
+    const logEl = document.getElementById('log');
+    let ws = null;
+    let reqId = 0;
+
+    function log(msg, cls) {
+      const line = document.createElement('div');
+      line.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
+      if (cls) line.className = cls;
+      logEl.appendChild(line);
+    }
+
+    connectBtn.addEventListener('click', () => {
+      const url = urlInput.value.trim();
+      log(`Connecting to ${url}...`);
+      ws = new WebSocket(url);
+      ws.onopen = () => {
+        log('WebSocket open', 'ok');
+        sendBtn.disabled = false;
+        closeBtn.disabled = false;
+        const token = tokenInput.value.trim() || 'admin';
+        ws.send(JSON.stringify({
+          type: 'req',
+          id: `conn-${++reqId}`,
+          method: 'connect',
+          params: {
+            min_protocol: 3,
+            max_protocol: 3,
+            client: { id: 'mobile-smoke', display_name: 'Mobile Smoke', version: '0.4.0', platform: 'web', device_family: 'Web', mode: 'web' },
+            caps: [],
+            auth: { token },
+            role: 'operator',
+            scopes: ['operator.read']
+          }
+        }));
+      };
+      ws.onmessage = (ev) => {
+        log(`<< ${ev.data}`);
+      };
+      ws.onerror = (ev) => {
+        log(`WebSocket error`, 'err');
+      };
+      ws.onclose = () => {
+        log('WebSocket closed');
+        sendBtn.disabled = true;
+        closeBtn.disabled = true;
+      };
+    });
+
+    sendBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const msg = {
+        type: 'req',
+        id: `chat-${++reqId}`,
+        method: 'chat.send',
+        params: { sessionKey: 'mobile:smoke:test', message: [{ type: 'text', text: 'hello from mobile' }] }
+      };
+      ws.send(JSON.stringify(msg));
+      log(`>> ${JSON.stringify(msg)}`);
+    });
+
+    closeBtn.addEventListener('click', () => {
+      if (ws) ws.close();
+    });
+  </script>
+</body>
+</html>

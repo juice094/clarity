@@ -11,14 +11,15 @@ const CMD_INPUT_H: f32 = 24.0;
 
 /// Render the Claw SSH terminal panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     let bot = app
+        .context
         .ui_store
         .bot_instances
         .iter()
-        .find(|b| b.id == app.ui_store.active_bot_id)
-        .or_else(|| app.ui_store.bot_instances.first());
+        .find(|b| b.id == app.context.ui_store.active_bot_id)
+        .or_else(|| app.context.ui_store.bot_instances.first());
 
     let (bot_name, bot_host) = match bot {
         Some(b) => (b.name.clone(), b.device_id.clone()),
@@ -50,8 +51,9 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     // OpenClaw Gateway connection status.
     // Per-device gateway connection status.
     let conn = app
+        .context
         .device_state
-        .active_connection(&app.ui_store.active_bot_id);
+        .active_connection(&app.context.ui_store.active_bot_id);
     let gw_url = conn
         .as_ref()
         .map(|c| c.gateway_url.clone())
@@ -95,7 +97,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // Terminal output area — scrollable log.
-    let history_count = app.ui_store.claw_history.len();
+    let history_count = app.context.ui_store.claw_history.len();
     // LAYOUT-EXEMPT: output viewport reserve/maximum tied to panel proportions.
     let output_height = (ui.available_height() - 80.0).max(120.0);
     egui::ScrollArea::vertical()
@@ -118,7 +120,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     .color(theme.text_muted),
                 );
                 crate::design_system::gap(ui, crate::design_system::Space::S0);
-                for line in &app.ui_store.claw_history {
+                for line in &app.context.ui_store.claw_history {
                     // Parse role-based coloring.
                     let (color, prefix) = if line.starts_with("[user]") {
                         (theme.accent, "")
@@ -133,7 +135,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                             .color(color),
                     );
                 }
-            } else if app.claw_ws.is_some() {
+            } else if app.context.claw_ws.is_some() {
                 ui.label(
                     egui::RichText::new(app.t("Loading session history…"))
                         .size(theme.text_sm)
@@ -162,15 +164,16 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         let hint = app.t("Enter command…");
         let resp = ui.add_sized(
             egui::vec2(ui.available_width() - theme.space_4, CMD_INPUT_H),
-            egui::TextEdit::singleline(&mut app.chat_store.input)
+            clarity_ui::widgets::TextInput::singleline(&mut app.chat_store_mut().input)
                 .hint_text(hint)
-                .font(egui::TextStyle::Monospace),
+                .font(theme.font_mono(theme.text_base)),
         );
         if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            let cmd = app.chat_store.input.trim().to_string();
+            let cmd = app.chat_store().input.trim().to_string();
             if !cmd.is_empty() {
-                if let Some(ref ws) = app.claw_ws {
+                if let Some(ref ws) = app.context.claw_ws {
                     let session_key = app
+                        .context
                         .session_store
                         .active_session()
                         .and_then(|s| match &s.context {
@@ -187,7 +190,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         crate::ui::types::ToastLevel::Warn,
                     );
                 }
-                app.chat_store.input.clear();
+                app.chat_store_mut().input.clear();
             }
         }
     });

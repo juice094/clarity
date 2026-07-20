@@ -23,6 +23,8 @@ cargo test -p clarity-core --lib
 - `src/mcp/mod.rs` — MCP 客户端与工具注入
 - `src/subagents/mod.rs` — 子代理并行执行
 - `src/background/mod.rs` — 后台任务管理器
+- `src/memory/` — `PersistentMemoryStore`、`MemoryCompiler`（`clarity-memory` 的 core 侧封装）
+- `src/knowledge.rs` — 对话 turn 更新 `KnowledgeField`；`index_compiled_memories` 把 `MemoryCompiler` 生成的 `.md` 产物索引进知识场
 - `src/error.rs` — `AgentError` / `ToolError`
 
 ## 约定

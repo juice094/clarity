@@ -122,12 +122,12 @@ fn bot_bar_buttons(ctx: &crate::ui::types::SessionContext) -> Vec<BotBarButton> 
 
 /// Render the Bot bar.
 pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
-    let active_session = app.session_store.active_session().cloned();
+    let theme = app.context.ui_store.theme.clone();
+    let active_session = app.context.session_store.active_session().cloned();
     let ctx = session_context(active_session.as_ref());
     let buttons = bot_bar_buttons(&ctx);
     let bot_name: String = app
-        .settings_store
+        .settings_store()
         .settings_edit
         .active_persona_id
         .clone()
@@ -136,7 +136,8 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
     // Translate tooltips before entering the closure so `app` is not borrowed twice.
     let tooltips: Vec<&'static str> = buttons.iter().map(|btn| app.t(btn.tooltip)).collect();
 
-    egui::Frame::new()
+    clarity_ui::design_system::Elevation::Base
+        .frame(&theme)
         .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -159,12 +160,45 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                         .color(theme.text_strong),
                 );
 
-                // Right-side rail buttons.
+                // Right-side rail buttons + status metadata.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = theme.space_4;
+
+                    // Model + agent status dot.
+                    let model = &app.settings_store().settings_edit.model;
+                    if !model.is_empty() && model != "auto" {
+                        ui.label(
+                            egui::RichText::new(model.as_str())
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                        );
+                    }
+                    let (dot_color, status_label) = match app.chat_store().agent_status {
+                        crate::ui::types::AgentStatus::Online
+                        | crate::ui::types::AgentStatus::Unconfigured => {
+                            (theme.status_online, "Ready")
+                        }
+                        crate::ui::types::AgentStatus::Busy => (theme.status_busy, "Busy"),
+                        crate::ui::types::AgentStatus::Offline => (theme.status_offline, "Offline"),
+                    };
+                    let dot_radius = theme.space_4 / 2.0;
+                    let (dot_rect, _) = ui.allocate_exact_size(
+                        egui::vec2(dot_radius * 2.0, dot_radius * 2.0),
+                        egui::Sense::hover(),
+                    );
+                    ui.painter()
+                        .circle_filled(dot_rect.center(), dot_radius, dot_color);
+                    ui.label(
+                        egui::RichText::new(status_label)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+
+                    ui.add_space(theme.space_8);
+
                     for (btn, tooltip) in buttons.iter().zip(tooltips.iter()) {
-                        let is_active = app.view_state.right_rail_visible
-                            && app.view_state.right_rail_panel == btn.panel
+                        let is_active = app.is_right_rail_visible()
+                            && app.current_right_rail() == Some(&btn.panel)
                             && app.view_state.right_rail_context == btn.context;
                         let fill = if is_active {
                             theme.accent.linear_multiply(0.2)
@@ -183,10 +217,9 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                         .clicked()
                         {
                             if is_active {
-                                app.view_state.collapse_right_rail();
+                                app.collapse_right_rail();
                             } else {
-                                app.view_state.set_right_rail_context(btn.context);
-                                app.view_state.set_right_rail_panel(btn.panel);
+                                app.toggle_right_rail_tab(btn.panel, btn.context);
                             }
                         }
                     }
@@ -194,7 +227,7 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
             });
 
             // Token usage progress bar.
-            let tu = &app.chat_store.token_usage;
+            let tu = &app.chat_store().token_usage;
             if tu.total_tokens > 0 {
                 let ratio = (tu.total_tokens as f32) / (tu.context_limit as f32);
                 let pct = (ratio * 100.0).min(100.0);
@@ -221,26 +254,23 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                 }
                 // Tooltip on hover.
                 if rect.contains(ui.input(|i| i.pointer.hover_pos()).unwrap_or_default()) {
-                    egui::show_tooltip_at_pointer(
-                        ui.ctx(),
-                        egui::LayerId::new(
-                            egui::Order::Tooltip,
-                            egui::Id::new("token_bar_tooltip_layer"),
-                        ),
+                    let tooltip_resp = ui.interact(
+                        rect,
                         egui::Id::new("token_bar_tooltip"),
-                        |ui| {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{} / {} tokens ({:.1}%)",
-                                    format_num(tu.total_tokens),
-                                    format_num(tu.context_limit),
-                                    pct,
-                                ))
-                                .size(theme.text_xs)
-                                .color(theme.text),
-                            );
-                        },
+                        egui::Sense::hover(),
                     );
+                    tooltip_resp.show_tooltip_ui(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} / {} tokens ({:.1}%)",
+                                format_num(tu.total_tokens),
+                                format_num(tu.context_limit),
+                                pct,
+                            ))
+                            .size(theme.text_xs)
+                            .color(theme.text),
+                        );
+                    });
                 }
             }
         });
@@ -276,6 +306,10 @@ mod tests {
             updated_at: 0,
             last_saved_at: 0,
             turn_heights: vec![],
+            estimate_buffer: Vec::new(),
+            line_offset_buffer: Vec::new(),
+            estimate_key: None,
+            cached_total_height: None,
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,

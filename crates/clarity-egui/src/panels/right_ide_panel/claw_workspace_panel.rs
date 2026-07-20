@@ -9,32 +9,35 @@ use std::path::PathBuf;
 
 /// Render the Claw workspace file-tree panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // Resolve the active bot's workspace root. In the future this will
     // come from the device registry; for now use a sensible default.
     let bot = app
+        .context
         .ui_store
         .bot_instances
         .iter()
-        .find(|b| b.id == app.ui_store.active_bot_id)
-        .or_else(|| app.ui_store.bot_instances.first());
+        .find(|b| b.id == app.context.ui_store.active_bot_id)
+        .or_else(|| app.context.ui_store.bot_instances.first());
 
     let bot_name = bot.map(|b| b.name.clone()).unwrap_or_default();
 
     // Resolve workspace from per-device connection, falling back to the
     // legacy path resolution for ZeroClaw devices.
     let workspace_root = app
+        .context
         .device_state
-        .active_connection(&app.ui_store.active_bot_id)
+        .active_connection(&app.context.ui_store.active_bot_id)
         .map(|c| c.workspace_root)
         .filter(|p| p != std::path::Path::new(".") && p.exists())
         .unwrap_or_else(|| resolve_workspace_root(&bot_name));
 
     // Show connection type badge.
     let conn_type = app
+        .context
         .device_state
-        .active_connection(&app.ui_store.active_bot_id)
+        .active_connection(&app.context.ui_store.active_bot_id)
         .map(|c| match c.claw_type {
             crate::claw::ClawType::ZeroClaw => "ZeroClaw",
             crate::claw::ClawType::OpenClaw => "OpenClaw",
@@ -84,9 +87,11 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     0,    // depth
                     None, // selected_path
                     &mut |path: &std::path::Path| {
-                        app.ui_store.active_project = Some(path.to_string_lossy().into_owned());
-                        app.view_state
-                            .set_right_rail_panel(clarity_core::ui::RightRailPanel::ClawWebBridge);
+                        app.context.ui_store.active_project =
+                            Some(path.to_string_lossy().into_owned());
+                        app.open_or_focus_right_rail_tab(
+                            clarity_core::ui::RightRailPanel::ClawWebBridge,
+                        );
                     },
                     &mut |_path: &std::path::Path| {
                         // Secondary click: no-op in Claw workspace for now.

@@ -40,6 +40,11 @@ mod tests {
             system_prompt: "You are custom".to_string(),
             allowed_tools: None,
             max_iterations: 10,
+            model: None,
+            capabilities: Vec::new(),
+            timeout_seconds: None,
+            read_only: false,
+            max_tokens: None,
         });
 
         assert!(market.get("custom").is_some());

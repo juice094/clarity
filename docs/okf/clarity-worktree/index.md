@@ -2,15 +2,15 @@
 id: clarity-worktree
 name: Clarity Project Worktree
 description: OKF knowledge bundle describing the Clarity crate topology, responsibilities, and dependency graph.
-version: 0.3.4-rc
-date: 2026-06-29
+version: 0.3.5-rc
+date: 2026-07-06
 source_repo: https://github.com/juice094/clarity
 ---
 
 # Clarity Project Worktree
 
-This OKF bundle describes the 20 crate directories in the Clarity workspace:
-19 active workspace members + 1 archived (`clarity-tauri`), plus the
+This OKF bundle describes the 21 crate directories in the Clarity workspace:
+20 active workspace members + 1 archived (`clarity-tauri`), plus the
 `tests/integration` integration-test crate.
 
 ## Layers
@@ -24,6 +24,7 @@ This OKF bundle describes the 20 crate directories in the Clarity workspace:
     - clarity-slint
   infrastructure:
     - clarity-channels
+    - clarity-knowledge
     - clarity-llm
     - clarity-mcp
     - clarity-memory
@@ -50,6 +51,7 @@ This OKF bundle describes the 20 crate directories in the Clarity workspace:
 - [`clarity-contract`](concepts/clarity-contract.md) — Shared trait/type contract with zero internal dependencies.
 - [`clarity-wire`](concepts/clarity-wire.md) — UI ↔ Agent event bus using SPMC channels.
 - [`clarity-memory`](concepts/clarity-memory.md) — Hybrid memory: SQLite + BM25 + vector search.
+- [`clarity-knowledge`](concepts/clarity-knowledge.md) — Local knowledge indexing and AI-native interaction with activation dynamics.
 - [`clarity-mcp`](concepts/clarity-mcp.md) — MCP client with stdio / SSE / HTTP / WebSocket transports.
 - [`clarity-llm`](concepts/clarity-llm.md) — LLM provider abstraction + Candle GGUF local inference.
 - [`clarity-tools`](concepts/clarity-tools.md) — Built-in tool library.
@@ -67,7 +69,7 @@ This OKF bundle describes the 20 crate directories in the Clarity workspace:
 - [`clarity-headless`](concepts/clarity-headless.md) — Headless CLI for scripts and CI.
 - [`clarity-mobile-core`](concepts/clarity-mobile-core.md) — Mobile FFI core for Android/iOS.
 - [`clarity-slint`](concepts/clarity-slint.md) — Experimental Slint desktop GUI.
-- [`clarity-anthropic-proxy`](concepts/clarity-anthropic-proxy.md) — Anthropic Messages API gateway (default DeepSeek device; protocol conversion in `clarity-llm::anthropic`).
+- [`clarity-anthropic-proxy`](concepts/clarity-anthropic-proxy.md) — Anthropic Messages API → DeepSeek proxy utility.
 - [`clarity-tauri`](concepts/clarity-tauri.md) — Archived Tauri desktop frontend.
 
 ## Key Invariants

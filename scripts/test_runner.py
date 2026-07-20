@@ -9,7 +9,7 @@ Usage:
     python scripts/test_runner.py
     python scripts/test_runner.py --json report.json
     python scripts/test_runner.py --skip integration
-    python scripts/test_runner.py --exclude clarity-slint
+    python scripts/test_runner.py --exclude clarity-anthropic-proxy
 """
 
 from __future__ import annotations

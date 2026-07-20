@@ -1,0 +1,21 @@
+# Caddy reverse proxy for Clarity Gateway TLS
+# Usage:
+#   1. Install Caddy: https://caddyserver.com/docs/install
+#   2. Edit the domain below (or use a Tailscale funnel hostname)
+#   3. Run: caddy run --config scripts/Caddyfile
+#
+# This exposes:
+#   https://your-domain.example.com      -> Clarity Gateway public API (18790)
+#   https://your-domain.example.com/ws   -> secure WebSocket
+#   https://your-domain.example.com/openclaw/ws -> secure OpenClaw fallback
+#
+# The admin UI (port 18800) is NOT exposed here; keep it on localhost.
+
+your-domain.example.com {
+    reverse_proxy localhost:18790
+
+    # Optional: restrict to known origins
+    header Access-Control-Allow-Origin "https://your-domain.example.com"
+    header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    header Access-Control-Allow-Headers "Content-Type, Authorization"
+}

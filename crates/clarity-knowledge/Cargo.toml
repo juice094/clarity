@@ -1,0 +1,43 @@
+[package]
+name = "clarity-knowledge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local knowledge indexing and AI-native interaction for Project Clarity"
+
+[dependencies]
+# Workspace dependencies
+clarity-contract = { path = "../clarity-contract" }
+clarity-memory = { path = "../clarity-memory" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+regex = { workspace = true }
+notify = { workspace = true }
+walkdir = { workspace = true }
+parking_lot = "0.12"
+
+# Markdown / YAML / graph parsing
+pulldown-cmark = "0.13"
+serde_yaml = "0.9"
+petgraph = "0.6"
+
+# Recall-effectiveness persistence
+rusqlite = { version = "0.34", features = ["bundled-full"] }
+ulid = "1"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints]
+workspace = true

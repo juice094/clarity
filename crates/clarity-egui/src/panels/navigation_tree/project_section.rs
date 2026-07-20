@@ -29,7 +29,7 @@ impl SessionSummary {
 
 /// Render the collapsible project tree section.
 pub fn render_project_section(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
     let mut expanded = app.view_state.expansions.nav_projects;
 
     crate::widgets::collapsible_section::collapsible_section(
@@ -51,6 +51,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
     use crate::ui::types::SessionContext;
 
     let summaries: Vec<SessionSummary> = app
+        .context
         .session_store
         .sessions
         .iter()
@@ -68,7 +69,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         }
     }
 
-    let archived_projects_empty = app.project_store.archived_projects.is_empty();
+    let archived_projects_empty = app.context.project_store.archived_projects.is_empty();
     if projects.is_empty() && archived_sessions.is_empty() && archived_projects_empty {
         ui.label(
             egui::RichText::new(app.t("No projects yet"))
@@ -79,6 +80,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
     }
 
     let project_meta: BTreeMap<String, (String, bool)> = app
+        .context
         .project_store
         .projects
         .iter()
@@ -94,7 +96,8 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
             .get(&project_id)
             .cloned()
             .unwrap_or_else(|| (project_id.clone(), true));
-        let is_selected = app.project_store.selected_project_id.as_deref() == Some(&project_id);
+        let is_selected =
+            app.context.project_store.selected_project_id.as_deref() == Some(&project_id);
         let icon = if has_workspace {
             crate::theme::ICON_FOLDER_OPEN
         } else {
@@ -146,7 +149,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
                 unarchive_session_ids.push(session.id);
             }
         }
-        for project in &app.project_store.archived_projects {
+        for project in &app.context.project_store.archived_projects {
             let name = project.name.clone();
             let resp = crate::widgets::interactive_row(ui, false, theme, |ui| {
                 ui.horizontal(|ui| {
@@ -172,13 +175,13 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
 
     // Deferred mutations.
     if let Some(pid) = selected_project {
-        app.project_store.selected_project_id = Some(pid);
+        app.context.project_store.selected_project_id = Some(pid);
     }
     for id in unarchive_session_ids {
         app.set_session_archived(id, false);
     }
     for id in unarchive_project_ids {
-        app.project_store.unarchive(&id);
+        app.context.project_store.unarchive(&id);
     }
 }
 
@@ -188,7 +191,7 @@ fn render_session_row(
     session: &SessionSummary,
     theme: &crate::theme::Theme,
 ) {
-    let is_active = session.id == app.session_store.active_session_id;
+    let is_active = session.id == app.context.session_store.active_session_id;
     use crate::ui::types::SessionContext;
     let icon = match &session.context {
         SessionContext::Claw { .. } => crate::theme::ICON_CPU,

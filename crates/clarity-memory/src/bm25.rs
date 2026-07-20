@@ -21,9 +21,8 @@
 //! - `k1` = term frequency saturation parameter (default 1.5)
 //! - `b` = length normalization parameter (default 0.75)
 
-use regex::Regex;
+use crate::tokenizer::tokenize;
 use std::collections::{HashMap, HashSet};
-use std::sync::LazyLock;
 
 /// Default k1 parameter for BM25
 const DEFAULT_K1: f32 = 1.5;
@@ -170,24 +169,6 @@ fn default_stop_words() -> HashSet<String> {
     .collect()
 }
 
-/// Token-matching regex for [`tokenize`].
-///
-/// # Panics
-///
-/// Panics only if the literal pattern is invalid; it is known to be valid.
-#[allow(clippy::unwrap_used)]
-static TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[a-zA-Z_\-]+\b").unwrap());
-
-/// Tokenize text into lowercase terms, filtering stop words and short tokens
-fn tokenize(text: &str) -> Vec<String> {
-    let stop_words = default_stop_words();
-    TOKEN_RE
-        .find_iter(text.to_lowercase().as_str())
-        .map(|m| m.as_str().to_string())
-        .filter(|t| !stop_words.contains(t) && t.len() > 1)
-        .collect()
-}
-
 /// BM25 index for efficient document scoring
 ///
 /// Build once from a corpus, then score multiple queries.
@@ -234,7 +215,7 @@ impl Bm25Index {
         let mut total_length = 0u32;
 
         for doc in docs {
-            let terms = tokenize(doc.as_ref());
+            let terms = tokenize(doc.as_ref(), &default_stop_words());
             let mut term_freq: HashMap<String, u32> = HashMap::new();
             let mut unique_terms: HashSet<String> = HashSet::new();
 
@@ -303,7 +284,7 @@ impl Bm25Index {
             return 0.0;
         }
 
-        let query_terms = tokenize(query);
+        let query_terms = tokenize(query, &default_stop_words());
         if query_terms.is_empty() {
             return 0.0;
         }
@@ -425,7 +406,7 @@ impl IncrementalBm25Index {
     /// The returned `usize` is the stable `doc_idx` that can later be
     /// passed to [`Self::score`] or [`Self::remove_document`].
     pub fn add_document(&mut self, doc: &str) -> usize {
-        let terms = tokenize(doc);
+        let terms = tokenize(doc, &default_stop_words());
         let mut term_freq: HashMap<String, u32> = HashMap::new();
         let mut unique_terms: HashSet<String> = HashSet::new();
 
@@ -503,7 +484,7 @@ impl IncrementalBm25Index {
             return 0.0;
         }
 
-        let query_terms = tokenize(query);
+        let query_terms = tokenize(query, &default_stop_words());
         if query_terms.is_empty() {
             return 0.0;
         }

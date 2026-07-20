@@ -14,7 +14,13 @@ use crate::handlers::AgentHandle;
 use crate::server::AppState;
 use crate::session::SessionId;
 use crate::session_store::SessionMessage;
-use clarity_contract::{SessionSource, ThreadId};
+use crate::transports::{
+    GatewayWebSocketTransport, ServerTransportContext, transport_event_to_ws_response,
+};
+use clarity_contract::{
+    ClawTransport, GovernedTransport, MessageContext, SessionSource, ThreadId, TransportAuth,
+    TransportEvent,
+};
 use clarity_core::background::{TaskSpec, TaskStatus};
 
 /// WebSocket 升级处理器
@@ -81,7 +87,8 @@ async fn handle_socket(
                             context: _,
                             use_wire: true,
                         } => {
-                            handle_chat_with_wire(&state, &session_id, message, &mut sender).await;
+                            handle_chat_with_wire(state.clone(), &session_id, message, &mut sender)
+                                .await;
                         }
                         WsRequest::Subscribe { since_event_id } => {
                             let since = since_event_id.unwrap_or(0);
@@ -120,6 +127,10 @@ async fn handle_socket(
                             {
                                 warn!("Failed to send EventAck");
                             }
+                        }
+                        request @ (WsRequest::RunSubagentStream { .. }
+                        | WsRequest::RunParallelSubagentsStream { .. }) => {
+                            handle_subagent_stream(state.clone(), request, &mut sender).await;
                         }
                         request => {
                             let response = handle_request(&state, &session_id, request).await;
@@ -182,8 +193,12 @@ async fn handle_socket(
 }
 
 /// Handle a Chat request with wire streaming.
+///
+/// This delegates to the transport-agnostic `GatewayWebSocketTransport` so the
+/// native `/ws` endpoint and the OpenClaw endpoint share the same chat/history
+/// implementation.
 async fn handle_chat_with_wire(
-    state: &AppState,
+    state: Arc<AppState>,
     session_id: &SessionId,
     message: String,
     sender: &mut futures::stream::SplitSink<WebSocket, WsMessage>,
@@ -193,109 +208,51 @@ async fn handle_chat_with_wire(
         session_id, message
     );
 
-    // 记录用户消息到持久化存储
-    let user_msg = SessionMessage::new("user", &message);
-    if let Err(e) = state
-        .session_store
-        .append_message(&session_id.to_string(), &user_msg)
-        .await
-    {
-        error!("Failed to append user message: {}", e);
+    let ctx = ServerTransportContext::new(state.clone(), session_id.to_string());
+    let transport = GatewayWebSocketTransport::new(ctx);
+    let transport = GovernedTransport::with_metrics(
+        transport,
+        TransportAuth {
+            token: Some("gateway-server".into()),
+            ..Default::default()
+        },
+        state.metrics.clone(),
+    );
+
+    if let Err(e) = transport.handshake(TransportAuth::default()).await {
+        send_ws_response(
+            sender,
+            WsResponse::Error {
+                error: format!("transport handshake failed: {}", e),
+            },
+        )
+        .await;
+        return;
     }
 
-    // Create wire and wire-enabled agent
-    let wire = clarity_wire::Wire::new();
-    let agent = state.clone_agent().with_wire(Arc::new(wire.clone()));
+    let msg_ctx = MessageContext {
+        message,
+        ..Default::default()
+    };
+    if let Err(e) = transport.send_message(msg_ctx).await {
+        send_ws_response(
+            sender,
+            WsResponse::Error {
+                error: format!("transport send_message failed: {}", e),
+            },
+        )
+        .await;
+        return;
+    }
 
-    // Run agent in background
-    let message_clone = message.clone();
-    let agent_task = tokio::spawn(async move { agent.run(&message_clone).await });
-
-    // Forward wire messages and view commands to WebSocket via a merge channel
-    let (merge_tx, mut merge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-
-    let mut ui_side = wire.ui_side(false);
-    let merge_tx_wire = merge_tx.clone();
-    let shared_wire = state.event_wire.clone();
-    let metrics = state.metrics.clone();
-    let wire_task = tokio::spawn(async move {
-        while let Some(msg) = ui_side.recv().await {
-            // Forward to the shared wire for cross-connection event replay.
-            // The shared wire's WireEventBuffer records every message with a
-            // sequence number for reconnection catch-up.
-            let _ = shared_wire.soul_side().send(msg.clone());
-
-            // Track per-message metrics.
-            metrics
-                .messages_sent
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-            // Wrap every streaming WireMessage in the unified WsResponse envelope
-            // so the WebSocket always emits a single schema.
-            let payload = match serde_json::to_value(&msg) {
-                Ok(value) => value,
-                Err(e) => {
-                    error!("Failed to serialize wire message: {}", e);
-                    continue;
-                }
-            };
-            let envelope = WsResponse::WireMessage { payload };
-            match serde_json::to_string(&envelope) {
-                Ok(json) => {
-                    if merge_tx_wire.send(json).is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to serialize wire envelope: {}", e);
-                }
-            }
+    let mut events = transport.events();
+    while let Some(ev) = events.next().await {
+        let is_done = matches!(ev, TransportEvent::Done);
+        if let Some(resp) = transport_event_to_ws_response(ev) {
+            send_ws_response(sender, resp).await;
         }
-    });
-    while let Some(json) = merge_rx.recv().await {
-        if let Err(e) = sender.send(WsMessage::Text(json)).await {
-            warn!("Failed to send merged message: {}", e);
+        if is_done {
             break;
-        }
-    }
-
-    // Clean up background forwarding tasks
-    let _ = wire_task.await;
-
-    // Wait for agent to complete
-    match agent_task.await {
-        Ok(Ok(response_text)) => {
-            // 记录助手回复到持久化存储
-            let assistant_msg = SessionMessage::new("assistant", &response_text);
-            if let Err(e) = state
-                .session_store
-                .append_message(&session_id.to_string(), &assistant_msg)
-                .await
-            {
-                error!("Failed to append assistant message: {}", e);
-            }
-        }
-        Ok(Err(e)) => {
-            error!("Agent execution error in WebSocket: {}", e);
-            let error = WsResponse::Error {
-                error: format!("Agent execution error: {}", e),
-            };
-            if let Ok(json) = serde_json::to_string(&error)
-                && let Err(e) = sender.send(WsMessage::Text(json)).await
-            {
-                warn!("Failed to send agent error: {}", e);
-            }
-        }
-        Err(e) => {
-            error!("Agent task panicked: {}", e);
-            let error = WsResponse::Error {
-                error: format!("Agent task panicked: {}", e),
-            };
-            if let Ok(json) = serde_json::to_string(&error)
-                && let Err(e) = sender.send(WsMessage::Text(json)).await
-            {
-                warn!("Failed to send panic error: {}", e);
-            }
         }
     }
 }
@@ -423,6 +380,65 @@ pub enum WsRequest {
         #[serde(default)]
         include_history: Option<bool>,
     },
+    /// Run a single subagent and return the final result.
+    RunSubagent {
+        /// Subagent run specification.
+        #[serde(flatten)]
+        spec: SubagentRunSpec,
+    },
+    /// Run multiple subagents in parallel and return the final result.
+    RunParallelSubagents {
+        /// Subagent specifications.
+        tasks: Vec<SubagentRunSpec>,
+        /// Maximum concurrency.
+        #[serde(default)]
+        max_concurrency: Option<usize>,
+        /// Cancel remaining tasks when one fails.
+        #[serde(default)]
+        cancel_on_error: bool,
+    },
+    /// Stream a single subagent run with progress events.
+    RunSubagentStream {
+        /// Subagent run specification.
+        #[serde(flatten)]
+        spec: SubagentRunSpec,
+    },
+    /// Stream a parallel subagent run with progress events.
+    RunParallelSubagentsStream {
+        /// Subagent specifications.
+        tasks: Vec<SubagentRunSpec>,
+        /// Maximum concurrency.
+        #[serde(default)]
+        max_concurrency: Option<usize>,
+        /// Cancel remaining tasks when one fails.
+        #[serde(default)]
+        cancel_on_error: bool,
+    },
+    /// List registered subagent types.
+    ListSubagentTypes,
+}
+
+/// Subagent run specification used by WebSocket requests.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SubagentRunSpec {
+    /// Human-readable task description.
+    pub description: String,
+    /// Agent type registered in the labor market.
+    pub agent_type: String,
+    /// Prompt / instructions for the subagent.
+    pub prompt: String,
+    /// Optional model alias override.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Optional maximum iteration override.
+    #[serde(default)]
+    pub max_iterations: Option<usize>,
+    /// Whether to force read-only mode.
+    #[serde(default)]
+    pub read_only: bool,
+    /// Optional goal tags for routing.
+    #[serde(default)]
+    pub goal_tags: Vec<String>,
 }
 
 /// WebSocket 响应类型.
@@ -445,6 +461,8 @@ pub enum WsResponse {
         #[serde(skip_serializing_if = "Option::is_none")]
         tool_calls: Option<Vec<ToolCall>>,
     },
+    /// The current chat turn finished.
+    Done,
     /// Pong response to a ping.
     Pong,
     /// Conversation history response.
@@ -532,6 +550,111 @@ pub enum WsResponse {
         /// Thread detail payload.
         thread: crate::handlers::threads::ThreadResponse,
     },
+    /// Subagent run progress event.
+    SubagentProgress {
+        /// Agent identifier.
+        agent_id: String,
+        /// Agent type.
+        agent_type: String,
+        /// Progress stage name.
+        stage: String,
+        /// Optional output text.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
+        /// Optional status.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+        /// Optional step progress.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        steps: Option<usize>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        /// Optional maximum steps.
+        max_steps: Option<usize>,
+    },
+    /// Single subagent run result.
+    SubagentResult {
+        /// Agent identifier.
+        agent_id: String,
+        /// Agent type.
+        agent_type: String,
+        /// Execution status.
+        status: String,
+        /// Result summary.
+        summary: String,
+        /// Full output.
+        full_output: String,
+        /// Steps taken.
+        steps_taken: usize,
+        /// Elapsed milliseconds.
+        elapsed_ms: u64,
+    },
+    /// Parallel subagent run result.
+    ParallelSubagentsResult {
+        /// Overall success rate.
+        success_rate: f64,
+        /// Total elapsed milliseconds.
+        total_elapsed_ms: u64,
+        /// Successful results.
+        results: Vec<SubagentRunResult>,
+        /// Failures as (description, error) pairs.
+        failures: Vec<ParallelSubagentFailure>,
+        /// Optional aggregated summary.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        aggregated_summary: Option<String>,
+    },
+    /// Subagent type list response.
+    SubagentTypes {
+        /// Registered agent types.
+        types: Vec<SubagentTypeSummary>,
+    },
+    /// Subagent run started acknowledgement (streaming only).
+    SubagentRunStarted {
+        /// Run identifier.
+        run_id: String,
+    },
+}
+
+/// Failure entry for a parallel subagent run.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParallelSubagentFailure {
+    /// Task description.
+    pub description: String,
+    /// Error message.
+    pub error: String,
+}
+
+/// Single subagent run result payload (shared by single and parallel responses).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubagentRunResult {
+    /// Agent identifier.
+    pub agent_id: String,
+    /// Agent type.
+    pub agent_type: String,
+    /// Execution status.
+    pub status: String,
+    /// Result summary.
+    pub summary: String,
+    /// Full output.
+    pub full_output: String,
+    /// Steps taken.
+    pub steps_taken: usize,
+    /// Elapsed milliseconds.
+    pub elapsed_ms: u64,
+}
+
+/// Registered subagent type summary.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubagentTypeSummary {
+    /// Agent type name.
+    pub name: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Default maximum iterations.
+    pub max_iterations: usize,
+    /// Whether the agent is read-only by default.
+    pub read_only: bool,
+    /// Capability tags.
+    pub capabilities: Vec<String>,
 }
 
 /// Tool call representation in a WebSocket response.
@@ -554,6 +677,265 @@ pub struct ChatMessage {
     pub timestamp: String,
 }
 
+/// Convert a WebSocket subagent spec into the contract `RunSpec`.
+fn build_run_spec(spec: SubagentRunSpec) -> clarity_contract::subagent::RunSpec {
+    let mut run_spec = clarity_contract::subagent::RunSpec::new(spec.description, spec.prompt)
+        .with_type(spec.agent_type);
+    if let Some(model) = spec.model {
+        run_spec = run_spec.with_model(model);
+    }
+    if let Some(max_iterations) = spec.max_iterations {
+        run_spec = run_spec.with_max_iterations(max_iterations);
+    }
+    if spec.read_only {
+        run_spec = run_spec.with_read_only(true);
+    }
+    if !spec.goal_tags.is_empty() {
+        run_spec = run_spec.with_goal_tags(spec.goal_tags);
+    }
+    run_spec
+}
+
+/// Build a `WsResponse::ParallelSubagentsResult` from a `ParallelResult`.
+fn build_parallel_subagents_response(
+    result: clarity_contract::subagent::ParallelResult,
+) -> WsResponse {
+    let success_rate = result.success_rate();
+    let total_elapsed_ms = result.total_elapsed_ms;
+    let aggregated_summary = result.aggregated_summary.clone();
+
+    let results: Vec<SubagentRunResult> = result
+        .results
+        .into_iter()
+        .map(|r| SubagentRunResult {
+            agent_id: r.agent_id,
+            agent_type: r.agent_type,
+            status: r.status.to_string(),
+            summary: r.summary,
+            full_output: r.full_output,
+            steps_taken: r.steps_taken,
+            elapsed_ms: r.elapsed_ms,
+        })
+        .collect();
+
+    let failures: Vec<ParallelSubagentFailure> = result
+        .failures
+        .into_iter()
+        .map(|(description, error)| ParallelSubagentFailure { description, error })
+        .collect();
+
+    WsResponse::ParallelSubagentsResult {
+        success_rate,
+        total_elapsed_ms,
+        results,
+        failures,
+        aggregated_summary,
+    }
+}
+
+/// Stream a subagent run over WebSocket.
+///
+/// Blocks the socket until the run completes, emitting progress events and a
+/// final result envelope. This mirrors the wire-chat streaming pattern.
+async fn handle_subagent_stream(
+    state: Arc<AppState>,
+    request: WsRequest,
+    sender: &mut futures::stream::SplitSink<WebSocket, WsMessage>,
+) {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let started = WsResponse::SubagentRunStarted {
+        run_id: run_id.clone(),
+    };
+    if let Ok(json) = serde_json::to_string(&started)
+        && sender.send(WsMessage::Text(json)).await.is_err()
+    {
+        return;
+    }
+
+    match request {
+        WsRequest::RunSubagentStream { spec } => {
+            let run_spec = build_run_spec(spec);
+            let (progress_tx, mut progress_rx) =
+                tokio::sync::mpsc::channel::<clarity_contract::subagent::SubagentProgressEvent>(64);
+
+            let mut manager = state.subagent_manager.lock().await;
+            let run_future = manager.run(run_spec, Some(progress_tx));
+            tokio::pin!(run_future);
+
+            loop {
+                tokio::select! {
+                    Some(event) = progress_rx.recv() => {
+                        let response = subagent_progress_to_ws(event);
+                        if let Ok(json) = serde_json::to_string(&response)
+                            && sender.send(WsMessage::Text(json)).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    result = &mut run_future => {
+                        let response = match result {
+                            Ok(result) => WsResponse::SubagentResult {
+                                agent_id: result.agent_id,
+                                agent_type: result.agent_type,
+                                status: result.status.to_string(),
+                                summary: result.summary,
+                                full_output: result.full_output,
+                                steps_taken: result.steps_taken,
+                                elapsed_ms: result.elapsed_ms,
+                            },
+                            Err(e) => WsResponse::Error {
+                                error: format!("subagent run failed: {}", e),
+                            },
+                        };
+                        let _ = send_ws_response(sender, response).await;
+                        break;
+                    }
+                }
+            }
+        }
+        WsRequest::RunParallelSubagentsStream {
+            tasks,
+            max_concurrency,
+            cancel_on_error,
+        } => {
+            let specs: Vec<clarity_contract::subagent::RunSpec> =
+                tasks.into_iter().map(build_run_spec).collect();
+            let mut config = clarity_contract::subagent::ParallelConfig::new()
+                .with_max_concurrency(max_concurrency.unwrap_or(4).max(1));
+            if cancel_on_error {
+                config = config.cancel_on_error();
+            }
+
+            let progress = std::sync::Arc::new(parking_lot::Mutex::new(
+                clarity_contract::subagent::BatchProgress::new(run_id.clone(), &specs),
+            ));
+            let progress_clone = progress.clone();
+
+            let manager = state.subagent_manager.lock().await;
+            let run_future = manager.run_parallel(specs, config, Some(progress_clone), None);
+            tokio::pin!(run_future);
+
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
+            let mut last_completed = 0usize;
+            let mut last_failed = 0usize;
+
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let (newly_completed, newly_failed, total) = {
+                            let p = progress.lock();
+                            (p.results.len(), p.failures.len(), p.total)
+                        };
+                        if newly_completed != last_completed || newly_failed != last_failed {
+                            last_completed = newly_completed;
+                            last_failed = newly_failed;
+                            let response = WsResponse::SubagentProgress {
+                                agent_id: run_id.clone(),
+                                agent_type: "parallel-batch".to_string(),
+                                stage: "progress".to_string(),
+                                output: None,
+                                status: Some(format!(
+                                    "{}/{} completed, {} failed",
+                                    newly_completed, total, newly_failed
+                                )),
+                                steps: Some(newly_completed + newly_failed),
+                                max_steps: Some(total),
+                            };
+                            if let Ok(json) = serde_json::to_string(&response)
+                                && sender.send(WsMessage::Text(json)).await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    result = &mut run_future => {
+                        let response = match result {
+                            Ok(result) => build_parallel_subagents_response(result),
+                            Err(e) => WsResponse::Error {
+                                error: format!("parallel subagent run failed: {}", e),
+                            },
+                        };
+                        let _ = send_ws_response(sender, response).await;
+                        break;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Convert a contract progress event into a WebSocket response.
+fn subagent_progress_to_ws(event: clarity_contract::subagent::SubagentProgressEvent) -> WsResponse {
+    match event {
+        clarity_contract::subagent::SubagentProgressEvent::Stage { agent_id, name } => {
+            WsResponse::SubagentProgress {
+                agent_id,
+                agent_type: String::new(),
+                stage: name,
+                output: None,
+                status: Some("stage".to_string()),
+                steps: None,
+                max_steps: None,
+            }
+        }
+        clarity_contract::subagent::SubagentProgressEvent::Output { agent_id, text } => {
+            WsResponse::SubagentProgress {
+                agent_id,
+                agent_type: String::new(),
+                stage: "output".to_string(),
+                output: Some(text),
+                status: None,
+                steps: None,
+                max_steps: None,
+            }
+        }
+        clarity_contract::subagent::SubagentProgressEvent::StatusChange {
+            agent_id,
+            agent_type,
+            status,
+        } => WsResponse::SubagentProgress {
+            agent_id,
+            agent_type,
+            stage: "status".to_string(),
+            output: None,
+            status: Some(format!("{:?}", status)),
+            steps: None,
+            max_steps: None,
+        },
+        clarity_contract::subagent::SubagentProgressEvent::Progress {
+            agent_id,
+            steps,
+            max_steps,
+        } => WsResponse::SubagentProgress {
+            agent_id,
+            agent_type: String::new(),
+            stage: "progress".to_string(),
+            output: None,
+            status: None,
+            steps: Some(steps),
+            max_steps: Some(max_steps),
+        },
+    }
+}
+
+/// Serialize and send a WebSocket response, logging failures.
+async fn send_ws_response(
+    sender: &mut futures::stream::SplitSink<WebSocket, WsMessage>,
+    response: WsResponse,
+) {
+    match serde_json::to_string(&response) {
+        Ok(json) => {
+            if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                warn!("Failed to send WebSocket response: {}", e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to serialize WebSocket response: {}", e);
+        }
+    }
+}
+
 /// 处理 WebSocket 请求
 async fn handle_request(
     state: &AppState,
@@ -570,6 +952,16 @@ async fn handle_request(
                 "Processing chat request from {}: message={}",
                 session_id, message
             );
+
+            // Serialize Agent turns across all WebSocket connections.
+            let _permit = match state.agent_turn_sem.acquire().await {
+                Ok(p) => p,
+                Err(_) => {
+                    return WsResponse::Error {
+                        error: "Agent turn queue closed".into(),
+                    };
+                }
+            };
 
             // 记录用户消息到持久化存储
             let user_msg = SessionMessage::new("user", &message);
@@ -825,6 +1217,66 @@ async fn handle_request(
                 error: format!("failed to list threads: {}", e),
             },
         },
+        WsRequest::RunSubagent { spec } => {
+            let run_spec = build_run_spec(spec);
+            let mut manager = state.subagent_manager.lock().await;
+            match manager.run(run_spec, None).await {
+                Ok(result) => WsResponse::SubagentResult {
+                    agent_id: result.agent_id,
+                    agent_type: result.agent_type,
+                    status: result.status.to_string(),
+                    summary: result.summary,
+                    full_output: result.full_output,
+                    steps_taken: result.steps_taken,
+                    elapsed_ms: result.elapsed_ms,
+                },
+                Err(e) => WsResponse::Error {
+                    error: format!("subagent run failed: {}", e),
+                },
+            }
+        }
+        WsRequest::RunParallelSubagents {
+            tasks,
+            max_concurrency,
+            cancel_on_error,
+        } => {
+            let specs: Vec<clarity_contract::subagent::RunSpec> =
+                tasks.into_iter().map(build_run_spec).collect();
+            let mut config = clarity_contract::subagent::ParallelConfig::new()
+                .with_max_concurrency(max_concurrency.unwrap_or(4).max(1));
+            if cancel_on_error {
+                config = config.cancel_on_error();
+            }
+            let manager = state.subagent_manager.lock().await;
+            match manager.run_parallel(specs, config, None, None).await {
+                Ok(result) => build_parallel_subagents_response(result),
+                Err(e) => WsResponse::Error {
+                    error: format!("parallel subagent run failed: {}", e),
+                },
+            }
+        }
+        WsRequest::RunSubagentStream { .. } => WsResponse::Error {
+            error: "RunSubagentStream must be handled by the streaming router".into(),
+        },
+        WsRequest::RunParallelSubagentsStream { .. } => WsResponse::Error {
+            error: "RunParallelSubagentsStream must be handled by the streaming router".into(),
+        },
+        WsRequest::ListSubagentTypes => {
+            let manager = state.subagent_manager.lock().await;
+            let types = manager
+                .labor_market()
+                .list()
+                .into_iter()
+                .map(|def| SubagentTypeSummary {
+                    name: def.name.clone(),
+                    description: def.description.clone(),
+                    max_iterations: def.max_iterations,
+                    read_only: def.read_only,
+                    capabilities: def.capabilities.clone(),
+                })
+                .collect();
+            WsResponse::SubagentTypes { types }
+        }
         WsRequest::GetThread {
             thread_id,
             include_history,
@@ -1377,5 +1829,124 @@ mod tests {
         );
 
         server.abort();
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_run_subagent() {
+        let json = r#"{"type":"run_subagent","description":"test","agent_type":"coder","prompt":"hello","max_iterations":1,"read_only":true}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        match req {
+            WsRequest::RunSubagent { spec } => {
+                assert_eq!(spec.description, "test");
+                assert_eq!(spec.agent_type, "coder");
+                assert_eq!(spec.prompt, "hello");
+                assert_eq!(spec.max_iterations, Some(1));
+                assert!(spec.read_only);
+            }
+            _ => panic!("expected RunSubagent variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_run_parallel_subagents() {
+        let json = r#"{"type":"run_parallel_subagents","tasks":[{"description":"a","agent_type":"coder","prompt":"p1"},{"description":"b","agent_type":"review","prompt":"p2"}],"max_concurrency":2,"cancel_on_error":true}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        match req {
+            WsRequest::RunParallelSubagents {
+                tasks,
+                max_concurrency,
+                cancel_on_error,
+            } => {
+                assert_eq!(tasks.len(), 2);
+                assert_eq!(tasks[0].agent_type, "coder");
+                assert_eq!(tasks[1].agent_type, "review");
+                assert_eq!(max_concurrency, Some(2));
+                assert!(cancel_on_error);
+            }
+            _ => panic!("expected RunParallelSubagents variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_list_subagent_types() {
+        let json = r#"{"type":"list_subagent_types"}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        assert!(matches!(req, WsRequest::ListSubagentTypes));
+    }
+
+    #[test]
+    fn test_ws_response_serialization_subagent_result() {
+        let resp = WsResponse::SubagentResult {
+            agent_id: "a1".into(),
+            agent_type: "coder".into(),
+            status: "completed".into(),
+            summary: "done".into(),
+            full_output: "full".into(),
+            steps_taken: 3,
+            elapsed_ms: 100,
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "subagent_result");
+        assert_eq!(json["agent_id"], "a1");
+        assert_eq!(json["status"], "completed");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_subagent_types() {
+        let resp = WsResponse::SubagentTypes {
+            types: vec![SubagentTypeSummary {
+                name: "coder".into(),
+                description: "Code tasks".into(),
+                max_iterations: 20,
+                read_only: false,
+                capabilities: vec!["code".into()],
+            }],
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "subagent_types");
+        assert!(json["types"].is_array());
+        assert_eq!(json["types"][0]["name"], "coder");
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_list_subagent_types() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+        let response = handle_request(&state, &session_id, WsRequest::ListSubagentTypes).await;
+        match response {
+            WsResponse::SubagentTypes { types } => {
+                assert!(!types.is_empty());
+                assert!(types.iter().any(|t| t.name == "coder"));
+            }
+            _ => panic!("expected SubagentTypes variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_run_subagent() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+        let response = handle_request(
+            &state,
+            &session_id,
+            WsRequest::RunSubagent {
+                spec: SubagentRunSpec {
+                    description: "ws-test".into(),
+                    agent_type: "coder".into(),
+                    prompt: "Say hello".into(),
+                    model: None,
+                    max_iterations: Some(1),
+                    read_only: false,
+                    goal_tags: Vec::new(),
+                },
+            },
+        )
+        .await;
+        match response {
+            WsResponse::SubagentResult { agent_type, .. } => {
+                assert_eq!(agent_type, "coder");
+            }
+            _ => panic!("expected SubagentResult variant, got {:?}", response),
+        }
     }
 }

@@ -9,8 +9,10 @@ clarity-core = { path = "../../crates/clarity-core" }
 clarity-telemetry = { path = "../../crates/clarity-telemetry" }
 clarity-wire = { path = "../../crates/clarity-wire" }
 clarity-memory = { path = "../../crates/clarity-memory" }
+clarity-claw = { path = "../../crates/clarity-claw" }
 clarity-gateway = { path = "../../crates/clarity-gateway" }
 clarity-mcp = { path = "../../crates/clarity-mcp" }
+clarity-contract = { path = "../../crates/clarity-contract" }
 
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }

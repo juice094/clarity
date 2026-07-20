@@ -16,6 +16,7 @@ use crate::ui::rich_inline::text_to_spans;
 use crate::ui::types::{
     ContentBlock, InlineSpan, Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus,
 };
+use clarity_ui::design_system::Elevation;
 use std::time::Duration;
 
 // ============================================================================
@@ -88,7 +89,8 @@ fn system_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
     design_system::gap(ui, Space::S0);
     ui.vertical_centered(|ui| {
-        egui::Frame::new()
+        Elevation::Elevated
+            .frame(theme)
             .fill(theme.glass)
             .corner_radius(egui::CornerRadius::same(theme.radius_full as u8))
             .inner_margin(egui::Margin::symmetric(16, 4))
@@ -110,30 +112,15 @@ fn agent_message(
     ui: &mut egui::Ui,
     msg: &Message,
     theme: &Theme,
-    show_header: bool,
+    _show_header: bool,
     metrics: Option<&EguiFontMetrics>,
 ) -> f32 {
     let start_y = ui.cursor().min.y;
 
-    if show_header {
-        // Header: avatar + label + elapsed time (outside the card)
-        ui.horizontal(|ui| {
-            crate::components::chat::avatar::avatar(ui, "A", theme);
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new("Agent")
-                    .size(theme.text_xs)
-                    .color(theme.text_dim),
-            );
-            design_system::gap(ui, Space::S0);
-            ui.label(
-                egui::RichText::new(format_elapsed(msg.timestamp.elapsed()))
-                    .size(theme.text_xs)
-                    .color(theme.text_dim),
-            );
-        });
-        design_system::gap(ui, Space::S0);
-    }
+    // ponytail: P6h — Kimi-style agent messages have no heavy header.
+    // The avatar/model label is removed to reduce visual weight; metadata
+    // (timestamp, actions) lives in a minimal hover-only bar outside the
+    // message content. See message_list::render_unit for that row.
 
     if msg.parsed.is_empty() {
         // Lazy parse fallback: streaming phase, show raw text without markdown parsing.
@@ -154,12 +141,16 @@ fn agent_message(
             .collect();
         if !visible_blocks.is_empty() {
             let max_width = (ui.available_width() - 32.0).max(120.0);
-            egui::Frame::new()
+            Elevation::Surface
+                .frame(theme)
                 .fill(theme.surface)
-                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
                 .stroke(egui::Stroke::NONE)
                 .shadow(egui::Shadow::NONE)
-                .inner_margin(egui::Margin::symmetric(16, 12))
+                .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+                .inner_margin(egui::Margin::symmetric(
+                    theme.space_16 as i8,
+                    theme.space_12 as i8,
+                ))
                 .show(ui, |ui| {
                     ui.set_max_width(max_width);
                     for (idx, block) in visible_blocks.iter().enumerate() {
@@ -202,7 +193,7 @@ fn agent_text_plain_inner(
                     .color(theme.chat_text),
             );
         } else {
-            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+            crate::ui::markdown::render_markdown(ui, &msg.content, theme.chat_text);
         }
     });
 
@@ -214,15 +205,15 @@ fn agent_text_plain_inner(
 fn agent_structured_card_inner(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
     // Glass card container — subtract padding to avoid parent overflow
     let max_width = (ui.available_width() - 32.0).max(120.0);
-    egui::Frame::new()
+    Elevation::Surface
+        .frame(theme)
         .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
         .stroke(egui::Stroke::NONE)
         .shadow(egui::Shadow::NONE)
         .inner_margin(egui::Margin::symmetric(16, 12))
         .show(ui, |ui| {
             ui.set_max_width(max_width);
-            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+            crate::ui::markdown::render_markdown(ui, &msg.content, theme.chat_text);
         });
 
     design_system::gap(ui, Space::S3);
@@ -284,8 +275,7 @@ fn render_content_block(
                     ui, &spans, theme, metrics, &profile, max_width,
                 );
             } else {
-                let parsed = crate::ui::markdown::parse_markdown(text);
-                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                crate::ui::markdown::render_markdown(ui, text, theme.chat_text);
             }
             design_system::gap(ui, Space::S0);
         }
@@ -298,22 +288,26 @@ fn render_content_block(
                         .monospace(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let copy_btn = egui::Button::new(
-                        egui::RichText::new(crate::theme::ICON_COPY)
-                            .font(theme.font_icon(theme.text_xs))
-                            .color(theme.text_muted),
-                    )
-                    .fill(egui::Color32::TRANSPARENT)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                    if ui.add(copy_btn).on_hover_text("Copy code").clicked() {
+                    let copy_resp = clarity_ui::widgets::icon_button::icon_button(
+                        ui,
+                        crate::theme::ICON_COPY,
+                        theme.text_xs,
+                        egui::Color32::TRANSPARENT,
+                        egui::CornerRadius::same(theme.radius_sm as u8),
+                        theme,
+                    );
+                    if copy_resp.on_hover_text("Copy code").clicked() {
                         ui.ctx().copy_text(code.clone());
                     }
                 });
             });
-            egui::Frame::new()
+            Elevation::Elevated
+                .frame(theme)
                 .fill(theme.code_block_bg)
+                .stroke(egui::Stroke::NONE)
+                .shadow(egui::Shadow::NONE)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::same(10))
+                .inner_margin(egui::Margin::same(theme.space_12 as i8))
                 .show(ui, |ui| {
                     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         ui.set_min_width(ui.available_width());
@@ -342,8 +336,7 @@ fn render_content_block(
             .id_salt(format!("tool_result_{}_{}", name, block_idx))
             .default_open(false)
             .show(ui, |ui| {
-                let parsed = crate::ui::markdown::parse_markdown(output);
-                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                crate::ui::markdown::render_markdown(ui, output, theme.chat_text);
                 if *truncated {
                     ui.label(
                         egui::RichText::new("(truncated)")
@@ -410,8 +403,7 @@ fn render_content_block(
                 );
             });
             ui.add_space(2.0);
-            let parsed = crate::ui::markdown::parse_markdown(content);
-            crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+            crate::ui::markdown::render_markdown(ui, content, theme.chat_text);
             design_system::gap(ui, Space::S1);
         }
     }
@@ -435,10 +427,9 @@ fn user_bubble(
         ui.set_max_width(max_width);
         let bubble_resp = egui::Frame::new()
             .fill(theme.user_bubble)
-            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .stroke(egui::Stroke::NONE)
-            .shadow(egui::Shadow::NONE)
-            .inner_margin(egui::Margin::symmetric(14, 10))
+            .stroke(egui::Stroke::new(1.0, theme.border))
+            .corner_radius(egui::CornerRadius::same(theme.composer_radius as u8))
+            .inner_margin(egui::Margin::symmetric(16, 12))
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.set_min_width(48.0);
@@ -459,30 +450,20 @@ fn user_bubble(
                             inner_max_width,
                         );
                     } else {
-                        crate::ui::markdown::render_blocks(
-                            ui,
-                            &msg.parsed,
-                            theme,
-                            theme.text_strong,
-                        );
+                        crate::ui::markdown::render_markdown(ui, &msg.content, theme.text_strong);
                     }
                 });
             });
         // Hover timestamp.
         if bubble_resp.response.hovered() {
             let ts = format_elapsed(msg.timestamp.elapsed());
-            egui::show_tooltip_at_pointer(
-                ui.ctx(),
-                egui::LayerId::new(egui::Order::Tooltip, ui.id().with("user_ts_layer")),
-                ui.id().with("user_ts"),
-                |ui| {
-                    ui.label(
-                        egui::RichText::new(ts)
-                            .size(theme.text_xs)
-                            .color(theme.text_dim),
-                    );
-                },
-            );
+            bubble_resp.response.show_tooltip_ui(|ui| {
+                ui.label(
+                    egui::RichText::new(ts)
+                        .size(theme.text_xs)
+                        .color(theme.text_dim),
+                );
+            });
         }
         design_system::gap(ui, Space::S1);
     });
@@ -518,7 +499,8 @@ fn error_bubble(
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
-        egui::Frame::new()
+        Elevation::Elevated
+            .frame(theme)
             .fill(theme.error_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::new(1.0_f32, theme.danger))
@@ -542,58 +524,53 @@ fn error_bubble(
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Copy button
-                        let copy_btn = egui::Button::new(
-                            egui::RichText::new(crate::theme::ICON_COPY)
-                                .font(theme.font_icon(theme.text_xs))
-                                .color(theme.error_text),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(copy_btn).on_hover_text("Copy error").clicked() {
+                        let copy_resp = clarity_ui::widgets::icon_button::icon_button(
+                            ui,
+                            crate::theme::ICON_COPY,
+                            theme.text_xs,
+                            egui::Color32::TRANSPARENT,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            theme,
+                        );
+                        if copy_resp.on_hover_text("Copy error").clicked() {
                             ui.ctx().copy_text(content.to_string());
                         }
 
                         // Fold / Unfold
                         if is_long {
                             let fold_label = if folded { "Expand" } else { "Collapse" };
-                            let fold_btn = egui::Button::new(
-                                egui::RichText::new(fold_label)
-                                    .size(theme.text_xs)
-                                    .color(theme.error_text),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .stroke(egui::Stroke::NONE)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                            if ui.add(fold_btn).clicked() {
+                            if ui
+                                .add(clarity_ui::widgets::Button::new(fold_label).ghost().small())
+                                .clicked()
+                            {
                                 folded = !folded;
                                 ui.data_mut(|d| d.insert_temp(fold_id, folded));
                             }
                         }
 
                         // Retry button
-                        let retry_btn = egui::Button::new(
-                            egui::RichText::new(crate::theme::ICON_REFRESH)
-                                .font(theme.font_icon(theme.text_xs))
-                                .color(theme.error_text),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(retry_btn).on_hover_text("Retry").clicked() {
+                        let retry_resp = clarity_ui::widgets::icon_button::icon_button(
+                            ui,
+                            crate::theme::ICON_REFRESH,
+                            theme.text_xs,
+                            egui::Color32::TRANSPARENT,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            theme,
+                        );
+                        if retry_resp.on_hover_text("Retry").clicked() {
                             *retry_idx = Some(msg_idx);
                         }
 
                         // Switch Model button
-                        let switch_btn = egui::Button::new(
-                            egui::RichText::new(crate::theme::ICON_SETTINGS)
-                                .font(theme.font_icon(theme.text_xs))
-                                .color(theme.error_text),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(switch_btn).on_hover_text("Switch Model").clicked() {
+                        let switch_resp = clarity_ui::widgets::icon_button::icon_button(
+                            ui,
+                            crate::theme::ICON_SETTINGS,
+                            theme.text_xs,
+                            egui::Color32::TRANSPARENT,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            theme,
+                        );
+                        if switch_resp.on_hover_text("Switch Model").clicked() {
                             *switch_model = true;
                         }
                     });
@@ -612,8 +589,8 @@ fn error_bubble(
                             .color(theme.error_text),
                     );
                 } else {
-                    // Expanded: render full parsed blocks
-                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.error_text);
+                    // Expanded: render full message content as markdown.
+                    crate::ui::markdown::render_markdown(ui, &msg.content, theme.error_text);
                 }
             });
     });
@@ -649,9 +626,9 @@ fn line_mode_agent(
     }
 
     let max_width = (ui.available_width() - 32.0).max(120.0);
-    egui::Frame::new()
+    Elevation::Surface
+        .frame(theme)
         .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
         .stroke(egui::Stroke::NONE)
         .shadow(egui::Shadow::NONE)
         .inner_margin(egui::Margin::symmetric(16, 12))
@@ -682,11 +659,12 @@ fn line_mode_user(
 
     ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
         ui.set_max_width(max_width);
-        egui::Frame::new()
+        Elevation::Elevated
+            .frame(theme)
             .fill(theme.user_bubble)
-            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -723,15 +701,15 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(ui.available_width() * 0.85);
-        egui::Frame::new()
+        Elevation::Elevated
+            .frame(theme)
             .fill(bg)
-            .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_base)));
+                    clarity_ui::design_system::icon(ui, icon, theme.text_base);
                     ui.label(
                         egui::RichText::new(&tc.name)
                             .size(theme.text_sm)
@@ -755,22 +733,34 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
 // Typing indicator
 // ============================================================================
 
-/// Render a typing indicator "..." bubble.
+/// Render an animated typing-indicator bubble.
+///
+/// Three dots pulse with staggered phases to signal that the assistant is
+/// still producing output. The animation is driven by egui's frame time so
+/// it stays smooth without per-frame state allocation.
 pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(ui.available_width() * 0.78);
-        egui::Frame::new()
+        Elevation::Elevated
+            .frame(theme)
             .fill(theme.ai_bubble)
-            .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 12))
             .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new("● ● ●")
-                        .size(theme.text_sm)
-                        .color(theme.text_muted),
-                );
+                let t = ui.input(|i| i.time);
+                ui.horizontal(|ui| {
+                    for phase in [0.0_f32, 2.1, 4.2] {
+                        let pulse = (t as f32 * 5.0 + phase).sin() * 0.5 + 0.5;
+                        let alpha = 0.35 + 0.65 * pulse;
+                        ui.label(
+                            egui::RichText::new("●")
+                                .size(theme.text_sm)
+                                .color(theme.text_muted.gamma_multiply(alpha)),
+                        );
+                        ui.add_space(theme.space_4);
+                    }
+                });
             });
     });
     design_system::gap(ui, Space::S3);

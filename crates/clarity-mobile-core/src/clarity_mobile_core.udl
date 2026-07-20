@@ -6,13 +6,14 @@ namespace clarity_mobile_core {
     string runtime_version();
 };
 
-// Supported cloud LLM providers.
+// Supported LLM providers.
 [Enum]
 interface ProviderType {
     OpenAi();
     Kimi();
     Deepseek();
     Anthropic();
+    DeepseekDevice();
 };
 
 // LLM provider profile.
@@ -21,6 +22,10 @@ dictionary ProviderProfile {
     string model;
     string api_key;
     string? base_url;
+    string? mobile;
+    string? password;
+    boolean search_enabled;
+    boolean reasoning_enabled;
 };
 
 // Runtime configuration passed from the mobile OS.
@@ -29,6 +34,11 @@ dictionary MobileConfig {
     string data_dir;
     // Default provider profile used for new conversations.
     ProviderProfile default_provider;
+    // Optional URL of a remote Clarity Gateway; when set, the runtime operates
+    // in Gateway remote mode instead of running a local agent.
+    string? gateway_url;
+    // Optional authentication token for the remote Gateway.
+    string? gateway_token;
 };
 
 // Handle to the mobile Clarity runtime.
@@ -54,16 +64,40 @@ interface MobileRuntime {
     // Get the active thread id.
     string current_thread_id();
 
+    // Load the messages of a thread. Returns an empty list for unknown ids.
+    sequence<ChatMessage> get_messages(string thread_id);
+
     // Update the LLM provider used for subsequent turns.
     void set_provider(ProviderProfile profile);
+
+    // Return the provider's cached authentication token, if any.
+    // Useful for persisting DeepSeek device-login tokens.
+    string? last_auth_token();
+
+    // Resolve a pending approval request (allow / reject / allow for session).
+    // Only applies to local agent mode.
+    void approve(string request_id, boolean allow, boolean remember);
+
+    // Set whether the local agent should run in agent (Smart approval + tools)
+    // or direct chat (Yolo approval) mode. Defaults to agent mode.
+    // Only applies to local agent mode.
+    void set_agent_mode(boolean enabled);
 
     // Send a user message in the active thread. The response is delivered
     // asynchronously via [pollEvent].
     void send_message(string content);
 
+    // Stop an in-flight local agent turn. Has no effect in Gateway remote mode.
+    void stop_turn();
+
     // Poll for the next UI event. Blocks up to [timeout_ms] milliseconds.
     // Returns null if no event arrived before the timeout.
     UiEvent? poll_event(u64 timeout_ms);
+
+    // Request device pairing with an OpenClaw gateway. Returns the device token
+    // once the gateway approves the pairing, or null on error/timeout.
+    // The token is persisted automatically for subsequent reconnects.
+    string? request_pairing();
 };
 
 // Summary of a conversation thread.
@@ -71,6 +105,13 @@ dictionary ThreadSummary {
     string thread_id;
     string? title;
     string updated_at;
+};
+
+// A single message loaded from a thread's history.
+dictionary ChatMessage {
+    string role;
+    string content;
+    string timestamp;
 };
 
 // Events flowing from the Rust core to the mobile UI.
@@ -82,8 +123,14 @@ interface UiEvent {
     // A text chunk from the assistant (streaming).
     ContentPart(string turn_id, string text);
 
+    // A reasoning/thinking chunk from a reasoning model (e.g. DeepSeek R1).
+    ReasoningPart(string turn_id, string text);
+
     // The model wants to call a tool.
     ToolCall(string turn_id, string id, string name, string arguments_json);
+
+    // A tool call needs user approval before executing.
+    ApprovalRequest(string request_id, string turn_id, string tool_name, string arguments_json, string? description);
 
     // A tool finished executing.
     ToolResult(string turn_id, string id, string result_json);
@@ -102,4 +149,7 @@ interface UiEvent {
 
     // Something went wrong.
     Error(string code, string message);
+
+    // A device pairing request was resolved by the gateway.
+    DevicePaired(string device_id, boolean approved, string? token, sequence<string> scopes);
 };

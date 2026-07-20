@@ -17,6 +17,8 @@ pub mod claw_sync;
 pub mod config;
 /// Scheduled cron task handlers.
 pub mod cron;
+/// DeepSeek Chat Android app-compatible handler.
+pub mod deepseek;
 /// File operation handlers.
 pub mod files;
 /// MCP server management handlers.
@@ -25,6 +27,8 @@ pub mod mcp;
 pub mod memory;
 /// Session management handlers.
 pub mod sessions;
+/// Subagent orchestration handlers.
+pub mod subagents;
 /// Background and parallel task handlers.
 pub mod tasks;
 /// Telemetry endpoint handlers (requires the `telemetry-api` feature).
@@ -59,11 +63,13 @@ mod tests {
     }
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use clarity_contract::{AgentError, LlmProvider, LlmResponse, Message, StreamDelta};
     use clarity_core::agent::{Agent, AgentConfig, MockLlm};
     use clarity_core::background::BackgroundTaskManager;
     use clarity_core::registry::ToolRegistry;
     use http_body_util::BodyExt;
     use std::sync::Arc;
+    use tokio::time::Duration;
     use tower::util::ServiceExt;
 
     pub(crate) async fn test_state() -> Arc<AppState> {
@@ -72,6 +78,77 @@ mod tests {
             .with_max_iterations(5)
             .with_read_only(false);
         let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
+
+        let temp =
+            std::env::temp_dir().join(format!("clarity-gateway-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp);
+        let task_manager = Arc::new(BackgroundTaskManager::new(
+            temp.join("store"),
+            temp.join("work"),
+            temp.join("context"),
+        ));
+
+        Arc::new(
+            AppState::new_with_home(agent, task_manager, temp.join(".clarity"))
+                .await
+                .unwrap(),
+        )
+    }
+
+    /// Mock LLM that sleeps for a fixed duration on every call so that tests
+    /// can observe concurrent agent turns overlapping in time.
+    struct SlowMockLlm {
+        delay: Duration,
+    }
+
+    #[async_trait::async_trait]
+    impl LlmProvider for SlowMockLlm {
+        async fn complete(
+            &self,
+            _messages: &[Message],
+            _tools: &serde_json::Value,
+        ) -> Result<LlmResponse, AgentError> {
+            tokio::time::sleep(self.delay).await;
+            Ok(LlmResponse {
+                content: "slow mock response".to_string(),
+                tool_calls: vec![],
+                is_complete: true,
+            })
+        }
+
+        fn stream(
+            &self,
+            _messages: &[Message],
+            _tools: &serde_json::Value,
+        ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+        {
+            let delay = self.delay;
+            let (tx, rx) = tokio::sync::mpsc::channel(1);
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+                let _ = tx
+                    .send(Ok(StreamDelta {
+                        content: Some("slow mock response".to_string()),
+                        reasoning_content: None,
+                        tool_calls: vec![],
+                        partial_tool_calls: vec![],
+                    }))
+                    .await;
+            });
+            Ok(rx)
+        }
+
+        fn set_prompt_cache_key(&self, _key: &str) {}
+    }
+
+    pub(crate) async fn test_state_with_slow_llm(delay: Duration) -> Arc<AppState> {
+        let registry = ToolRegistry::with_builtin_tools();
+        let config = AgentConfig::new()
+            .with_max_iterations(5)
+            .with_read_only(false);
+        let agent = Arc::new(
+            Agent::with_config(registry, config).with_llm(Arc::new(SlowMockLlm { delay })),
+        );
 
         let temp =
             std::env::temp_dir().join(format!("clarity-gateway-test-{}", std::process::id()));
@@ -446,5 +523,124 @@ mod tests {
         assert!(json.get("healthy").is_some());
         assert!(json.get("issue_count").is_some());
         assert!(json.get("issues").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_http_chat_serializes_turns() {
+        // Two concurrent HTTP chat requests must not race on the shared Agent
+        // state and fail with "Agent is already running a turn". They should be
+        // serialized by agent_turn_sem and both eventually return 200.
+        let state = test_state_with_slow_llm(Duration::from_millis(200)).await;
+        let app = create_api_router(state);
+
+        let body = serde_json::json!({
+            "model": "mock",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": false
+        });
+        let body_str = body.to_string();
+
+        let req1 = Request::builder()
+            .uri("/v1/chat/completions")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(body_str.clone()))
+            .unwrap();
+        let req2 = Request::builder()
+            .uri("/v1/chat/completions")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(body_str))
+            .unwrap();
+
+        let (resp1, resp2) = tokio::join!(app.clone().oneshot(req1), app.oneshot(req2));
+        let resp1 = resp1.unwrap();
+        let resp2 = resp2.unwrap();
+
+        assert_eq!(
+            resp1.status(),
+            StatusCode::OK,
+            "first concurrent chat request should succeed"
+        );
+        assert_eq!(
+            resp2.status(),
+            StatusCode::OK,
+            "second concurrent chat request should be queued, not rejected with AlreadyRunning"
+        );
+
+        let bytes2 = resp2.into_body().collect().await.unwrap().to_bytes();
+        let json2: serde_json::Value = serde_json::from_slice(&bytes2).unwrap();
+        assert!(
+            json2["choices"][0]["message"]["content"].is_string(),
+            "second response should contain assistant content: {json2}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_deepseek_api_v0_alias() {
+        // DeepSeek Chat app sends chat requests to /api/v0/chat/completion.
+        // The native handler expects DeepSeek format and returns an SSE stream.
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        // 1. Create a DeepSeek chat session.
+        let create_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v0/chat_session/create")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(create_resp.status(), StatusCode::OK);
+        let bytes = create_resp.into_body().collect().await.unwrap().to_bytes();
+        let create_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let session_id = create_json["data"]["biz_data"]["chat_session"]["id"]
+            .as_str()
+            .unwrap();
+
+        // 2. Send a DeepSeek-format completion request.
+        let body = serde_json::json!({
+            "chat_session_id": session_id,
+            "prompt": "hello from deepseek app",
+            "thinking_enabled": false,
+            "search_enabled": true,
+            "model_type": "default"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v0/chat/completion")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let text = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(
+            text.contains("event: ready"),
+            "missing ready event: {}",
+            text
+        );
+        assert!(
+            text.contains("event: close"),
+            "missing close event: {}",
+            text
+        );
+        assert!(
+            text.contains("This is a mock response"),
+            "missing content: {}",
+            text
+        );
     }
 }

@@ -1,33 +1,30 @@
 //! Task result view modal — displays the output of a completed background task.
 
 use crate::App;
+use clarity_ui::design_system::{Space, TextStyle, code_frame, gap, spinner, text};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::modal::Modal;
 
-/// Renders the task view modal UI.
+/// Renders the task view modal UI using the Clarity Design Protocol.
+///
+/// The modal shell itself (scrim + frame + centering) is owned by
+/// `clarity_ui::widgets::modal`; this function only renders the content.
 pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
-    if app.view_state.modal != Some(clarity_core::ui::ModalType::TaskView) {
+    if app.current_modal() != Some(&clarity_core::ui::ModalType::TaskView) {
         return;
     }
 
     let mut close_requested = false;
-    let theme = &app.ui_store.theme;
+    let theme = &app.context.ui_store.theme;
 
-    egui::Window::new("Task Result")
-        .collapsible(false)
-        .resizable(true)
-        .min_width(480.0)
-        .min_height(240.0)
-        .max_width(800.0)
+    Modal::new("task_view")
+        .width(420.0)
         .max_height(600.0)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .frame(
-            egui::Frame::window(&ctx.style())
-                .fill(theme.surface)
-                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8)),
-        )
         .show(ctx, |ui| {
-            ui.set_min_width(480.0);
+            text(ui, "Task Result", TextStyle::Title);
+            gap(ui, Space::S2);
 
-            if let Some(ref result) = app.task_store.viewing_task_result {
+            if let Some(ref result) = app.task_store().viewing_task_result {
                 // Header: status + elapsed + steps
                 ui.horizontal(|ui| {
                     let (status_icon, status_color) = match result.status {
@@ -53,68 +50,41 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if result.elapsed_ms > 0 {
-                            ui.label(
-                                egui::RichText::new(format!(
+                            text(
+                                ui,
+                                format!(
                                     "{:.1}s · {} steps",
                                     result.elapsed_ms as f64 / 1000.0,
                                     result.steps
-                                ))
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
+                                ),
+                                TextStyle::Small,
                             );
                         }
                     });
                 });
-                crate::design_system::gap(ui, crate::design_system::Space::S1);
+                gap(ui, Space::S1);
 
                 // Output text
-                egui::Frame::new()
-                    .fill(theme.bg)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::same(12))
-                    .show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .max_height(400.0)
-                            .show(ui, |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(&result.output)
-                                            .size(theme.text_sm)
-                                            .color(theme.text)
-                                            .monospace(),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                    });
+                code_frame(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(400.0)
+                        .show(ui, |ui| {
+                            text(ui, &result.output, TextStyle::Mono);
+                        });
+                });
             } else {
                 ui.vertical_centered(|ui| {
-                    ui.add_space(theme.space_40);
-                    ui.label(
-                        egui::RichText::new("Loading result...")
-                            .size(theme.text_base)
-                            .color(theme.text_dim),
-                    );
-                    crate::design_system::gap(ui, crate::design_system::Space::S1);
-                    ui.spinner();
+                    gap(ui, Space::S6);
+                    text(ui, "Loading result...", TextStyle::Body);
+                    gap(ui, Space::S1);
+                    spinner(ui);
                 });
             }
 
-            crate::design_system::gap(ui, crate::design_system::Space::S2);
+            gap(ui, Space::S2);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add_sized(
-                            egui::vec2(80.0, 32.0),
-                            egui::Button::new(
-                                egui::RichText::new("Close")
-                                    .size(theme.text_base)
-                                    .color(theme.text),
-                            )
-                            .fill(theme.border),
-                        )
-                        .clicked()
-                    {
+                    if ui.add(Button::new("Close").ghost().width(80.0)).clicked() {
                         close_requested = true;
                     }
                 });
@@ -122,22 +92,8 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
         });
 
     if close_requested {
-        app.view_state.close_modal();
-        app.task_store.viewing_task_id = None;
-        app.task_store.viewing_task_result = None;
-    }
-}
-
-// ── Panel trait implementation ──
-
-pub struct TaskViewModal;
-
-impl crate::design_system::Panel for TaskViewModal {
-    fn title(&self, _app: &crate::App) -> &str {
-        "TaskView"
-    }
-    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        render_task_view_modal(app, &ctx);
+        app.close_modal();
+        app.task_store_mut().viewing_task_id = None;
+        app.task_store_mut().viewing_task_result = None;
     }
 }

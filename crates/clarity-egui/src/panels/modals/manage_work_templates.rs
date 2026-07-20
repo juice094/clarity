@@ -1,65 +1,59 @@
 //! Modal for managing custom work templates.
 
 use crate::App;
+use clarity_ui::design_system::{Space, TextStyle, gap, text};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::icon_button::icon_button_toolbar;
+use clarity_ui::widgets::modal::Modal;
+use clarity_ui::widgets::text_input::TextInput;
 
 /// Render the work templates management modal.
 pub fn render_manage_work_templates_modal(app: &mut App, ctx: &egui::Context) {
-    if app.view_state.modal != Some(clarity_core::ui::ModalType::ManageWorkTemplates) {
+    if app.current_modal() != Some(&clarity_core::ui::ModalType::ManageWorkTemplates) {
         return;
     }
 
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // Clone templates so the render closure doesn't conflict with mutable app borrows.
-    let mut templates_edit = app.settings_store.settings_edit.work_templates.clone();
+    let mut templates_edit = app.settings_store().settings_edit.work_templates.clone();
     let mut needs_save = false;
 
-    egui::Window::new(app.t("Work Templates"))
-        .collapsible(false)
-        .resizable(true)
-        .movable(true)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .frame(
-            egui::Frame::window(&ctx.style())
-                .fill(theme.surface)
-                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8)),
-        )
+    Modal::new("manage_work_templates")
+        .width(420.0)
+        .max_height(600.0)
         .show(ctx, |ui| {
-            ui.set_min_width(400.0);
+            text(ui, app.t("Work Templates"), TextStyle::Title);
+            gap(ui, Space::S2);
 
+            // ponytail: ScrollArea is not yet wrapped in clarity-ui. Once a
+            // scrollable container component exists, replace this raw call.
             egui::ScrollArea::vertical()
                 .max_height(400.0)
                 .show(ui, |ui| {
                     let mut remove_idx: Option<usize> = None;
                     for (i, template) in templates_edit.iter_mut().enumerate() {
                         ui.horizontal(|ui| {
-                            ui.label(app.t("Name"));
+                            text(ui, app.t("Name"), TextStyle::CaptionStrong);
                             ui.add(
-                                egui::TextEdit::singleline(&mut template.name)
+                                TextInput::singleline(&mut template.name)
                                     .hint_text("My Workflow")
-                                    .desired_width(120.0),
+                                    .width(120.0),
                             );
-                            ui.label(app.t("Prompt"));
+                            text(ui, app.t("Prompt"), TextStyle::CaptionStrong);
                             ui.add(
-                                egui::TextEdit::multiline(&mut template.prompt)
+                                TextInput::multiline(&mut template.prompt)
                                     .hint_text("Write a function that...")
-                                    .desired_width(200.0)
-                                    .desired_rows(2),
+                                    .width(200.0)
+                                    .min_height(48.0),
                             );
-                            if ui
-                                .add_sized(
-                                    egui::vec2(20.0, 20.0),
-                                    egui::Button::new(
-                                        egui::RichText::new(crate::theme::ICON_X)
-                                            .size(theme.text_sm),
-                                    ),
-                                )
+                            if icon_button_toolbar(ui, crate::theme::ICON_X, theme.text_sm, &theme)
                                 .clicked()
                             {
                                 remove_idx = Some(i);
                             }
                         });
-                        // TextEdit mutations are in-place; write-back below
+                        // TextInput mutations are in-place; write-back below
                         // always syncs them to settings_edit in memory.
                     }
                     if let Some(idx) = remove_idx {
@@ -67,23 +61,11 @@ pub fn render_manage_work_templates_modal(app: &mut App, ctx: &egui::Context) {
                     }
                 });
 
-            crate::design_system::gap(ui, crate::design_system::Space::S1);
+            gap(ui, Space::S2);
 
             ui.horizontal(|ui| {
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(format!(
-                                "{} {}",
-                                crate::theme::ICON_PLUS,
-                                app.t("Add")
-                            ))
-                            .size(theme.text_sm),
-                        )
-                        .fill(theme.bg_hover),
-                    )
-                    .clicked()
-                {
+                let add_label = format!("{} {}", crate::theme::ICON_PLUS, app.t("Add"));
+                if ui.add(Button::new(&add_label).ghost()).clicked() {
                     templates_edit.push(crate::settings::WorkTemplate {
                         name: String::new(),
                         prompt: String::new(),
@@ -92,33 +74,22 @@ pub fn render_manage_work_templates_modal(app: &mut App, ctx: &egui::Context) {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(app.t("Close")).clicked() {
+                    if ui
+                        .add(Button::new(app.t("Close")).ghost().width(80.0))
+                        .clicked()
+                    {
                         needs_save = true;
-                        app.view_state.close_modal();
+                        app.close_modal();
                     }
                 });
             });
         });
 
-    // Always sync edits back to in-memory settings (TextEdit mutations are
+    // Always sync edits back to in-memory settings (TextInput mutations are
     // in-place and don't fire change events). Only persist to disk on
     // explicit actions (add, delete, close) to avoid per-frame disk writes.
-    app.settings_store.settings_edit.work_templates = templates_edit;
+    app.settings_store_mut().settings_edit.work_templates = templates_edit;
     if needs_save {
         app.auto_save_settings();
-    }
-}
-
-// ── Panel trait implementation ──
-
-pub struct ManageWorkTemplatesModal;
-
-impl crate::design_system::Panel for ManageWorkTemplatesModal {
-    fn title(&self, _app: &crate::App) -> &str {
-        "ManageWorkTemplates"
-    }
-    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        render_manage_work_templates_modal(app, &ctx);
     }
 }

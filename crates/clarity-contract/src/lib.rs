@@ -51,15 +51,18 @@ pub mod identity;
 pub mod key_ref;
 pub mod lifecycle;
 pub mod llm;
+pub mod openclaw_protocol;
 pub mod reliable_provider;
 pub mod retry;
 pub mod rollout;
 pub mod rollout_retention;
+pub mod settings;
 pub mod subagent;
 pub mod thread;
 pub mod tool;
 pub mod tool_format;
 pub mod tool_parser;
+pub mod transport;
 
 pub use key_ref::resolve_key_ref;
 
@@ -254,6 +257,10 @@ pub use subagent::{
 };
 pub use thread::{SessionId, ThreadId};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
+pub use transport::{
+    ClawTransport, GovernedTransport, HistoryMessage, MessageContext, TransportAuth, TransportCaps,
+    TransportError, TransportEvent,
+};
 
 #[cfg(test)]
 mod tests;

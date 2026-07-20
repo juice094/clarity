@@ -1,5 +1,8 @@
+//! Criterion benchmarks for tool-registry operations.
+#![allow(missing_docs)]
+
 use clarity_core::registry::ToolRegistry;
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_tool_registry_creation(c: &mut Criterion) {
     c.bench_function("ToolRegistry::with_builtin_tools", |b| {

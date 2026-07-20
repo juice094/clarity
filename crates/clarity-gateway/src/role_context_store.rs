@@ -47,7 +47,9 @@ impl RoleContextStore {
         let db_path = db_path.as_ref().to_path_buf();
         let conn = tokio::task::spawn_blocking(move || -> Result<Connection> {
             let conn = Connection::open(&db_path).map_err(RoleContextStoreError::Database)?;
-            conn.pragma_update(None, "journal_mode", "WAL")
+            // ponytail: PRAGMA journal_mode returns a result row on some SQLite
+            // builds, so use query_row to consume it instead of execute.
+            conn.query_row("PRAGMA journal_mode=WAL", [], |_| Ok(()))
                 .map_err(RoleContextStoreError::Database)?;
             Ok(conn)
         })
@@ -433,5 +435,25 @@ mod tests {
         let store = RoleContextStore::new_in_memory().unwrap();
         store.record_device_presence("operator", "").await.unwrap();
         assert!(store.online_devices("operator").await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_persistent_store_initializes_without_fallback() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("role_context.db");
+        let store = RoleContextStore::new(&db_path).await.unwrap();
+        let event = ClawContextEvent {
+            event_id: "ev-1".to_string(),
+            origin_device: "dev-a".to_string(),
+            origin_clock: 1,
+            kind: ContextEventKind::AppendMessage {
+                role: "user".to_string(),
+                content: "hello".to_string(),
+            },
+        };
+        store.append_event("operator", &event).await.unwrap();
+        let events = store.list_events("operator", None).await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(db_path.exists());
     }
 }

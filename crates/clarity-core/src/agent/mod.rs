@@ -287,6 +287,8 @@ pub struct Agent {
     plan_controller: Arc<tokio::sync::Mutex<Option<crate::agent::plan::PlanExecutionController>>>,
     /// Optional subagent orchestrator — injected at build time.
     orchestrator: Option<Arc<dyn clarity_contract::subagent::SubagentOrchestrator>>,
+    /// Optional knowledge field for dynamic file/session activation.
+    knowledge_field: Option<Arc<clarity_knowledge::KnowledgeField>>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `parking_lot::RwLock` is intentional.**

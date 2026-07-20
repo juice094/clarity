@@ -20,6 +20,7 @@ Tool implementations for Project Clarity.
 | Web | `WebFetchTool`, `WebSearchTool`, `WebBrowserTool` |
 | 协作 | `AskUserTool`, `NotifyTool`, `ChannelSendTool` |
 | 规划 | `PlanTool`, `TodoTool`, `ThinkTool` |
+| 知识 | `KnowledgeSearchTool` |
 | 其他 | `ComputerUseTool`, `ReadMediaFileTool`, `TeamCreateTool` |
 
 ## 测试

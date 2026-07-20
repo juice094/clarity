@@ -20,17 +20,8 @@
 //! let results = index.search("programming language", 2);
 //! ```
 
-use regex::Regex;
+use crate::tokenizer::tokenize;
 use std::collections::{HashMap, HashSet};
-use std::sync::LazyLock;
-
-/// Tokenizer regex shared by all [`TfidfVectorizer`] instances.
-///
-/// # Panics
-///
-/// Panics only if the literal pattern is invalid; it is known to be valid.
-#[allow(clippy::unwrap_used)]
-static TOKENIZER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-zA-Z0-9]+").unwrap());
 
 /// TF-IDF Vectorizer
 ///
@@ -46,8 +37,6 @@ pub struct TfidfVectorizer {
     vocabulary: HashMap<String, usize>,
     /// Stop words to ignore
     stop_words: HashSet<String>,
-    /// Regex for tokenization
-    tokenizer: Regex,
     /// Minimum document frequency for a term to be included
     min_df: u32,
     /// Maximum document frequency (as ratio) for a term to be included
@@ -196,7 +185,6 @@ impl TfidfVectorizer {
             total_docs: 0,
             vocabulary: HashMap::new(),
             stop_words,
-            tokenizer: TOKENIZER_RE.clone(),
             min_df: 1,
             max_df_ratio: 0.95,
         }
@@ -221,15 +209,6 @@ impl TfidfVectorizer {
         self
     }
 
-    /// Tokenize text into terms
-    fn tokenize(&self, text: &str) -> Vec<String> {
-        self.tokenizer
-            .find_iter(text.to_lowercase().as_str())
-            .map(|m| m.as_str().to_string())
-            .filter(|t| !self.stop_words.contains(t) && t.len() > 1)
-            .collect()
-    }
-
     /// Fit the vectorizer on a corpus of documents
     ///
     /// This builds the vocabulary and document frequency statistics.
@@ -239,7 +218,9 @@ impl TfidfVectorizer {
 
         // Count document frequencies
         for doc in documents {
-            let terms: HashSet<String> = self.tokenize(doc.as_ref()).into_iter().collect();
+            let terms: HashSet<String> = tokenize(doc.as_ref(), &self.stop_words)
+                .into_iter()
+                .collect();
             for term in terms {
                 *self.doc_freq.entry(term).or_insert(0) += 1;
             }
@@ -271,7 +252,7 @@ impl TfidfVectorizer {
 
     /// Transform a document into a TF-IDF vector
     pub fn transform(&self, document: impl AsRef<str>) -> SparseVector {
-        let terms = self.tokenize(document.as_ref());
+        let terms = tokenize(document.as_ref(), &self.stop_words);
         let term_counts: HashMap<String, u32> = terms.iter().fold(HashMap::new(), |mut acc, t| {
             *acc.entry(t.clone()).or_insert(0) += 1;
             acc

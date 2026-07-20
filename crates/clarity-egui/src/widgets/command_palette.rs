@@ -1,4 +1,7 @@
 use crate::theme::Theme;
+use clarity_ui::design_system::{Space, TextStyle, gap, text};
+use clarity_ui::widgets::overlay::Overlay;
+use clarity_ui::widgets::text_input::TextInput;
 
 /// Re-export from shared core so the palette speaks the same language as TUI.
 pub use clarity_core::ui::CommandItem;
@@ -58,39 +61,25 @@ impl CommandPalette {
             self.selected = filtered.len() - 1;
         }
 
-        egui::Window::new("command_palette")
-            .title_bar(false)
-            .resizable(false)
-            .collapsible(false)
-            .anchor(
-                egui::Align2::CENTER_TOP,
-                egui::vec2(0.0, theme.modal_offset_y),
-            )
-            .frame(
-                egui::Frame::new()
-                    .fill(theme.bg_elevated)
-                    .stroke(egui::Stroke::new(1.0, theme.border))
-                    .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                    .inner_margin(egui::Margin::symmetric(0, theme.space_12 as i8)),
-            )
+        Overlay::new("command_palette")
+            .width(theme.palette_w)
+            .top_center(theme.modal_offset_y)
             .show(ctx, |ui| {
-                ui.set_width(theme.palette_w);
-
                 // ── Input ──
                 let input_resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.query)
+                    TextInput::singleline(&mut self.query)
                         .hint_text("> type a command...")
-                        .font(egui::FontId::monospace(theme.text_base))
-                        .text_color(theme.text)
-                        .frame(false),
+                        .width(ui.available_width()),
                 );
                 if input_resp.changed() {
                     self.selected = 0;
                 }
 
+                // ponytail: raw separator; no semantic wrapper in clarity-ui yet.
                 ui.separator();
 
                 // ── List ──
+                // ponytail: raw ScrollArea; no wrapper in clarity-ui yet.
                 egui::ScrollArea::vertical()
                     .max_height(theme.palette_max_h)
                     .show(ui, |ui| {
@@ -102,15 +91,15 @@ impl CommandPalette {
                                 egui::Color32::TRANSPARENT
                             };
 
-                            let row_resp = egui::Frame::new()
+                            let row_resp = crate::design_system::interactive_row_frame(ui)
                                 .fill(row_bg)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                                 .inner_margin(egui::Margin::symmetric(
                                     theme.space_12 as i8,
                                     theme.space_8 as i8,
                                 ))
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
+                                        // ponytail: raw Label with custom icon font/color.
                                         ui.label(
                                             egui::RichText::new("›")
                                                 .font(theme.font_icon(theme.text_sm))
@@ -120,19 +109,13 @@ impl CommandPalette {
                                                     theme.text_dim
                                                 }),
                                         );
-                                        crate::design_system::gap(
-                                            ui,
-                                            crate::design_system::Space::S1,
-                                        );
-                                        ui.label(
-                                            egui::RichText::new(cmd.name.as_str())
-                                                .color(theme.text)
-                                                .size(theme.text_base),
-                                        );
+                                        gap(ui, Space::S1);
+                                        text(ui, cmd.name.as_str(), TextStyle::Body);
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
                                             |ui| {
                                                 if let Some(ref sc) = cmd.shortcut {
+                                                    // ponytail: raw Label for text_muted + monospace shortcut.
                                                     ui.label(
                                                         egui::RichText::new(sc.as_str())
                                                             .color(theme.text_muted)

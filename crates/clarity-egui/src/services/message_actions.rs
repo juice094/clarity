@@ -16,29 +16,33 @@ impl App {
     /// Enter inline-edit mode for the message at `idx`.
     /// Only user messages are editable.
     pub(crate) fn start_edit(&mut self, idx: usize) {
-        if let Some(session) = self.session_store.active_session() {
-            if let Some(msg) = session.messages.get(idx) {
-                if msg.role == Role::User {
-                    self.chat_store.editing_message_idx = Some(idx);
-                    self.chat_store.edit_buffer = msg.content.clone();
-                }
-            }
+        let content = self
+            .context
+            .session_store
+            .active_session()
+            .and_then(|session| session.messages.get(idx))
+            .filter(|msg| msg.role == Role::User)
+            .map(|msg| msg.content.clone());
+        if let Some(content) = content {
+            let chat_store = self.chat_store_mut();
+            chat_store.editing_message_idx = Some(idx);
+            chat_store.edit_buffer = content;
         }
     }
 
     /// Commit the edit: overwrite the message, truncate everything after it,
     /// and re-submit so the agent regenerates the response from the new prompt.
     pub(crate) fn commit_edit(&mut self) {
-        let Some(idx) = self.chat_store.editing_message_idx else {
+        let Some(idx) = self.chat_store_mut().editing_message_idx else {
             return;
         };
-        let new_text = self.chat_store.edit_buffer.trim().to_string();
+        let new_text = self.chat_store_mut().edit_buffer.trim().to_string();
         if new_text.is_empty() {
             self.cancel_edit();
             return;
         }
 
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             if idx < session.messages.len() {
                 session.messages[idx].content = new_text.clone();
                 session.messages[idx].blocks.clear();
@@ -49,16 +53,16 @@ impl App {
                 session.updated_at = crate::session::now_millis();
             }
         }
-        self.chat_store.editing_message_idx = None;
-        self.chat_store.edit_buffer.clear();
-        self.chat_store.input = new_text;
+        self.chat_store_mut().editing_message_idx = None;
+        self.chat_store_mut().edit_buffer.clear();
+        self.chat_store_mut().input = new_text;
         self.send();
     }
 
     /// Cancel inline edit without mutating session history.
     pub(crate) fn cancel_edit(&mut self) {
-        self.chat_store.editing_message_idx = None;
-        self.chat_store.edit_buffer.clear();
+        self.chat_store_mut().editing_message_idx = None;
+        self.chat_store_mut().edit_buffer.clear();
     }
 
     // ── Regenerate ──
@@ -70,7 +74,7 @@ impl App {
     /// 2. Delete the AI message at `ai_idx` and everything after it.
     /// 3. Re-submit the user prompt so the agent streams a new response.
     pub(crate) fn regenerate(&mut self, ai_idx: usize) {
-        let session = match self.session_store.active_session_mut() {
+        let session = match self.context.session_store.active_session_mut() {
             Some(s) => s,
             None => return,
         };
@@ -85,7 +89,7 @@ impl App {
 
         let Some(user_idx) = user_idx else {
             crate::handlers::system::push_toast(
-                &mut self.ui_store,
+                &mut self.context.ui_store,
                 "Cannot regenerate: no preceding user message",
                 crate::ui::types::ToastLevel::Warn,
             );
@@ -98,7 +102,7 @@ impl App {
         session.turn_heights.clear();
         session.updated_at = crate::session::now_millis();
         // Re-submit.
-        self.chat_store.input = query;
+        self.chat_store_mut().input = query;
         self.send();
     }
 }

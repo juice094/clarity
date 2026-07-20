@@ -28,19 +28,21 @@ pub mod work_templates;
 /// `panel_width` controls the rendered width of the panel. During expand/collapse
 /// animation this is the current animated value; when the animation is done and
 /// expanded, it equals `theme.size_sidebar`.
-pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_width: f32) {
-    let theme = app.ui_store.theme.clone();
+pub fn render_left_navigation_tree(app: &mut App, ui: &mut egui::Ui, panel_width: f32) {
+    let ctx = ui.ctx().clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // SAFE: the caller (render_left_rail) already guards `panel_width > 0.0`,
     // so we never pass exactly 0 here. egui handles narrowing panels by
     // clipping content; no additional clamp needed.
-    egui::SidePanel::left("left_navigation_tree")
-        .exact_width(panel_width)
-        .min_width(0.0)
+    let panel_response = egui::Panel::left("left_navigation_tree")
+        .exact_size(panel_width)
+        .min_size(0.0)
         .resizable(false)
         .show_separator_line(false)
         .frame(
-            egui::Frame::new()
+            clarity_ui::design_system::Elevation::Base
+                .frame(&theme)
                 .fill(theme.bg)
                 .stroke(egui::Stroke::NONE)
                 .shadow(egui::Shadow::NONE)
@@ -50,8 +52,8 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_wid
                 ))
                 .outer_margin(egui::Margin::symmetric(0, theme.space_4 as i8)),
         )
-        .show(ctx, |ui| {
-            if crate::ui::debug_overlay::is_enabled(ctx) {
+        .show(ui, |ui| {
+            if crate::ui::debug_overlay::is_enabled(&ctx) {
                 crate::ui::debug_overlay::show_layout_state(ui, "left-nav-tree");
             }
 
@@ -66,10 +68,23 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_wid
             let available = ui.available_rect_before_wrap();
             let scroll_h = (available.height() - footer_h).max(0.0);
 
-            // Scroll area fills the top portion.
-            let scroll_rect =
-                egui::Rect::from_min_size(available.min, egui::vec2(available.width(), scroll_h));
-            ui.allocate_new_ui(egui::UiBuilder::new().max_rect(scroll_rect), |ui| {
+            // Animate the scrollable content so it feels like it slides in and
+            // fades as the rail expands, rather than just being clipped by the
+            // changing width.
+            let expansion = rail_expansion(panel_width, &theme);
+            let slide_x = (1.0 - expansion) * -8.0;
+
+            // Scroll area fills the top portion, shifted slightly left while
+            // collapsed and sliding into place as the rail opens.
+            let scroll_rect = egui::Rect::from_min_size(
+                available.min + egui::vec2(slide_x, 0.0),
+                egui::vec2(available.width(), scroll_h),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(scroll_rect), |ui| {
+                // Keep the shifted content clipped to the visible rail so it does
+                // not spill into the main stage while collapsed.
+                ui.set_clip_rect(available);
+
                 egui::ScrollArea::vertical()
                     .id_salt("left_nav_scroll")
                     .auto_shrink([false; 2])
@@ -86,7 +101,7 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_wid
                 egui::pos2(available.min.x, available.max.y - footer_h),
                 egui::vec2(available.width(), footer_h),
             );
-            ui.allocate_new_ui(
+            ui.scope_builder(
                 egui::UiBuilder::new()
                     .max_rect(footer_rect)
                     .layout(egui::Layout::top_down(egui::Align::LEFT)),
@@ -101,7 +116,7 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_wid
                             ui.cursor().min,
                             egui::vec2(ui.available_width(), remaining_h),
                         );
-                        ui.allocate_new_ui(
+                        ui.scope_builder(
                             egui::UiBuilder::new()
                                 .max_rect(avatar_rect)
                                 .layout(egui::Layout::bottom_up(egui::Align::LEFT)),
@@ -113,6 +128,29 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context, panel_wid
                 },
             );
         });
+
+    // Fade the rail contents in/out on top of the panel so the labels do not
+    // pop in abruptly as the width animation plays.
+    let expansion = rail_expansion(panel_width, &theme);
+    let overlay_alpha = 1.0 - crate::animation::ease_out_cubic(expansion);
+    if overlay_alpha > 0.001 {
+        ui.painter().rect_filled(
+            panel_response.response.rect,
+            egui::CornerRadius::ZERO,
+            theme.bg.gamma_multiply(overlay_alpha),
+        );
+    }
+}
+
+/// Normalised expansion of the left rail: 0.0 when collapsed, 1.0 when fully open.
+fn rail_expansion(panel_width: f32, theme: &crate::theme::Theme) -> f32 {
+    let expanded_w = theme.size_sidebar;
+    let collapsed_w = theme.size_sidebar_collapsed;
+    if expanded_w > collapsed_w {
+        ((panel_width - collapsed_w) / (expanded_w - collapsed_w)).clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
 }
 
 /// Top area: primary navigation actions.
@@ -157,7 +195,7 @@ fn footer_separator(ui: &mut egui::Ui, theme: &crate::theme::Theme) {
 
 /// Bottom user avatar row showing the active user and current model.
 fn render_user_avatar_row(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    let model = app.settings_store.settings_edit.model.trim();
+    let model = app.settings_store().settings_edit.model.trim();
     let subtitle = if model.is_empty() { None } else { Some(model) };
     let _ = crate::widgets::user_avatar_row(ui, "User", subtitle, theme);
 }
@@ -223,9 +261,9 @@ mod tests {
         let mut separator_y = 0.0_f32;
         let mut avatar_widget_rect = egui::Rect::NOTHING;
 
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.allocate_new_ui(
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                ui.scope_builder(
                     egui::UiBuilder::new()
                         .max_rect(footer_rect)
                         .layout(egui::Layout::top_down(egui::Align::LEFT)),
@@ -241,7 +279,7 @@ mod tests {
                             ui.cursor().min,
                             egui::vec2(ui.available_width(), remaining_h),
                         );
-                        ui.allocate_new_ui(
+                        ui.scope_builder(
                             egui::UiBuilder::new()
                                 .max_rect(avatar_area)
                                 .layout(egui::Layout::bottom_up(egui::Align::LEFT)),

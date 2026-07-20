@@ -22,6 +22,7 @@
     )
 )]
 
+pub mod acp_bridge;
 pub mod client;
 pub mod connection_manager;
 pub mod device;
@@ -32,7 +33,9 @@ pub mod mesh;
 #[cfg(feature = "mesh")]
 pub mod mesh_client;
 pub mod netmon;
+pub mod openclaw_gateway;
 pub mod protocol;
+pub mod transports;
 pub mod types;
 pub mod watchdog;
 
@@ -49,6 +52,7 @@ pub use discovery::discover_openclaw_devices;
 pub use gateway_client::{GatewayClient, GatewayMessage, GatewayResponse, ToolCall};
 pub use netmon::{NetChangeEvent, NetMonitor};
 pub use protocol::{DetectedProtocol, ProtocolCommand, ProtocolEvent, ProtocolHistoryMessage};
+pub use transports::{GatewayWebSocketTransport, OpenClawTransport, TransportManager};
 pub use types::{ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};
 pub use watchdog::GatewayWatchdog;
 
@@ -152,7 +156,7 @@ fn check_gateway_error(value: &serde_json::Value) -> anyhow::Result<()> {
 }
 
 /// Convert an HTTP(S) Gateway URL into the canonical WebSocket endpoint.
-fn gateway_ws_url(url: &str) -> String {
+pub fn gateway_ws_url(url: &str) -> String {
     let mut url = url.to_string();
     if url.starts_with("http://") {
         url = url.replacen("http://", "ws://", 1);
@@ -160,6 +164,36 @@ fn gateway_ws_url(url: &str) -> String {
         url = url.replacen("https://", "wss://", 1);
     }
     format!("{}/ws", url.trim_end_matches('/'))
+}
+
+/// Convert an HTTP(S) or WebSocket URL into the OpenClaw JSON-RPC endpoint.
+///
+/// Kimi Desktop's OpenClaw Gateway speaks on the root WebSocket path
+/// (`ws://127.0.0.1:18679`), while `clarity-gateway` exposes its compatible
+/// endpoint under `/openclaw/ws` (`ws://127.0.0.1:18790/openclaw/ws`). This
+/// helper normalizes a user-supplied Gateway URL so that:
+///
+/// - URLs already ending in `/openclaw/ws` are preserved.
+/// - URLs pointing at the default Clarity Gateway port (`18790`) are mounted
+///   under `/openclaw/ws`.
+/// - Other URLs (e.g. Kimi Desktop on `18679`) are kept on their original path
+///   after scheme conversion.
+pub fn openclaw_ws_url(url: &str) -> String {
+    let mut url = url.to_string();
+    if url.starts_with("http://") {
+        url = url.replacen("http://", "ws://", 1);
+    } else if url.starts_with("https://") {
+        url = url.replacen("https://", "wss://", 1);
+    }
+    if url.ends_with("/openclaw/ws") {
+        return url;
+    }
+    let trimmed = url.trim_end_matches('/');
+    if trimmed.contains(":18790") && !trimmed.contains("/openclaw/ws") {
+        format!("{}/openclaw/ws", trimmed)
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// Send a quick chat message to the Gateway over WebSocket (non-streaming).
@@ -400,6 +434,37 @@ mod tests {
         assert_eq!(
             gateway_ws_url("ws://127.0.0.1:18790"),
             "ws://127.0.0.1:18790/ws"
+        );
+    }
+
+    #[test]
+    fn test_openclaw_ws_url_mounts_clarity_gateway_under_openclaw_path() {
+        // HTTP/WS scheme conversion and /openclaw/ws mount for Clarity Gateway.
+        assert_eq!(
+            openclaw_ws_url("http://127.0.0.1:18790"),
+            "ws://127.0.0.1:18790/openclaw/ws"
+        );
+        assert_eq!(
+            openclaw_ws_url("ws://127.0.0.1:18790/"),
+            "ws://127.0.0.1:18790/openclaw/ws"
+        );
+        // Already-complete URL is preserved.
+        assert_eq!(
+            openclaw_ws_url("ws://127.0.0.1:18790/openclaw/ws"),
+            "ws://127.0.0.1:18790/openclaw/ws"
+        );
+    }
+
+    #[test]
+    fn test_openclaw_ws_url_preserves_kimi_desktop_root_path() {
+        // Kimi Desktop OpenClaw Gateway speaks on the root WebSocket path.
+        assert_eq!(
+            openclaw_ws_url("http://127.0.0.1:18679"),
+            "ws://127.0.0.1:18679"
+        );
+        assert_eq!(
+            openclaw_ws_url("ws://127.0.0.1:18679/"),
+            "ws://127.0.0.1:18679"
         );
     }
 

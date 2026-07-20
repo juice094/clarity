@@ -141,6 +141,9 @@ cargo run -p clarity-egui
 - [ ] 空状态时 Composer 居中显示
 - [ ] 发送消息后输入栏恢复底部固定
 - [ ] 右 rail Status / Tools / Subagents / Memory / Knowledge 卡片可切换
+- [ ] Knowledge 面板：在搜索框输入关键词并点击 Search，结果列表出现且均为文件节点（无 `tag:` 条目）
+- [ ] Knowledge 面板：点击 Top active，列表按激活度排序，点击结果可在下方查看路径与摘要
+- [ ] 发送含 `[[某笔记]]` 或 `某笔记.md` 的消息后，Knowledge 面板 Top active 中该笔记激活度上升
 - [ ] `Ctrl+Shift+L` 可调出布局诊断覆盖层
 
 ### 5.2 TUI

@@ -56,9 +56,16 @@ impl ChatTemplate {
 
     /// Format messages into a prompt string.
     fn format(&self, messages: &[Message], tools: &Value) -> String {
+        // Local models accept a single prompt string. Truncate oldest
+        // non-system messages to keep the request body within provider limits
+        // while preserving the final user message.
+        let messages = crate::request::truncate_messages_by_bytes(
+            messages,
+            crate::request::MAX_MESSAGE_BODY_BYTES,
+        );
         match self {
-            ChatTemplate::Qwen2 => Self::format_qwen2(messages, tools),
-            ChatTemplate::DeepSeekR1 => Self::format_deepseek_r1(messages, tools),
+            ChatTemplate::Qwen2 => Self::format_qwen2(&messages, tools),
+            ChatTemplate::DeepSeekR1 => Self::format_deepseek_r1(&messages, tools),
         }
     }
 
@@ -181,6 +188,18 @@ impl ChatTemplate {
                 }
                 crate::api::MessageRole::Assistant => {
                     result.push_str("<｜Assistant｜>");
+                    result.push_str(&msg.content);
+                    if let Some(ref calls) = msg.tool_calls {
+                        for call in calls {
+                            result.push_str(&format!(
+                                "\n{{\"tool_calls\": [{{\"id\": \"{}\", \"type\": \"function\", \"function\": {{\"name\": \"{}\", \"arguments\": {}}}}}]}}",
+                                call.id, call.function.name, call.function.arguments
+                            ));
+                        }
+                    }
+                }
+                crate::api::MessageRole::Tool => {
+                    result.push_str("<｜Tool｜>");
                     result.push_str(&msg.content);
                 }
                 _ => {}
@@ -1001,6 +1020,55 @@ mod tests {
         assert!(prompt.contains("You are helpful."));
         assert!(prompt.contains("<｜User｜>Hello"));
         assert!(prompt.ends_with("<｜Assistant｜>"));
+    }
+
+    #[test]
+    fn test_deepseek_r1_format_includes_tool_results() {
+        let tool_call = ToolCall {
+            id: "call_1".to_string(),
+            call_type: "function".to_string(),
+            function: FunctionCall {
+                name: "powershell".to_string(),
+                arguments: r#"{"command":"Get-ChildItem"}"#.to_string(),
+            },
+        };
+        let messages = vec![
+            Message::system("You are helpful."),
+            Message::user("List files."),
+            crate::api::Message {
+                role: crate::api::MessageRole::Assistant,
+                content: String::new(),
+                tool_calls: Some(vec![tool_call]),
+                tool_call_id: None,
+            },
+            Message::tool("call_1", "desktop files"),
+        ];
+        let prompt = ChatTemplate::DeepSeekR1.format(&messages, &serde_json::json!([]));
+
+        assert!(prompt.contains("<｜User｜>List files."));
+        assert!(prompt.contains("<｜Assistant｜>"));
+        assert!(prompt.contains("\"tool_calls\""));
+        assert!(prompt.contains("powershell"));
+        assert!(prompt.contains("<｜Tool｜>desktop files"));
+        assert!(prompt.ends_with("<｜Assistant｜>"));
+    }
+
+    #[test]
+    fn test_deepseek_r1_format_truncates_old_messages() {
+        let old_big = "x".repeat(1_000_000);
+        let new_big = "y".repeat(1_000_000);
+        let messages = vec![
+            Message::system("You are helpful."),
+            Message::user(old_big.clone()),
+            Message::user(new_big.clone()),
+            Message::user("final"),
+        ];
+        let prompt = ChatTemplate::DeepSeekR1.format(&messages, &serde_json::json!([]));
+
+        assert!(!prompt.contains(&old_big));
+        assert!(prompt.contains("You are helpful."));
+        assert!(prompt.contains(&new_big));
+        assert!(prompt.contains("<｜User｜>final"));
     }
 
     #[test]

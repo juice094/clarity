@@ -1,3 +1,6 @@
+//! Criterion benchmarks for agent system-prompt construction.
+#![allow(missing_docs)]
+
 use clarity_core::{Agent, ToolRegistry};
 use criterion::{Criterion, criterion_group, criterion_main};
 

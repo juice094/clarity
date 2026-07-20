@@ -90,6 +90,7 @@ pub mod session_store;
 pub mod session_store_v2;
 pub mod store;
 pub mod ticker;
+pub mod tokenizer;
 pub mod types;
 
 // Re-export commonly used types

@@ -25,7 +25,6 @@ tray = [
 mesh = [
     "dep:syncthing-core",
     "dep:syncthing-sync",
-    "dep:reqwest",
     "dep:bytes",
 ]
 
@@ -40,11 +39,13 @@ clarity-wire = { path = "../clarity-wire", optional = true }
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3"
+futures = { workspace = true }
 async-trait = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+uuid = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
@@ -71,10 +72,12 @@ chrono = { workspace = true }
 # Sync primitives
 parking_lot = "0.12"
 
+# HTTP client for file downloads and mesh sync.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 # Mesh synchronization (optional)
 syncthing-core = { path = "../../third_party/syncthing-rust/crates/syncthing-core", optional = true }
 syncthing-sync = { path = "../../third_party/syncthing-rust/crates/syncthing-sync", optional = true }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 bytes = { workspace = true, optional = true }
 
 # System tray binary dependencies (optional)
@@ -88,6 +91,9 @@ notify = { version = "7", default-features = false, features = ["macos_fsevent",
 name = "clarity-claw"
 path = "src/main.rs"
 required-features = ["tray"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

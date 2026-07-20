@@ -118,6 +118,8 @@ pub mod ids {
     pub const COPY_LINE: &str = "copy-line";
     /// `SHOW_SHORTCUTS` constant — keyboard shortcuts reference modal.
     pub const SHOW_SHORTCUTS: &str = "show-shortcuts";
+    /// `SCROLL_TO_BOTTOM` constant — jump to the latest chat message.
+    pub const SCROLL_TO_BOTTOM: &str = "scroll-to-bottom";
 }
 
 /// 预置的常用命令常量 — 避免两端硬编码重复。

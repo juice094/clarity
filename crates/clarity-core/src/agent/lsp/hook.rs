@@ -102,10 +102,21 @@ impl LspHook {
     }
 }
 
+/// Expand a leading `~` to the user's home directory (cross-platform).
+fn expand_tilde(path_str: &str) -> std::path::PathBuf {
+    if let Some(rest) = path_str.strip_prefix('~') {
+        if let Some(home) = dirs::home_dir() {
+            let rest = rest.trim_start_matches(['/', '\\']);
+            return home.join(rest);
+        }
+    }
+    std::path::PathBuf::from(path_str)
+}
+
 pub(crate) fn path_to_uri_impl(working_dir: &std::path::Path, path_str: &str) -> String {
-    let path = std::path::Path::new(path_str);
+    let path = expand_tilde(path_str);
     let abs = if path.is_absolute() {
-        path.to_path_buf()
+        path
     } else {
         working_dir.join(path)
     };
@@ -293,6 +304,18 @@ mod tests {
             path_to_uri_impl(&wd, "src/main.rs"),
             "file:///home/user/project/src/main.rs".to_string()
         );
+    }
+
+    #[test]
+    fn test_path_to_uri_expands_tilde() {
+        let wd = std::path::PathBuf::from("/home/user/project");
+        let home = dirs::home_dir().expect("home_dir should be available in tests");
+        let expected = format!(
+            "file:///{}/Desktop/file.rs",
+            home.to_string_lossy().replace('\\', "/")
+        );
+        assert_eq!(path_to_uri_impl(&wd, "~/Desktop/file.rs"), expected);
+        assert_eq!(path_to_uri_impl(&wd, "~\\Desktop\\file.rs"), expected);
     }
 
     #[test]

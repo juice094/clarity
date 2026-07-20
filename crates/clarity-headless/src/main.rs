@@ -27,6 +27,7 @@ use clarity_core::{
 use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm};
 #[cfg(feature = "local-llm")]
 use clarity_llm::{LocalGgufConfig, LocalGgufProvider};
+use futures_util::StreamExt;
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -56,6 +57,11 @@ enum Command {
     Health(HealthArgs),
     /// Manage V2 threads and rollouts
     Threads(threads::ThreadsArgs),
+    /// Run the KimiClaw ACP bridge to relay cloud messages to local Gateway
+    AcpBridge(AcpBridgeArgs),
+    /// Pair this Claw instance with a local Kimi Desktop OpenClaw Gateway
+    #[command(name = "openclaw-pair")]
+    OpenClawPair(OpenClawPairArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -159,6 +165,43 @@ struct HealthArgs {
     output: OutputFormat,
 }
 
+#[derive(Parser, Debug, Clone)]
+struct AcpBridgeArgs {
+    /// Local backend to forward cloud messages to
+    #[arg(short, long, value_enum, default_value = "auto")]
+    local_backend: LocalBackendArg,
+
+    /// Local Clarity Gateway URL
+    #[arg(short, long, default_value = "http://127.0.0.1:18790")]
+    gateway_url: String,
+
+    /// Directory containing `openclaw.json` with the KimiClaw bridge config
+    #[arg(short, long)]
+    openclaw_home: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct OpenClawPairArgs {
+    /// Local OpenClaw Gateway URL
+    #[arg(short, long, default_value = "http://127.0.0.1:18679")]
+    gateway_url: String,
+
+    /// Admin token for the local OpenClaw Gateway
+    #[arg(short, long)]
+    token: String,
+}
+
+#[derive(Debug, Clone, ValueEnum, PartialEq)]
+enum LocalBackendArg {
+    /// Auto-detect: probe the native Clarity Gateway `/ws`; fall back to OpenClaw
+    /// if it is unreachable.
+    Auto,
+    /// Original Clarity Gateway WebSocket.
+    Gateway,
+    /// Kimi Desktop local OpenClaw Gateway.
+    Openclaw,
+}
+
 #[derive(Debug, Clone, ValueEnum, PartialEq)]
 enum OutputFormat {
     Markdown,
@@ -205,6 +248,8 @@ async fn async_main() -> Result<()> {
         Command::Jumpy(jumpy_args) => jumpy_command(jumpy_args).await,
         Command::Health(health_args) => health_command(health_args).await,
         Command::Threads(threads_args) => threads::run(threads_args).await,
+        Command::AcpBridge(acp_args) => acp_bridge_command(acp_args).await,
+        Command::OpenClawPair(pair_args) => openclaw_pair_command(pair_args).await,
     }
 }
 
@@ -425,6 +470,212 @@ async fn health_command(args: HealthArgs) -> Result<()> {
     } else {
         anyhow::bail!("Configuration health check failed");
     }
+}
+
+/// Probe whether the native Clarity Gateway WebSocket endpoint is reachable.
+///
+/// Opens a short-lived connection, waits for the `welcome` frame, and closes.
+/// Returns `true` only if the endpoint responds with a valid welcome message.
+async fn native_gateway_reachable(gateway_url: &str) -> bool {
+    let ws_url = clarity_claw::gateway_ws_url(gateway_url);
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        tokio_tungstenite::connect_async(&ws_url),
+    )
+    .await
+    {
+        Ok(Ok((mut stream, _))) => {
+            let welcome =
+                tokio::time::timeout(std::time::Duration::from_secs(2), stream.next()).await;
+            let _ = stream.close(None).await;
+            matches!(
+                welcome,
+                Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))))
+                    if text.contains("\"type\":\"welcome\"")
+            )
+        }
+        _ => false,
+    }
+}
+
+async fn acp_bridge_command(args: AcpBridgeArgs) -> Result<()> {
+    let openclaw_home = args.openclaw_home.clone().unwrap_or_else(|| {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".kimi_openclaw")
+    });
+
+    let (config, configured_gateway_url) =
+        clarity_claw::acp_bridge::load_acp_config_and_gateway_url(&openclaw_home).with_context(
+            || format!("Failed to load ACP bridge config from {:?}", openclaw_home),
+        )?;
+
+    let state_path = openclaw_home.join("acp-bridge-state.json");
+    let gateway_url = if args.gateway_url == "http://127.0.0.1:18790" {
+        // When the user did not override the default, prefer the Gateway URL
+        // stored in openclaw.json so we match the local KimiClaw setup.
+        configured_gateway_url
+    } else {
+        args.gateway_url
+    };
+
+    let (gateway_url, local_backend) = match args.local_backend {
+        LocalBackendArg::Gateway => (
+            gateway_url,
+            clarity_claw::acp_bridge::LocalBackend::ClarityGateway,
+        ),
+        LocalBackendArg::Openclaw => {
+            let oc_url = clarity_claw::openclaw_ws_url(&gateway_url);
+            (
+                oc_url,
+                clarity_claw::acp_bridge::LocalBackend::OpenClawGateway,
+            )
+        }
+        LocalBackendArg::Auto => {
+            // Auto-detect: prefer the native Clarity Gateway WebSocket endpoint
+            // because it is the canonical protocol and supports the full feature
+            // set (role-context sync, wire messages, metrics). Fall back to the
+            // OpenClaw-compatible endpoint only when the native endpoint is
+            // unreachable, so Clarity can continue serving Claw traffic even
+            // after Kimi Desktop is removed.
+            if native_gateway_reachable(&gateway_url).await {
+                (
+                    gateway_url,
+                    clarity_claw::acp_bridge::LocalBackend::ClarityGateway,
+                )
+            } else {
+                tracing::info!(
+                    gateway_url = %gateway_url,
+                    "Native Gateway /ws unreachable, falling back to /openclaw/ws"
+                );
+                let oc_url = clarity_claw::openclaw_ws_url(&gateway_url);
+                (
+                    oc_url,
+                    clarity_claw::acp_bridge::LocalBackend::OpenClawGateway,
+                )
+            }
+        }
+    };
+
+    tracing::info!(
+        gateway_url = %gateway_url,
+        acp_url = %config.url,
+        backend = ?local_backend,
+        state_path = %state_path.display(),
+        "Starting ACP bridge"
+    );
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::broadcast::channel(1);
+    let (status_tx, mut status_rx) =
+        tokio::sync::watch::channel(clarity_claw::acp_bridge::AcpBridgeStatus::default());
+
+    // Listen for Ctrl+C / SIGINT and request a clean bridge shutdown.
+    let shutdown_tx_clone = shutdown_tx.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            let _ = shutdown_tx_clone.send(());
+        }
+    });
+
+    // Periodically log bridge health so users can verify the relay is alive.
+    tokio::spawn(async move {
+        loop {
+            let status = status_rx.borrow_and_update().clone();
+            if status.connected || status.last_error.is_some() {
+                tracing::info!(
+                    connected = status.connected,
+                    chat_id = ?status.chat_id,
+                    reconnect_count = status.reconnect_count,
+                    last_error = ?status.last_error,
+                    "ACP bridge status"
+                );
+            }
+            if status_rx.changed().await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let result = clarity_claw::acp_bridge::run_acp_gateway_bridge_with_options(
+        &config,
+        &gateway_url,
+        local_backend,
+        shutdown_rx,
+        clarity_contract::retry::RetryConfig::default(),
+        Some(state_path.as_path()),
+        Some(status_tx),
+    )
+    .await
+    .context("ACP bridge failed");
+
+    drop(shutdown_tx);
+    result
+}
+
+async fn openclaw_pair_command(args: OpenClawPairArgs) -> Result<()> {
+    use clarity_claw::{
+        device::{DeviceIdentity, PairedToken, save_paired_token},
+        openclaw_gateway::{OpenClawDeviceApi, client::OpenClawGatewayClient},
+    };
+
+    let device = DeviceIdentity::load_or_generate()
+        .map_err(|e| anyhow::anyhow!("Failed to load or generate Claw device identity: {e}"))?;
+    let ws_url = clarity_claw::openclaw_ws_url(&args.gateway_url);
+
+    tracing::info!(
+        gateway_url = %args.gateway_url,
+        device_id = %device.device_id(),
+        "Requesting OpenClaw device pairing"
+    );
+
+    let client = OpenClawGatewayClient::connect(&ws_url, &args.token)
+        .await
+        .context("Failed to connect to OpenClaw Gateway")?;
+
+    // Wait for handshake before issuing the pairing request.
+    for _ in 0..60 {
+        if client.hello_ok().is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    if client.hello_ok().is_none() {
+        anyhow::bail!("OpenClaw Gateway handshake timed out");
+    }
+
+    let result = client
+        .pair_request(&device)
+        .await
+        .context("device.pair.request failed")?;
+
+    tracing::info!(
+        device_id = %result.device_id,
+        approved = result.approved,
+        scopes = ?result.scopes,
+        "OpenClaw pairing result received"
+    );
+
+    if !result.approved {
+        anyhow::bail!(
+            "Pairing request for {} is pending approval in the Gateway UI",
+            result.device_id
+        );
+    }
+
+    let record = PairedToken {
+        gateway_url: args.gateway_url,
+        token: args.token,
+        device_token: result.token,
+        role: "operator".to_string(),
+        scopes: result.scopes,
+        paired_at_ms: chrono::Utc::now().timestamp_millis(),
+    };
+    save_paired_token(&record).map_err(|e| anyhow::anyhow!("Failed to save paired token: {e}"))?;
+
+    println!("OpenClaw pairing approved and saved.");
+    println!("Device id: {}", result.device_id);
+    println!("Scopes: {:?}", record.scopes);
+    Ok(())
 }
 
 fn read_prompt(args: &RunArgs) -> Result<String> {
@@ -762,6 +1013,112 @@ mod tests {
                 assert_eq!(health_args.output, OutputFormat::Markdown);
             }
             _ => panic!("Expected Health command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_acp_bridge_defaults() {
+        let args = Args::try_parse_from(["clarity-headless", "acp-bridge"]).unwrap();
+        match args.command {
+            Command::AcpBridge(acp_args) => {
+                assert_eq!(acp_args.gateway_url, "http://127.0.0.1:18790");
+                assert_eq!(acp_args.openclaw_home, None);
+                assert_eq!(acp_args.local_backend, LocalBackendArg::Auto);
+            }
+            _ => panic!("Expected AcpBridge command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_acp_bridge_custom() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "acp-bridge",
+            "--gateway-url",
+            "http://custom:8080",
+            "--openclaw-home",
+            "/tmp/oc",
+        ])
+        .unwrap();
+        match args.command {
+            Command::AcpBridge(acp_args) => {
+                assert_eq!(acp_args.gateway_url, "http://custom:8080");
+                assert_eq!(acp_args.openclaw_home, Some(PathBuf::from("/tmp/oc")));
+                assert_eq!(acp_args.local_backend, LocalBackendArg::Auto);
+            }
+            _ => panic!("Expected AcpBridge command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_acp_bridge_local_backend_gateway() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "acp-bridge",
+            "--local-backend",
+            "gateway",
+        ])
+        .unwrap();
+        match args.command {
+            Command::AcpBridge(acp_args) => {
+                assert_eq!(acp_args.local_backend, LocalBackendArg::Gateway);
+            }
+            _ => panic!("Expected AcpBridge command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_acp_bridge_local_backend_openclaw() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "acp-bridge",
+            "--local-backend",
+            "openclaw",
+        ])
+        .unwrap();
+        match args.command {
+            Command::AcpBridge(acp_args) => {
+                assert_eq!(acp_args.local_backend, LocalBackendArg::Openclaw);
+            }
+            _ => panic!("Expected AcpBridge command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_openclaw_pair_defaults() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "openclaw-pair",
+            "--token",
+            "admin-token",
+        ])
+        .unwrap();
+        match args.command {
+            Command::OpenClawPair(pair_args) => {
+                assert_eq!(pair_args.gateway_url, "http://127.0.0.1:18679");
+                assert_eq!(pair_args.token, "admin-token");
+            }
+            _ => panic!("Expected OpenClawPair command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_openclaw_pair_custom() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "openclaw-pair",
+            "--gateway-url",
+            "http://custom:18679",
+            "--token",
+            "custom-token",
+        ])
+        .unwrap();
+        match args.command {
+            Command::OpenClawPair(pair_args) => {
+                assert_eq!(pair_args.gateway_url, "http://custom:18679");
+                assert_eq!(pair_args.token, "custom-token");
+            }
+            _ => panic!("Expected OpenClawPair command"),
         }
     }
 

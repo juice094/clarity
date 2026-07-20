@@ -10,9 +10,9 @@ use crate::App;
 
 /// Render work template action rows and the "Manage" entry.
 pub fn render_work_templates(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
     let templates: Vec<crate::settings::WorkTemplate> =
-        app.settings_store.settings_edit.work_templates.clone();
+        app.settings_store().settings_edit.work_templates.clone();
 
     // Template action rows — one click = new session from template.
     for template in &templates {
@@ -40,7 +40,6 @@ pub fn render_work_templates(app: &mut App, ui: &mut egui::Ui) {
         .on_hover_text(app.t("Manage templates"))
         .clicked()
     {
-        app.view_state
-            .open_modal(clarity_core::ui::ModalType::ManageWorkTemplates);
+        app.open_modal(clarity_core::ui::ModalType::ManageWorkTemplates);
     }
 }

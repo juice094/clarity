@@ -12,6 +12,8 @@ description = "Advanced memory storage system for Clarity - SQLite, File, Hybrid
 default = ["sqlite"]
 # SQLite backend with FTS5 support
 sqlite = ["rusqlite"]
+# Chinese/CJK word segmentation via jieba-rs
+jieba = ["dep:jieba-rs"]
 # Hermes-memory backend integration
 hermes = ["dep:hermes-memory-core", "dep:hermes-memory-store", "dep:hermes-memory-search", "dep:ulid"]
 
@@ -32,6 +34,7 @@ futures = { workspace = true }
 rusqlite = { version = "0.34", features = ["bundled-full"], optional = true }
 sha2 = "0.10"
 hex = "0.4"
+jieba-rs = { version = "0.7", optional = true }
 
 # New dependencies for enhanced functionality
 dashmap = "6"

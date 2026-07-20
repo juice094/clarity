@@ -43,11 +43,11 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
-    eframe::run_simple_native("StripTitlebar PoC", options, |ctx, _frame| {
+    eframe::run_ui_native("StripTitlebar PoC", options, |ui, _frame| {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(egui::Color32::from_rgb(28, 28, 32)))
-            .show(ctx, |ui| {
-                render_titlebar(ui, ctx);
+            .show(ui, |ui| {
+                render_titlebar(ui);
                 ui.add_space(8.0);
                 ui.heading("Body — resize the window to verify CENTER zone behavior");
                 ui.label(
@@ -58,7 +58,7 @@ fn main() -> eframe::Result {
     })
 }
 
-fn render_titlebar(ui: &mut egui::Ui, ctx: &egui::Context) {
+fn render_titlebar(ui: &mut egui::Ui) {
     ui.add_space(2.0);
     StripBuilder::new(ui)
         .size(Size::exact(LEFT_ZONE_WIDTH))
@@ -102,7 +102,7 @@ fn render_titlebar(ui: &mut egui::Ui, ctx: &egui::Context) {
                         egui::Sense::click_and_drag(),
                     );
                     if response.drag_started_by(egui::PointerButton::Primary) {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
                 });
             });
@@ -113,13 +113,14 @@ fn render_titlebar(ui: &mut egui::Ui, ctx: &egui::Context) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(4.0);
                     if ui.button("\u{2715}").on_hover_text("Close").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     if ui.button("\u{2610}").on_hover_text("Maximize").clicked() {
                         // toggle maximize (no-op in PoC)
                     }
                     if ui.button("\u{2014}").on_hover_text("Minimize").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        ui.ctx()
+                            .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     }
                     ui.add_space(8.0);
                     ui.label("\u{25CF}  Gateway");

@@ -4,6 +4,7 @@
 
 use crate::store::SubagentStore;
 use clarity_contract::subagent::{AgentTypeDefinition, CapabilityToken, LaborMarket};
+use clarity_contract::tool::ToolRegistry as ToolRegistryTrait;
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::Message;
@@ -16,6 +17,8 @@ pub struct SubagentBuilder {
     git_context: Option<String>,
     capability_token: Option<CapabilityToken>,
     iteration_budget: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    /// Force read-only mode regardless of the agent type definition.
+    read_only: bool,
 }
 
 impl SubagentBuilder {
@@ -31,6 +34,7 @@ impl SubagentBuilder {
             git_context: None,
             capability_token: None,
             iteration_budget: None,
+            read_only: false,
         }
     }
 
@@ -55,6 +59,12 @@ impl SubagentBuilder {
         self
     }
 
+    /// Force read-only mode for this build.
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
     /// Build a subagent from type definition
     pub fn build(
         &self,
@@ -65,8 +75,9 @@ impl SubagentBuilder {
         // Create state in store
         store.create(agent_id.to_string(), type_def.name.clone());
 
-        // Filter tools based on allowed_tools
-        let filtered_registry = self.filter_tools(&type_def.allowed_tools);
+        // Filter tools based on allowed_tools and read-only restriction.
+        let effective_read_only = self.read_only || type_def.read_only;
+        let filtered_registry = self.filter_tools(&type_def.allowed_tools, effective_read_only);
 
         // Build system prompt, optionally prepending Git context
         let system_prompt = if let Some(git_ctx) = &self.git_context {
@@ -140,26 +151,46 @@ impl SubagentBuilder {
         Ok(agent)
     }
 
-    /// Filter tools based on allowed list
-    fn filter_tools(&self, allowed: &Option<Vec<String>>) -> ToolRegistry {
-        match allowed {
-            None => self.tool_registry.clone(),
-            Some(allowed_tools) => {
-                let filtered = ToolRegistry::new();
-                for name in allowed_tools {
-                    if let Ok(Some(tool)) = self.tool_registry.get(name) {
-                        let _ = filtered.register_shared(tool);
-                    }
-                }
-                filtered
+    /// Filter tools based on allowed list and read-only restriction.
+    fn filter_tools(&self, allowed: &Option<Vec<String>>, read_only: bool) -> ToolRegistry {
+        let candidate_names: Vec<String> = match allowed {
+            None => self
+                .tool_registry
+                .list()
+                .unwrap_or_default()
+                .iter()
+                .map(|t| t.to_string())
+                .collect(),
+            Some(allowed_tools) => allowed_tools.clone(),
+        };
+
+        let filtered = ToolRegistry::new();
+        for name in candidate_names {
+            if read_only && is_mutating_tool(&name) {
+                continue;
+            }
+            if let Ok(Some(tool)) = self.tool_registry.get(&name) {
+                let _ = filtered.register_shared(tool);
             }
         }
+        filtered
     }
 
     /// Get labor market reference
     pub fn labor_market(&self) -> &LaborMarket {
         &self.labor_market
     }
+}
+
+/// Returns true for tools that may modify files or execute arbitrary commands.
+///
+/// ponytail: hard-coded name list. Long-term this should come from tool metadata
+/// (e.g. `Tool::category()`) rather than string matching.
+fn is_mutating_tool(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "file_write" | "file_edit" | "bash" | "shell" | "cmd" | "write_file" | "edit_file"
+    )
 }
 
 #[cfg(test)]
@@ -213,5 +244,60 @@ mod tests {
 
         let result = builder.build_by_type("test-1", "unknown", &mut store);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_only_filter_excludes_mutating_tools() {
+        let registry = create_test_registry();
+        let builder = SubagentBuilder::new(registry, "/tmp");
+
+        let filtered = builder.filter_tools(
+            &Some(vec![
+                "file_read".to_string(),
+                "file_write".to_string(),
+                "bash".to_string(),
+            ]),
+            true,
+        );
+
+        assert!(filtered.get("file_read").unwrap().is_some());
+        assert!(filtered.get("file_write").unwrap().is_none());
+        assert!(filtered.get("bash").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_read_only_filter_applies_to_full_registry_when_allowed_tools_none() {
+        let registry = create_test_registry();
+        let builder = SubagentBuilder::new(registry, "/tmp");
+
+        let filtered = builder.filter_tools(&None, true);
+
+        assert!(filtered.get("file_read").unwrap().is_some());
+        assert!(filtered.get("file_write").unwrap().is_none());
+        assert!(filtered.get("bash").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_non_read_only_filter_keeps_mutating_tools() {
+        let registry = create_test_registry();
+        let builder = SubagentBuilder::new(registry, "/tmp");
+
+        let filtered = builder.filter_tools(
+            &Some(vec!["file_read".to_string(), "file_write".to_string()]),
+            false,
+        );
+
+        assert!(filtered.get("file_read").unwrap().is_some());
+        assert!(filtered.get("file_write").unwrap().is_some());
+    }
+
+    #[test]
+    fn test_is_mutating_tool_recognizes_variants() {
+        assert!(is_mutating_tool("file_write"));
+        assert!(is_mutating_tool("File_Write"));
+        assert!(is_mutating_tool("bash"));
+        assert!(is_mutating_tool("shell"));
+        assert!(!is_mutating_tool("file_read"));
+        assert!(!is_mutating_tool("glob"));
     }
 }

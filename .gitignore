@@ -1,5 +1,6 @@
 /target
 /.archive/
+/.venv/
 *.db
 *.db-journal
 *.log

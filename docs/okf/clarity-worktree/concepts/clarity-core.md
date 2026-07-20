@@ -3,8 +3,8 @@ id: clarity-core
 name: clarity-core
 type: core
 layer: kernel
-depends_on: ["clarity-contract", "clarity-wire", "clarity-memory", "clarity-mcp", "clarity-llm", "clarity-tools", "clarity-channels", "clarity-secrets", "clarity-thread-store"]
-consumed_by: ["clarity-gateway", "clarity-egui", "clarity-tui", "clarity-claw", "clarity-headless", "clarity-mobile-core", "clarity-subagents", "clarity-telemetry"]
+depends_on: ["clarity-contract", "clarity-wire", "clarity-memory", "clarity-knowledge", "clarity-mcp", "clarity-llm", "clarity-tools", "clarity-channels", "clarity-secrets", "clarity-thread-store"]
+consumed_by: ["clarity-gateway", "clarity-egui", "clarity-tui", "clarity-claw", "clarity-headless", "clarity-mobile-core", "clarity-subagents", "clarity-telemetry", "clarity-anthropic-proxy"]
 ---
 
 # clarity-core

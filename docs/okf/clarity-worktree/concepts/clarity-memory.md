@@ -4,7 +4,7 @@ name: clarity-memory
 type: memory
 layer: infrastructure
 depends_on: ["clarity-contract"]
-consumed_by: ["clarity-core", "clarity-gateway", "clarity-mobile-core"]
+consumed_by: ["clarity-core", "clarity-gateway", "clarity-mobile-core", "clarity-knowledge"]
 ---
 
 # clarity-memory

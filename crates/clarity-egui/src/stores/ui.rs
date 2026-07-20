@@ -75,6 +75,8 @@ pub struct UiStore {
     pub history_search: String,
     /// `#` context picker state for quick-add context injection.
     pub context_picker_state: crate::widgets::context_picker::ContextPickerState,
+    /// `/` plugin picker state for invoking skills, tools, and actions.
+    pub plugin_picker_state: crate::widgets::plugin_picker::PluginPickerState,
     /// Pretext PoC: whether the text-measurement probe window is open.
     pub pretext_probe_open: bool,
     /// Pretext PoC: wrap-preview max width in the probe window.
@@ -88,6 +90,11 @@ pub struct UiStore {
     pub last_claw_error: Option<(String, Instant)>,
     /// Input buffer for the role-context E2EE passphrase in the Claw settings panel.
     pub claw_role_passphrase_input: String,
+    /// Dock state for the IDE-style right rail tabs.
+    pub right_rail_dock: egui_dock::DockState<crate::panels::right_ide_panel::RightRailTab>,
+    /// Set by `egui_dock` when the user closes the active or last right-rail tab.
+    /// Consumed after rendering to hide the rail.
+    pub right_rail_tab_close_hide_requested: bool,
 }
 
 impl Default for UiStore {
@@ -123,12 +130,17 @@ impl Default for UiStore {
             claw_gateway_session_id: String::new(),
             history_search: String::new(),
             context_picker_state: crate::widgets::context_picker::ContextPickerState::default(),
+            plugin_picker_state: crate::widgets::plugin_picker::PluginPickerState::default(),
             pretext_probe_open: false,
             pretext_probe_wrap_width: 400.0,
             pretext_estimate_enabled: true,
             claw_connect_backoff: HashMap::new(),
             last_claw_error: None,
             claw_role_passphrase_input: String::new(),
+            right_rail_dock: egui_dock::DockState::new(vec![
+                crate::panels::right_ide_panel::RightRailTab::Files,
+            ]),
+            right_rail_tab_close_hide_requested: false,
         }
     }
 }

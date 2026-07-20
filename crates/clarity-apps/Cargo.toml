@@ -1,0 +1,28 @@
+[package]
+name = "clarity-apps"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Clarity sub-applications: Chat, Settings, Dashboard, etc."
+
+[dependencies]
+egui = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+rfd = "0.15"
+uuid = { workspace = true }
+
+clarity-contract = { path = "../clarity-contract" }
+clarity-core = { path = "../clarity-core" }
+clarity-ui = { path = "../clarity-ui" }
+clarity-shell = { path = "../clarity-shell" }
+clarity-llm = { path = "../clarity-llm" }
+
+[lints]
+workspace = true

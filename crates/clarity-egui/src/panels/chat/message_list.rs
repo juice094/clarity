@@ -1,7 +1,11 @@
 use crate::App;
+use crate::design_system;
+use crate::stores::SessionStore;
 use crate::theme::Theme;
 use crate::ui;
 use crate::ui::types::Role;
+use clarity_ui::widgets::icon_button::icon_button_toolbar_colored;
+use clarity_ui::widgets::text_input::TextInput;
 
 /// Actions detected during the render pass that must be applied after the
 /// `session` mutable borrow is released.
@@ -62,83 +66,11 @@ impl VirtualWindow {
     }
 }
 
-/// Render the action bar below a user message bubble (edit + copy buttons).
-/// Returns the actions the caller should dispatch after releasing borrows.
-#[allow(dead_code)]
-fn render_user_action_bar(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    msg_idx: usize,
-    pending: &mut PendingActions,
-) {
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            crate::design_system::gap(ui, crate::design_system::Space::S1);
-            let edit_btn = egui::Button::new(
-                egui::RichText::new(crate::theme::ICON_EDIT)
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.text_muted),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                pending.edit_idx = Some(msg_idx);
-            }
-            ui.add_space(4.0);
-            let copy_btn = egui::Button::new(
-                egui::RichText::new(crate::theme::ICON_COPY)
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.text_muted),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                pending.copy_content = Some(String::new()); // placeholder, filled by caller
-            }
-        });
-    });
-}
-
-/// Render the action bar below an agent turn (regenerate + copy buttons).
-#[allow(dead_code)]
-fn render_agent_action_bar(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    unit_start: usize,
-    pending: &mut PendingActions,
-) {
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            crate::design_system::gap(ui, crate::design_system::Space::S1);
-            let regen_btn = egui::Button::new(
-                egui::RichText::new(crate::theme::ICON_REFRESH)
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.text_muted),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-            if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
-                pending.regenerate_idx = Some(unit_start);
-            }
-            ui.add_space(4.0);
-            let copy_btn = egui::Button::new(
-                egui::RichText::new(crate::theme::ICON_COPY)
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.text_muted),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                pending.copy_content = Some(String::new()); // placeholder, filled by caller
-            }
-        });
-    });
-}
-
 /// Compute per-unit height estimates for the virtual list.
 ///
 /// Takes individual slices rather than `&Session` so the caller can split
 /// immutable (`messages`) and mutable (`turn_heights`) borrows across slices.
+#[allow(clippy::too_many_arguments)]
 fn compute_unit_estimates(
     messages: &[crate::ui::types::Message],
     units: &[RenderUnit],
@@ -147,366 +79,185 @@ fn compute_unit_estimates(
     theme: &Theme,
     metrics: &crate::pretext::EguiFontMetrics,
     turn_heights: &mut [Option<f32>],
-) -> Vec<f32> {
-    units
-        .iter()
-        .enumerate()
-        .map(|(i, u)| {
-            let editing = editing_idx == Some(u.start);
-            if u.is_user {
-                let bubble_h = messages[u.start].cached_height.unwrap_or_else(|| {
-                    crate::ui::render::estimate_height(&messages[u.start], max_w, theme, metrics)
-                });
-                if editing {
-                    bubble_h + 80.0
-                } else {
-                    bubble_h + 28.0
-                }
+    turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
+    out: &mut Vec<f32>,
+) {
+    // Keep this in sync with `estimate_total_height` so the virtual window and
+    // the ScrollArea stick-to-bottom math agree.
+    let action_gap_h = theme.space_24 + theme.space_8;
+    out.clear();
+    out.extend(units.iter().enumerate().map(|(i, u)| {
+        let editing = editing_idx == Some(u.start);
+        if u.is_user {
+            let bubble_h = messages[u.start].cached_height.unwrap_or_else(|| {
+                crate::ui::render::estimate_height(&messages[u.start], max_w, theme, metrics)
+            });
+            if editing {
+                bubble_h + 80.0
             } else {
-                let cached = turn_heights.get(i).copied().flatten();
-                cached.unwrap_or_else(|| {
-                    let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                        &messages[u.start..u.end],
-                    );
-                    turn.estimate_height(max_w, theme, metrics)
-                }) + 28.0
+                bubble_h + action_gap_h
             }
-        })
-        .collect()
+        } else {
+            let cached = turn_heights.get(i).copied().flatten();
+            cached.unwrap_or_else(|| {
+                let turn = turn_cache[i].get_or_insert_with(|| {
+                    crate::components::agent_turn::AgentTurn::from_messages(
+                        &messages[u.start..u.end],
+                    )
+                });
+                turn.estimate_height(max_w, theme, metrics)
+            }) + action_gap_h
+        }
+    }));
 }
 
 /// Renders the message list UI.
-pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
-    let available_height = ui.available_height();
-    let is_loading = app.view_state.turn == clarity_core::ui::TurnState::Loading;
-    let theme = app.ui_store.theme.clone();
-    // The parent (ScrollArea) already constrains the content column width.
-    // Use the actual available width so cached heights and estimates stay
-    // consistent when the window is narrower than `content_max_width`.
+///
+/// `theme` is passed by reference so the hot path avoids cloning the whole
+/// `Theme` every frame.
+pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
+    let turn_state = app.view_state.turn;
+    let is_loading = turn_state == clarity_core::ui::TurnState::Loading;
     let max_w = ui.available_width();
-    let active_id = app.session_store.active_session_id.clone();
-    let scroll_y = app.ui_store.last_scroll_offset;
-    let pretext_enabled = app.ui_store.pretext_estimate_enabled;
-    let pretext_metrics = app.pretext_metrics.clone();
-    let metrics = &pretext_metrics;
-    let render_metrics = pretext_enabled.then_some(metrics);
+    let active_id = app.context.session_store.active_session_id.clone();
+    let pretext_enabled = app.context.ui_store.pretext_estimate_enabled;
+    let metrics = app.pretext_metrics.clone();
+    let render_metrics = pretext_enabled.then_some(&metrics);
     #[cfg(feature = "line-mode")]
-    let line_cursor_selected = app.ui_store.line_cursor_selected;
+    let line_cursor_selected = app.context.ui_store.line_cursor_selected;
     #[cfg(not(feature = "line-mode"))]
     let line_cursor_selected: Option<usize> = None;
 
-    // Pre-calculate content height to avoid stick-to-bottom when messages are short
-    let total_estimated: f32 = if let Some(session) = app
-        .session_store
-        .sessions
-        .iter()
-        .find(|s| s.id == active_id)
-    {
-        if session.messages.is_empty() && !is_loading {
-            0.0
-        } else {
-            let typing_h = if is_loading
-                && session.messages.last().is_none_or(|m| m.role == Role::User)
-                && app.chat_store.tool_calls.is_empty()
-            {
-                60.0
-            } else {
-                0.0
-            };
-            let units = aggregate_turns(&session.messages);
-            let estimates: Vec<f32> = units
-                .iter()
-                .enumerate()
-                .map(|(i, u)| {
-                    let editing = app.chat_store.editing_message_idx == Some(u.start);
-                    if u.is_user {
-                        let bubble_h =
-                            session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                ui::render::estimate_height(
-                                    &session.messages[u.start],
-                                    max_w,
-                                    &theme,
-                                    metrics,
-                                )
-                            });
-                        if editing {
-                            bubble_h + 80.0 // approximate edit controls height
-                        } else {
-                            bubble_h + 28.0 // action bar
-                        }
-                    } else {
-                        session
-                            .turn_heights
-                            .get(i)
-                            .copied()
-                            .flatten()
-                            .unwrap_or_else(|| {
-                                let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                                    &session.messages[u.start..u.end],
-                                );
-                                turn.estimate_height(max_w, &theme, metrics)
-                            })
-                            + 28.0 // action bar
-                    }
-                })
-                .collect();
-            estimates.iter().sum::<f32>() + typing_h
-        }
-    } else {
-        0.0
-    };
-    let _should_stick = app.chat_store.stick_to_bottom && total_estimated >= available_height;
-
-    let mut scroll_up = false;
-    // The ScrollArea has been moved up to `chat/mod.rs::render_chat_area` so
-    // the scrollbar rides the right edge of the full chat_content area (Kimi
-    // style). This function receives the already-scrollable inner Ui.
+    let available_height = ui.available_height();
+    let scroll_y = app.context.ui_store.last_scroll_offset;
     let mut pending = PendingActions::default();
 
-    if let Some(session) = app
-        .session_store
-        .sessions
-        .iter_mut()
-        .find(|s| s.id == active_id)
     {
-        #[cfg(feature = "line-mode")]
-        let msg_line_offsets: Vec<usize> = {
-            let mut v = Vec::with_capacity(session.messages.len());
-            let mut acc = 0;
-            for msg in &session.messages {
-                v.push(acc);
-                acc += msg.lines.len();
+        let (session_store, chat_store) = app.chat_session_both_mut();
+        let SessionStore {
+            sessions,
+            turn_cache,
+            ..
+        } = session_store;
+        let cache = turn_cache.entry(active_id.clone()).or_default();
+        if let Some(session) = sessions.iter_mut().find(|s| s.id == active_id) {
+            #[cfg(feature = "line-mode")]
+            {
+                session.line_offset_buffer.clear();
+                let mut acc = 0;
+                for msg in &session.messages {
+                    session.line_offset_buffer.push(acc);
+                    acc += msg.lines.len();
+                }
+                app.context.ui_store.line_cursor_total_lines = acc;
             }
-            app.ui_store.line_cursor_total_lines = acc;
-            v
-        };
-        #[cfg(not(feature = "line-mode"))]
-        let msg_line_offsets: Vec<usize> = Vec::new();
+            #[cfg(not(feature = "line-mode"))]
+            session.line_offset_buffer.clear();
 
-        // Phase 1 pretext PoC: pre-populate cached heights with pretext
-        // measurements so the virtual list and stick-to-bottom use stable
-        // first-frame estimates.
-        for m in &mut session.messages {
-            if m.cached_height.is_none() {
-                m.cached_height = Some(crate::ui::render::estimate_height(
-                    m, max_w, &theme, metrics,
-                ));
+            // Phase 1 pretext PoC: pre-populate cached heights with pretext
+            // measurements so the virtual list and stick-to-bottom use stable
+            // first-frame estimates.
+            for m in &mut session.messages {
+                if m.cached_height.is_none() {
+                    m.cached_height = Some(crate::ui::render::estimate_height(
+                        m, max_w, theme, &metrics,
+                    ));
+                }
             }
-        }
 
-        if session.messages.is_empty() && !is_loading {
-            // Empty state is rendered by `render_chat_area` so the composer is
-            // centered vertically instead of pinned to the bottom.
-            return;
-        }
+            if session.messages.is_empty() && !is_loading {
+                // Empty state is rendered by `ChatApp::render` so the composer is
+                // centered vertically instead of pinned to the bottom.
+                return;
+            }
 
-        // --- AgentTurn aggregation mode (single unified path) ---
-        let units = aggregate_turns(&session.messages);
-        if session.turn_heights.len() < units.len() {
-            session.turn_heights.resize(units.len(), None);
-        }
+            let units = aggregate_turns(&session.messages);
+            if session.turn_heights.len() < units.len() {
+                session.turn_heights.resize(units.len(), None);
+            }
+            cache.resize(units.len(), None);
+            if !units.is_empty() {
+                // Only invalidate the last agent turn while a turn is actively
+                // streaming/generating. When idle the content is stable, so
+                // keeping the cached AgentTurn avoids rebuilding it every frame.
+                let last_idx = units.len() - 1;
+                let turn_active = !matches!(turn_state, clarity_core::ui::TurnState::Idle);
+                if turn_active && !units[last_idx].is_user {
+                    cache[last_idx] = None;
+                }
+            }
 
-        let estimates = compute_unit_estimates(
-            &session.messages,
-            &units,
-            app.chat_store.editing_message_idx,
-            max_w,
-            &theme,
-            metrics,
-            &mut session.turn_heights,
-        );
+            let editing_idx = chat_store.editing_message_idx;
+            compute_unit_estimates(
+                &session.messages,
+                &units,
+                editing_idx,
+                max_w,
+                theme,
+                &metrics,
+                &mut session.turn_heights,
+                cache,
+                &mut session.estimate_buffer,
+            );
+            let win = VirtualWindow::compute(&session.estimate_buffer, scroll_y, available_height);
 
-        let win = VirtualWindow::compute(&estimates, scroll_y, available_height);
-
-        {
-            let top = win.top_spacer(&estimates);
+            let top = win.top_spacer(&session.estimate_buffer);
             if top > 0.0 {
                 ui.allocate_space(egui::vec2(ui.available_width(), top));
             }
-        }
 
-        for (i, unit) in units
-            .iter()
-            .enumerate()
-            .skip(win.start_idx)
-            .take(win.end_idx - win.start_idx)
-        {
-            if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
-                continue;
-            }
-            if unit.is_user {
-                let editing = app.chat_store.editing_message_idx == Some(unit.start);
-                let bubble_h = if editing {
-                    let (h, save, cancel) =
-                        render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
-                    if save {
-                        pending.save_edit = true;
-                    }
-                    if cancel {
-                        pending.cancel_edit = true;
-                    }
-                    h
-                } else {
-                    let sel = line_cursor_selected.and_then(|g| {
-                        let start = msg_line_offsets[unit.start];
-                        let end = start + session.messages[unit.start].lines.len();
-                        if g >= start && g < end {
-                            Some(g - start)
-                        } else {
-                            None
-                        }
-                    });
-                    ui::render::message_bubble(
-                        ui,
-                        &session.messages[unit.start],
-                        &theme,
-                        true,
-                        unit.start,
-                        &mut pending.retry_error_idx,
-                        &mut pending.switch_model,
-                        sel,
-                        render_metrics,
-                    )
-                };
-                session.messages[unit.start].cached_height = Some(bubble_h);
+            let tool_calls_empty = chat_store.tool_calls.is_empty();
+            let edit_buffer = &mut chat_store.edit_buffer;
+            let status_message = chat_store.status_message.as_deref().unwrap_or("");
 
-                if !editing {
-                    ui.horizontal(|ui| {
-                        if let Some(msg) = session.messages.get(unit.start) {
-                            if let Some(ts) = format_relative_time(msg.timestamp) {
-                                ui.label(
-                                    egui::RichText::new(ts)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                );
-                            }
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            crate::design_system::gap(ui, crate::design_system::Space::S1);
-                            let edit_btn = egui::Button::new(
-                                egui::RichText::new(crate::theme::ICON_EDIT)
-                                    .font(theme.font_icon(theme.text_sm))
-                                    .color(theme.text_muted),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                                pending.edit_idx = Some(unit.start);
-                            }
-                            ui.add_space(4.0);
-                            let copy_btn = egui::Button::new(
-                                egui::RichText::new(crate::theme::ICON_COPY)
-                                    .font(theme.font_icon(theme.text_sm))
-                                    .color(theme.text_muted),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                if let Some(msg) = session.messages.get(unit.start) {
-                                    ui.ctx().copy_text(msg.content.clone());
-                                    pending.copy_content = Some(msg.content.clone());
-                                }
-                            }
-                        });
-                    });
-                    crate::design_system::gap(ui, crate::design_system::Space::S1);
+            for (i, unit) in units
+                .iter()
+                .enumerate()
+                .skip(win.start_idx)
+                .take(win.end_idx - win.start_idx)
+            {
+                if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
+                    continue;
                 }
-            } else {
-                let mut turn = crate::components::agent_turn::AgentTurn::from_messages(
-                    &session.messages[unit.start..unit.end],
+                render_unit(
+                    ui,
+                    session,
+                    unit,
+                    i,
+                    theme,
+                    editing_idx,
+                    edit_buffer,
+                    line_cursor_selected,
+                    render_metrics,
+                    cache,
+                    &mut pending,
                 );
-                let bubble_h =
-                    crate::render::turn_renderer::render_agent_turn(ui, &mut turn, &theme, i);
-                session.turn_heights[i] = Some(bubble_h);
-
-                ui.horizontal(|ui| {
-                    if let Some(msg) = session.messages.get(unit.start) {
-                        if let Some(ts) = format_relative_time(msg.timestamp) {
-                            ui.label(
-                                egui::RichText::new(ts)
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            );
-                        }
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        crate::design_system::gap(ui, crate::design_system::Space::S1);
-                        let regen_btn = egui::Button::new(
-                            egui::RichText::new(crate::theme::ICON_REFRESH)
-                                .font(theme.font_icon(theme.text_sm))
-                                .color(theme.text_muted),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
-                            pending.regenerate_idx = Some(unit.start);
-                        }
-                        ui.add_space(4.0);
-                        let copy_btn = egui::Button::new(
-                            egui::RichText::new(crate::theme::ICON_COPY)
-                                .font(theme.font_icon(theme.text_sm))
-                                .color(theme.text_muted),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                            let content: String = session.messages[unit.start..unit.end]
-                                .iter()
-                                .map(|m| m.content.as_str())
-                                .collect::<Vec<_>>()
-                                .join("\n\n");
-                            ui.ctx().copy_text(content.clone());
-                            pending.copy_content = Some(content);
-                        }
-                    });
-                });
-                crate::design_system::gap(ui, crate::design_system::Space::S1);
             }
-        }
 
-        {
-            let bottom = win.bottom_spacer(&estimates);
+            let bottom = win.bottom_spacer(&session.estimate_buffer);
             if bottom > 0.0 {
                 ui.allocate_space(egui::vec2(ui.available_width(), bottom));
             }
-        }
 
-        // Always show a transient status message while the agent is working,
-        // even when tool calls are in flight (StepBegin / StatusUpdate).
-        if is_loading && app.chat_store.status_message.is_some() {
-            crate::widgets::status_message::status_message(
-                ui,
-                &theme,
-                app.chat_store.status_message.as_deref().unwrap_or(""),
-            );
-        }
-
-        if is_loading
-            && session.messages.last().is_none_or(|m| m.role == Role::User)
-            && app.chat_store.tool_calls.is_empty()
-        {
-            // Prefer the new draft indicator when the backend has emitted one.
-            // Falls back to the legacy typing indicator so the UI never goes blank.
-            let rendered = crate::widgets::draft_indicator::draft_indicator(
-                ui,
-                &theme,
-                &app.chat_store.draft_status,
-            );
-            if !rendered {
-                ui::render::typing_indicator(ui, &theme);
+            if is_loading && !status_message.is_empty() {
+                crate::widgets::status_message::status_message(ui, theme, status_message);
             }
-        }
-    }
-    // Detect user scroll-up intent to release stick-to-bottom.
-    ui.input(|i| {
-        for event in &i.events {
-            if let egui::Event::MouseWheel { delta, .. } = event {
-                if delta.y > 0.0 {
-                    scroll_up = true;
+
+            if is_loading
+                && session.messages.last().is_none_or(|m| m.role == Role::User)
+                && tool_calls_empty
+            {
+                let rendered = crate::widgets::draft_indicator::draft_indicator(
+                    ui,
+                    theme,
+                    &chat_store.draft_status,
+                );
+                if !rendered {
+                    ui::render::typing_indicator(ui, theme);
                 }
             }
         }
-    });
+    }
 
     if pending.save_edit {
         app.commit_edit();
@@ -524,37 +275,36 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         app.regenerate(idx);
     }
     if pending.switch_model {
-        app.view_state.main = clarity_core::ui::AppView::Settings;
+        app.navigate(clarity_core::ui::AppView::Settings.into());
     }
     if pending.copy_content.is_some() {
         app.push_toast("Copied to clipboard", crate::ui::types::ToastLevel::Info);
-    }
-
-    if scroll_up {
-        app.chat_store.stick_to_bottom = false;
     }
 }
 
 /// Estimate the total rendered height of the message list content, including
 /// inter-unit spacing and the typing indicator, without doing any actual layout.
 ///
-/// This is used by `render_chat_area` to decide whether the conversation is
+/// This is used by `ChatApp::render` to decide whether the conversation is
 /// tall enough to need a scrollable area. It intentionally uses only the
 /// current-width estimate so that cached heights from previous frames do not
 /// inflate the value after a resize.
-pub fn estimate_total_height(app: &crate::App, content_max_width: f32) -> f32 {
+pub fn estimate_total_height(app: &mut crate::App, content_max_width: f32, theme: &Theme) -> f32 {
     let max_w = content_max_width;
-    let theme = app.ui_store.theme.clone();
     let metrics = &app.pretext_metrics;
     let is_loading = app.view_state.turn == clarity_core::ui::TurnState::Loading;
-    let active_id = app.session_store.active_session_id.clone();
+    let active_id = app.context.session_store.active_session_id.clone();
+    let editing_idx = app.chat_store().editing_message_idx;
+    let tool_calls_empty = app.chat_store().tool_calls.is_empty();
 
-    let Some(session) = app
-        .session_store
-        .sessions
-        .iter()
-        .find(|s| s.id == active_id)
-    else {
+    let session_store = &mut app.context.session_store;
+    let SessionStore {
+        sessions,
+        turn_cache,
+        ..
+    } = session_store;
+    let cache = turn_cache.entry(active_id.clone()).or_default();
+    let Some(session) = sessions.iter_mut().find(|s| s.id == active_id) else {
         return 0.0;
     };
     if session.messages.is_empty() && !is_loading {
@@ -562,40 +312,79 @@ pub fn estimate_total_height(app: &crate::App, content_max_width: f32) -> f32 {
     }
 
     let units = aggregate_turns(&session.messages);
+    cache.resize(units.len(), None);
+    if !units.is_empty() {
+        let last_idx = units.len() - 1;
+        let turn_active = !matches!(app.view_state.turn, clarity_core::ui::TurnState::Idle);
+        if turn_active && !units[last_idx].is_user {
+            cache[last_idx] = None;
+        }
+    }
+
+    // ponytail: cache the total height estimate across frames when the
+    // conversation is idle. Streaming/content changes invalidate via the key.
+    let turn_state = app.view_state.turn;
+    let estimate_key = (units.len(), max_w, editing_idx, turn_state);
+    if matches!(turn_state, clarity_core::ui::TurnState::Idle)
+        && session.estimate_key == Some(estimate_key)
+    {
+        return session.cached_total_height.unwrap_or(0.0);
+    }
+
     let mut total = 0.0_f32;
-    for u in units.iter() {
-        let editing = app.chat_store.editing_message_idx == Some(u.start);
-        let h = if u.is_user {
+    // ponytail: prefer cached rendered heights. The cold-path estimator
+    // systematically overestimates (action-bar + inter-unit spacing), which
+    // inflates max_scroll and scrolls the conversation above the viewport.
+    let action_gap_h = theme.space_24 + theme.space_8;
+    for (i, u) in units.iter().enumerate() {
+        let editing = editing_idx == Some(u.start);
+        let cached = if u.is_user {
+            session.messages[u.start].cached_height
+        } else {
+            session.turn_heights.get(i).copied().flatten()
+        };
+        let h = if let Some(bubble_h) = cached {
+            if editing {
+                bubble_h + 80.0
+            } else {
+                bubble_h + action_gap_h
+            }
+        } else if u.is_user {
             let bubble_h = crate::ui::render::estimate_height(
                 &session.messages[u.start],
                 max_w,
-                &theme,
+                theme,
                 metrics,
             );
             if editing {
                 bubble_h + 80.0
             } else {
-                bubble_h + 28.0
+                bubble_h + action_gap_h
             }
         } else {
-            let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                &session.messages[u.start..u.end],
-            );
-            let turn_h = turn.estimate_height(max_w, &theme, metrics);
-            turn_h + 28.0
+            let turn = cache[i].get_or_insert_with(|| {
+                crate::components::agent_turn::AgentTurn::from_messages(
+                    &session.messages[u.start..u.end],
+                )
+            });
+            let turn_h = turn.estimate_height(max_w, theme, metrics);
+            turn_h + action_gap_h
         };
         total += h;
     }
-    // Each unit adds `space_8` before the action bar and `space_8` after it.
-    // The +28 action-bar height is already included in the per-unit estimate.
-    total += units.len() as f32 * theme.space_8 * 2.0;
 
     if is_loading
         && session.messages.last().is_none_or(|m| m.role == Role::User)
-        && app.chat_store.tool_calls.is_empty()
+        && tool_calls_empty
     {
         total += 60.0;
     }
+
+    if matches!(turn_state, clarity_core::ui::TurnState::Idle) {
+        session.estimate_key = Some(estimate_key);
+        session.cached_total_height = Some(total);
+    }
+
     total
 }
 
@@ -637,6 +426,184 @@ fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
     units
 }
 
+/// Render a single aggregated unit inside the virtual list.
+#[allow(clippy::too_many_arguments)]
+fn render_unit(
+    ui: &mut egui::Ui,
+    session: &mut crate::ui::types::Session,
+    unit: &RenderUnit,
+    unit_index: usize,
+    theme: &Theme,
+    editing_idx: Option<usize>,
+    edit_buffer: &mut String,
+    line_cursor_selected: Option<usize>,
+    render_metrics: Option<&crate::pretext::EguiFontMetrics>,
+    turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
+    pending: &mut PendingActions,
+) {
+    let editing = editing_idx == Some(unit.start);
+    if unit.is_user {
+        let bubble_h = if editing {
+            let (h, save, cancel) = render_edit_bubble(ui, edit_buffer, theme);
+            if save {
+                pending.save_edit = true;
+            }
+            if cancel {
+                pending.cancel_edit = true;
+            }
+            h
+        } else {
+            let sel = line_cursor_selected.and_then(|g| {
+                let start = session.line_offset_buffer[unit.start];
+                let end = start + session.messages[unit.start].lines.len();
+                if g >= start && g < end {
+                    Some(g - start)
+                } else {
+                    None
+                }
+            });
+            ui::render::message_bubble(
+                ui,
+                &session.messages[unit.start],
+                theme,
+                true,
+                unit.start,
+                &mut pending.retry_error_idx,
+                &mut pending.switch_model,
+                sel,
+                render_metrics,
+            )
+        };
+        session.messages[unit.start].cached_height = Some(bubble_h);
+
+        if !editing {
+            render_message_actions(ui, theme, unit, session, pending, true);
+        }
+    } else {
+        let bubble_h = {
+            let turn = turn_cache[unit_index].get_or_insert_with(|| {
+                crate::components::agent_turn::AgentTurn::from_messages(
+                    &session.messages[unit.start..unit.end],
+                )
+            });
+            crate::render::turn_renderer::render_agent_turn(ui, turn, theme, unit_index)
+        };
+        session.turn_heights[unit_index] = Some(bubble_h);
+
+        render_message_actions(ui, theme, unit, session, pending, false);
+    }
+}
+
+/// Render a lightweight action/meta row beneath a message.
+///
+/// User messages get [Edit | Copy]; agent messages get [Copy | Regenerate].
+/// Timestamp is shown only when the message is older than a minute, in the
+/// smallest/dimmest caption style so it does not compete with content.
+fn render_message_actions(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    unit: &RenderUnit,
+    session: &crate::ui::types::Session,
+    pending: &mut PendingActions,
+    is_user: bool,
+) {
+    let row_id = ui.id().with(unit.start).with("msg_actions");
+    let hovered = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(row_id))
+        .unwrap_or(false);
+
+    let row_response = ui.horizontal(|ui| {
+        ui.set_min_height(theme.space_20);
+        // Timestamp on the left, very subtle.
+        if let Some(msg) = session.messages.get(unit.start) {
+            if let Some(ts) = format_relative_time(msg.timestamp) {
+                design_system::text_with_size_color(ui, ts, theme.text_xs, theme.text_dim);
+            } else {
+                // Occupies the same vertical space so the row height is stable.
+                ui.add_space(theme.text_xs);
+            }
+        }
+
+        // Action icons on the right; only visible on hover to keep the
+        // conversation clean. They remain allocated so text does not jump.
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let icon_alpha = if hovered { 1.0 } else { 0.0 };
+            let action_color = theme.text_dim.linear_multiply(icon_alpha);
+            if is_user {
+                if icon_button_toolbar_colored(
+                    ui,
+                    crate::theme::ICON_COPY,
+                    theme.text_xs,
+                    action_color,
+                    theme,
+                )
+                .on_hover_text("Copy")
+                .clicked()
+                {
+                    if let Some(msg) = session.messages.get(unit.start) {
+                        ui.ctx().copy_text(msg.content.clone());
+                        pending.copy_content = Some(msg.content.clone());
+                    }
+                }
+                ui.add_space(4.0);
+                if icon_button_toolbar_colored(
+                    ui,
+                    crate::theme::ICON_EDIT,
+                    theme.text_xs,
+                    action_color,
+                    theme,
+                )
+                .on_hover_text("Edit")
+                .clicked()
+                {
+                    pending.edit_idx = Some(unit.start);
+                }
+            } else {
+                if icon_button_toolbar_colored(
+                    ui,
+                    crate::theme::ICON_REFRESH,
+                    theme.text_xs,
+                    action_color,
+                    theme,
+                )
+                .on_hover_text("Regenerate")
+                .clicked()
+                {
+                    pending.regenerate_idx = Some(unit.start);
+                }
+                ui.add_space(4.0);
+                if icon_button_toolbar_colored(
+                    ui,
+                    crate::theme::ICON_COPY,
+                    theme.text_xs,
+                    action_color,
+                    theme,
+                )
+                .on_hover_text("Copy")
+                .clicked()
+                {
+                    let content: String = session.messages[unit.start..unit.end]
+                        .iter()
+                        .map(|m| m.content.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n\n");
+                    ui.ctx().copy_text(content.clone());
+                    pending.copy_content = Some(content);
+                }
+            }
+        });
+    });
+
+    // Persist hover state for the row so the icons fade in/out smoothly.
+    // (The row itself spans the full width, so hovering anywhere over the
+    // meta row reveals the actions.)
+    let is_hovered = row_response.response.hovered();
+    ui.ctx().data_mut(|d| d.insert_temp(row_id, is_hovered));
+
+    design_system::gap(ui, design_system::Space::S1);
+}
+
 // ============================================================================
 // Inline edit bubble
 // ============================================================================
@@ -649,7 +616,8 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
 
     ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
         ui.set_max_width(max_width);
-        egui::Frame::new()
+        clarity_ui::design_system::Elevation::Elevated
+            .frame(theme)
             .fill(theme.user_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .inner_margin(egui::Margin::symmetric(18, 14))
@@ -657,16 +625,15 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.set_min_width(48.0);
                     ui.add(
-                        egui::TextEdit::multiline(buffer)
-                            .desired_width(ui.available_width())
-                            .desired_rows(3)
-                            .font(theme.font(theme.text_base))
-                            .text_color(theme.text_strong),
+                        TextInput::multiline(buffer)
+                            .transparent()
+                            .width(ui.available_width())
+                            .desired_rows(3),
                     );
                 });
             });
     });
-    crate::design_system::gap(ui, crate::design_system::Space::S1);
+    design_system::gap(ui, design_system::Space::S1);
 
     let mut save_clicked = false;
     let mut cancel_clicked = false;
@@ -678,7 +645,7 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
             cancel_clicked = true;
         }
     });
-    crate::design_system::gap(ui, crate::design_system::Space::S3);
+    design_system::gap(ui, design_system::Space::S3);
 
     (ui.cursor().min.y - start_y, save_clicked, cancel_clicked)
 }
@@ -699,5 +666,110 @@ fn format_relative_time(instant: std::time::Instant) -> Option<String> {
         Some(format!("{}h ago", elapsed / 3600))
     } else {
         Some(format!("{}d ago", elapsed / 86400))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::types::{ContentBlock, Message, Role, SessionContext};
+
+    fn make_message(role: Role, content: &str) -> Message {
+        let mut msg = Message {
+            role,
+            content: content.to_string(),
+            blocks: vec![ContentBlock::Text {
+                text: content.to_string(),
+            }],
+            timestamp: std::time::Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+            lines: vec![],
+        };
+        msg.prepare();
+        msg
+    }
+
+    #[test]
+    fn estimate_total_height_caches_when_idle() {
+        let egui_ctx = egui::Context::default();
+        let mut app = crate::apps::test_app(&egui_ctx);
+        let mut session = crate::session::new_session(0, SessionContext::Chat);
+        session.id = "cache-test".to_string();
+        session.messages.push(make_message(
+            Role::Agent,
+            "This is a stable agent turn used for cache validation.",
+        ));
+        app.context.session_store.sessions.push(session);
+        app.context.session_store.active_session_id = "cache-test".to_string();
+        app.view_state.turn = clarity_core::ui::TurnState::Idle;
+
+        let theme = app.context.ui_store.theme.clone();
+        let mut first = 0.0_f32;
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            first = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        assert!(first > 0.0, "height should be positive");
+
+        let session = app
+            .context
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == "cache-test")
+            .expect("session exists");
+        assert!(
+            session.estimate_key.is_some(),
+            "estimate key should be populated after idle estimate"
+        );
+        assert_eq!(
+            session.cached_total_height,
+            Some(first),
+            "cached total height should match first estimate"
+        );
+
+        let mut second = 0.0_f32;
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            second = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        assert_eq!(
+            first, second,
+            "second estimate should return the cached value"
+        );
+    }
+
+    #[test]
+    fn estimate_total_height_invalidates_cache_when_turn_active() {
+        let egui_ctx = egui::Context::default();
+        let mut app = crate::apps::test_app(&egui_ctx);
+        let mut session = crate::session::new_session(0, SessionContext::Chat);
+        session.id = "active-test".to_string();
+        session.messages.push(make_message(
+            Role::Agent,
+            "This turn is considered active and should not be cached.",
+        ));
+        app.context.session_store.sessions.push(session);
+        app.context.session_store.active_session_id = "active-test".to_string();
+        app.view_state.turn = clarity_core::ui::TurnState::Loading;
+
+        let theme = app.context.ui_store.theme.clone();
+        let mut first = 0.0_f32;
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            first = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        assert!(first > 0.0);
+
+        let session = app
+            .context
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == "active-test")
+            .expect("session exists");
+        assert!(
+            session.estimate_key.is_none(),
+            "estimate key should not be cached while turn is active"
+        );
     }
 }

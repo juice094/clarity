@@ -81,7 +81,11 @@ impl PersistentSessionStore {
         let conn = tokio::task::spawn_blocking(move || -> Result<Connection> {
             let conn = Connection::open(&db_path).map_err(SessionStoreError::Database)?;
             // Enable WAL for concurrent reads and reduced write-lock contention.
-            conn.pragma_update(None, "journal_mode", "WAL")
+            // ponytail: PRAGMA journal_mode returns a result row on some SQLite
+            // builds, so use query_row to consume it instead of execute.
+            conn.query_row("PRAGMA journal_mode=WAL", [], |_| Ok(()))
+                .map_err(SessionStoreError::Database)?;
+            conn.execute_batch("PRAGMA foreign_keys=ON;")
                 .map_err(SessionStoreError::Database)?;
             Ok(conn)
         })
@@ -625,5 +629,16 @@ mod tests {
 
         assert!(!store.session_exists("old").await.unwrap());
         assert!(store.session_exists("recent").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_persistent_store_initializes_without_fallback() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("sessions.db");
+        let store = PersistentSessionStore::new(&db_path).await.unwrap();
+        store.create_session("persistent-1").await.unwrap();
+        let sessions = store.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert!(db_path.exists());
     }
 }

@@ -7,7 +7,13 @@ Clarity 分布式节点（Claw）的 client-side 统一入口：同时提供 UI 
 - **库（lib）**
   - Gateway WebSocket 原生协议客户端
   - OpenClaw / KimiClaw JSON-RPC 兼容层
+    - `openclaw_gateway::client`：带自动重连的 OpenClaw Gateway WebSocket 客户端
+    - `openclaw_gateway::chat`：`chat.send` / `chat.history` / `chat.abort`
+    - `openclaw_gateway::session`：会话列表/预览/重置/删除/压缩
+    - `openclaw_gateway::device`：`device.pair.request` / `device.pair.list`
+    - `openclaw_gateway::kimi_file`：Kimi 文件元数据解析与下载
   - 设备发现、Ed25519 设备身份、配对 token 管理
+  - ACP bridge：将 Kimi 云端 Agent Cloud Proxy 消息桥接到本地 Clarity Gateway 或 OpenClaw 兼容端点（包括 Kimi Desktop 与 `clarity-gateway` 内建的 `ws://127.0.0.1:18790/openclaw/ws`）
   - 角色上下文同步（可选 `mesh` feature，基于 syncthing-rust）
 - **二进制（bin）**
   - 系统托盘常驻节点

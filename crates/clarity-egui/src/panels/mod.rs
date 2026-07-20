@@ -32,5 +32,4 @@ pub use modals::subagent_view;
 pub use modals::task_create;
 pub use modals::task_view;
 pub use modals::team_create;
-pub use system::dashboard;
 pub use system::toast;

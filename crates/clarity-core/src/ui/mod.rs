@@ -6,6 +6,8 @@
 /// Commands module.
 pub mod commands;
 pub mod render_line;
+pub mod route;
+pub mod router;
 pub mod shortcut;
 pub mod view_state;
 
@@ -14,9 +16,11 @@ pub use render_line::{
     ApprovalOption, ArtifactId, BlockId, DiffKind, InstanceId, LineRole, RenderLine, SessionId,
     Span, SpanStyle, StatusKind, ToolStatus, markdown_to_lines, render_line_plain_text,
 };
+pub use route::{BACK_PRIORITY, Route, RouteLayer};
+pub use router::Router;
 pub use shortcut::{KeyEvent, ShortcutBinding, ShortcutRegistry};
 pub use view_state::{
-    AppView, FocusScope, LeftRailSection, ModalType, NewSessionMode, PanelExpansion, PanelKind,
-    RightRailCard, RightRailContext, RightRailPanel, RightRailSection, SidePanel, TurnState,
-    ViewState,
+    AgentMode, AppView, FocusScope, LeftRailSection, ModalType, NewSessionMode, PanelExpansion,
+    PanelKind, RightRailCard, RightRailContext, RightRailPanel, RightRailSection, SidePanel,
+    TurnState, ViewState,
 };

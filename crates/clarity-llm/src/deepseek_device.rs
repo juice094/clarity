@@ -591,7 +591,12 @@ impl DeepSeekDeviceProvider {
             .map_err(|e| AgentError::Llm(format!("chat completion request failed: {}", e)))?;
 
         let status = response.status();
-        debug!("deepseek-device chat_completion response status={}", status);
+        debug!(
+            "deepseek-device chat_completion response status={} prompt_len={} session_id={}",
+            status,
+            prompt.len(),
+            session_id
+        );
         if !status.is_success() {
             let err = response.text().await.unwrap_or_default();
             return Err(AgentError::Llm(format!(
@@ -725,7 +730,22 @@ impl DeepSeekDeviceProvider {
     /// we inject tool descriptions into the prompt itself so the model can
     /// emit XML/JSON tool tags that `clarity_core::agent::tool_parser` will
     /// parse on the way back.
+    ///
+    /// Unlike the earlier implementation that only kept the system prompt and
+    /// the last user message, this version serializes the full non-system
+    /// conversation history (including assistant tool calls and tool results)
+    /// into the prompt so the model can observe the outcome of its own tool
+    /// usage.
     fn build_prompt_with_tools(&self, messages: &[Message], tools: &Value) -> String {
+        // The device endpoint only accepts a single `prompt` string, so the
+        // conversation history grows linearly with the number of turns. Guard
+        // against unbounded request bodies by truncating the oldest non-system
+        // messages while preserving the final user message.
+        let messages = crate::request::truncate_messages_by_bytes(
+            messages,
+            crate::request::MAX_MESSAGE_BODY_BYTES,
+        );
+
         // Cache the tool prompt to avoid ~8K token rebuild per turn.
         let tool_hash = {
             use std::collections::hash_map::DefaultHasher;
@@ -741,60 +761,85 @@ impl DeepSeekDeviceProvider {
             .filter(|(h, _)| *h == tool_hash)
             .map(|(_, text)| text.clone());
 
-        if let Some(cached) = cache_hit {
-            // Use cached tool text, strip any existing markdown section.
-            let system_content = messages
+        let system_content = if let Some(cached) = cache_hit {
+            messages
                 .iter()
                 .find(|m| m.role == MessageRole::System)
                 .map(|m| {
                     let cleaned = crate::tool_payload::strip_markdown_tools_section(&m.content);
                     cleaned + &cached
-                });
-            let user_content = messages
-                .last()
-                .filter(|m| m.role == MessageRole::User)
-                .map(|m| m.content.clone());
-            return match (system_content, user_content) {
-                (Some(s), Some(u)) => format!("{}\n\n{}", s, u),
-                (Some(s), None) => s,
-                (None, Some(u)) => u,
-                (None, None) => String::new(),
-            };
-        }
+                })
+                .unwrap_or_default()
+        } else {
+            // Cold path: compute and cache the tool prompt.
+            let (adapted_messages, _) = crate::tool_payload::adapt_prompt_guided(&messages, tools);
+            // Extract and cache just the tool text for next time.
+            if let Some(cached) = adapted_messages
+                .iter()
+                .find(|m| m.role == MessageRole::System)
+                .and_then(|m| {
+                    // Extract the XML tool section from the adapted system message.
+                    let idx = m.content.find("<tool_description")?;
+                    Some(m.content[idx..].to_string())
+                })
+            {
+                *self.tool_prompt_cache.write() = Some((tool_hash, cached));
+            }
 
-        // Cold path: compute and cache the tool prompt.
-        let (adapted_messages, _) = crate::tool_payload::adapt_prompt_guided(messages, tools);
-        // Extract and cache just the tool text for next time.
-        if let Some(cached) = adapted_messages
-            .iter()
-            .find(|m| m.role == MessageRole::System)
-            .and_then(|m| {
-                // Extract the XML tool section from the adapted system message.
-                let idx = m.content.find("<tool_description")?;
-                Some(m.content[idx..].to_string())
-            })
-        {
-            *self.tool_prompt_cache.write() = Some((tool_hash, cached));
-        }
+            adapted_messages
+                .iter()
+                .find(|m| m.role == MessageRole::System)
+                .map(|m| m.content.clone())
+                .unwrap_or_default()
+        };
 
-        let system_content = adapted_messages
-            .iter()
-            .find(|m| m.role == MessageRole::System)
-            .map(|m| m.content.clone())
-            .unwrap_or_default();
-        let user_content = adapted_messages
-            .last()
-            .filter(|m| m.role == MessageRole::User)
-            .map(|m| m.content.clone())
-            .unwrap_or_default();
+        let history = Self::format_message_history(&messages);
 
         if system_content.is_empty() {
-            user_content
-        } else if user_content.is_empty() {
+            history
+        } else if history.is_empty() {
             system_content
         } else {
-            format!("{}\n\n{}", system_content, user_content)
+            format!("{}\n\n{}", system_content, history)
         }
+    }
+
+    /// Serialize all non-system messages into a plain-text conversation history.
+    ///
+    /// Tool results are preserved verbatim (they already contain
+    /// `<tool_result>` tags), and assistant messages that only contain tool
+    /// calls have those calls appended as JSON so the model can see what it
+    /// invoked.
+    fn format_message_history(messages: &[Message]) -> String {
+        let mut parts = Vec::new();
+        for m in messages.iter().filter(|m| m.role != MessageRole::System) {
+            match m.role {
+                MessageRole::User => {
+                    parts.push(format!("User: {}", m.content));
+                }
+                MessageRole::Assistant => {
+                    let mut block = format!("Assistant: {}", m.content);
+                    if let Some(ref calls) = m.tool_calls {
+                        for call in calls {
+                            block.push_str(&format!(
+                                "\n<tool_call id=\"{}\" name=\"{}\">{}</tool_call>",
+                                call.id, call.function.name, call.function.arguments
+                            ));
+                        }
+                    }
+                    parts.push(block);
+                }
+                MessageRole::Tool => {
+                    parts.push(format!(
+                        "Tool result ({}): {}",
+                        m.tool_call_id.as_deref().unwrap_or("unknown"),
+                        m.content
+                    ));
+                }
+                _ => {}
+            }
+        }
+        parts.join("\n\n")
     }
 
     /// 执行一次 completion 调用，支持 password 模式下 token 过期后重试一次。
@@ -866,11 +911,25 @@ impl LlmProvider for DeepSeekDeviceProvider {
             let mut buffer = PatchBuffer::default();
             let mut content = String::new();
             let mut reasoning = String::new();
+            let mut saw_data = false;
             for line in text.lines() {
                 if let Some(data) = line.strip_prefix("data:") {
-                    let data = data.trim_start();
+                    let data = data.trim();
                     if data == "[DONE]" || data == "FINISHED" {
                         break;
+                    }
+                    if data.is_empty() {
+                        continue;
+                    }
+                    saw_data = true;
+                    if data.len() < 240 {
+                        debug!("deepseek-device complete raw sse data: {}", data);
+                    } else {
+                        debug!(
+                            "deepseek-device complete raw sse data len={} head={}...",
+                            data.len(),
+                            &data[..240]
+                        );
                     }
                     if let Some(id) = self.try_extract_ready_message_id(data) {
                         self.update_last_response_message_id(id);
@@ -884,6 +943,12 @@ impl LlmProvider for DeepSeekDeviceProvider {
                     }
                 }
             }
+            debug!(
+                "deepseek-device complete finished saw_data={} content_len={} reasoning_len={}",
+                saw_data,
+                content.len(),
+                reasoning.len()
+            );
 
             Ok(LlmResponse {
                 content,
@@ -935,10 +1000,22 @@ impl LlmProvider for DeepSeekDeviceProvider {
                                     line_buffer = line_buffer[pos + 1..].to_string();
 
                                     if let Some(data) = line.strip_prefix("data:") {
-                                        let data = data.trim_start();
+                                        let data = data.trim();
                                         if data == "[DONE]" || data == "FINISHED" {
                                             debug!("deepseek-device stream terminator: {}", data);
                                             return Ok(());
+                                        }
+                                        if data.is_empty() {
+                                            continue;
+                                        }
+                                        if data.len() < 240 {
+                                            debug!("deepseek-device raw sse data: {}", data);
+                                        } else {
+                                            debug!(
+                                                "deepseek-device raw sse data len={} head={}...",
+                                                data.len(),
+                                                &data[..240]
+                                            );
                                         }
                                         if let Some(id) =
                                             self_clone3.try_extract_ready_message_id(data)
@@ -1014,6 +1091,15 @@ impl LlmProvider for DeepSeekDeviceProvider {
             debug!("deepseek-device captured provider state: {}", json);
             Some(json)
         })
+    }
+
+    fn capture_auth_token(&self) -> Option<String> {
+        let token = self.token.read().clone();
+        debug!(
+            "deepseek-device capture_auth_token present={}",
+            token.is_some()
+        );
+        token
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
@@ -1153,6 +1239,82 @@ mod tests {
         assert!(prompt.contains("<tool_description name=\"powershell\""));
         assert!(prompt.contains("<arg key=\"arg_name\">"));
         assert!(prompt.contains("List files."));
+    }
+
+    #[test]
+    fn test_build_prompt_with_tools_includes_tool_results() {
+        let tools = json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "powershell",
+                    "description": "Execute a PowerShell command.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": { "type": "string" }
+                        },
+                        "required": ["command"]
+                    }
+                }
+            }
+        ]);
+        let tool_call = clarity_contract::ToolCall {
+            id: "call_1".to_string(),
+            call_type: "function".to_string(),
+            function: clarity_contract::FunctionCall {
+                name: "powershell".to_string(),
+                arguments: r#"{"command":"Get-ChildItem"}"#.to_string(),
+            },
+        };
+        let messages = vec![
+            Message::system("You are a helpful assistant."),
+            Message::user("List files."),
+            clarity_contract::Message {
+                role: clarity_contract::MessageRole::Assistant,
+                content: String::new(),
+                tool_calls: Some(vec![tool_call]),
+                tool_call_id: None,
+            },
+            Message::tool(
+                "call_1",
+                "<tool_result name=\"powershell\">desktop files</tool_result>",
+            ),
+        ];
+
+        let provider = DeepSeekDeviceProvider::with_token("test");
+        let prompt = provider.build_prompt_with_tools(&messages, &tools);
+
+        // System prompt and tool descriptions must still be present.
+        assert!(prompt.contains("<tool_description name=\"powershell\""));
+        // User query must survive after tool execution.
+        assert!(prompt.contains("User: List files."));
+        // Assistant tool call must be visible.
+        assert!(prompt.contains("<tool_call id=\"call_1\" name=\"powershell\">"));
+        // Tool result must be visible to the model.
+        assert!(prompt.contains("Tool result (call_1):"));
+        assert!(prompt.contains("desktop files"));
+    }
+
+    #[test]
+    fn test_build_prompt_with_tools_truncates_old_messages() {
+        let old_big = "x".repeat(1_000_000);
+        let new_big = "y".repeat(1_000_000);
+        let messages = vec![
+            Message::system("You are helpful."),
+            Message::user(old_big.clone()),
+            Message::user(new_big.clone()),
+            Message::user("final"),
+        ];
+        let provider = DeepSeekDeviceProvider::with_token("test");
+        let prompt = provider.build_prompt_with_tools(&messages, &json!([]));
+
+        // The oldest oversized message should be dropped to fit the byte budget.
+        assert!(!prompt.contains(&old_big));
+        // The system prompt and the surviving turns must remain.
+        assert!(prompt.contains("You are helpful."));
+        assert!(prompt.contains(&new_big));
+        assert!(prompt.contains("User: final"));
     }
 
     #[test]

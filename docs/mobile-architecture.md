@@ -2,6 +2,8 @@
 
 > 目标：为 Clarity 构建 Android / iOS 移动端应用，优先 Android。
 > 决策：路线 B（Rust 核心 + 原生 UI），先复用现有 Rust 引擎，通过 UniFFI 暴露给 Kotlin Compose / SwiftUI。
+>
+> **当前实施状态**：Android 引擎层与 FFI 已跑通，`clarity-mobile-core` 通过 UniFFI 暴露给 Kotlin Compose；已验证本地 Agent 模式、Thread 持久化、DeepSeek 设备登录、Claw Gateway 远程模式。UI 层目前是可用的 demo 级别（单文件 MainActivity + 基础组件），尚未达到 DeepSeek 等商业客户端的精致度。iOS 尚未开始。
 
 ---
 
@@ -390,36 +392,50 @@ Mobile → clarity-claw::quick_chat(gateway_url)
 
 ### Phase 0：基础设施（1-2 周）
 
-- [ ] 新建 `crates/clarity-mobile-core`
-- [ ] 引入 `uniffi` 依赖，配置 `build.rs`
-- [ ] 配置 `cargo-ndk` 交叉编译 Android `aarch64-linux-android`
-- [ ] 验证 Kotlin 能成功调用 `runtime_version()`
+- [x] 新建 `crates/clarity-mobile-core`
+- [x] 引入 `uniffi` 依赖，配置 `build.rs`
+- [x] 配置 `cargo-ndk` 交叉编译 Android `aarch64-linux-android` 与 `x86_64-linux-android`
+- [x] 验证 Kotlin 能成功调用 `runtime_version()`
 
-### Phase 1：最小对话循环（2-3 周）
+### Phase 1：最小对话循环（已完成，demo 级）
 
-- [ ] FFI 实现 `send_message` + `poll_event`
-- [ ] Android Compose 实现 ChatScreen
-- [ ] 集成 `clarity-core` 的 `Agent` + `clarity-llm` provider
-- [ ] 支持文字流式输出（ContentPart / TurnEnd）
+- [x] FFI 实现 `send_message` + `poll_event`
+- [x] Android Compose 实现基础 ChatScreen
+- [x] 集成 `clarity-core` 的 `Agent` + `clarity-llm` provider
+- [x] 支持文字流式输出（ContentPart / TurnEnd）
 
-### Phase 2：线程与记忆（2 周）
+### Phase 2：线程与记忆（已完成引擎层，UI 待打磨）
 
-- [ ] FFI 暴露 `list_threads` / `create_thread` / `switch_thread`
-- [ ] ThreadListScreen
-- [ ] 接入 `SessionStoreV2` 持久化
+- [x] FFI 暴露 `list_threads` / `create_thread` / `switch_thread`
+- [x] 基础 ThreadListScreen
+- [x] 接入 `SessionStore` 会话持久化
 - [ ] 接入 `MemoryStore` 事实查询
 
-### Phase 3：配置与多 Provider（1-2 周）
+### Phase 3：配置与多 Provider（已完成基础链路）
 
-- [ ] SettingsScreen：选择 provider、输入 API key、选择模型
+- [x] ProviderSetup：选择 provider、输入 API key / 手机号密码、选择模型
+- [x] 多 Provider 支持（OpenAI / Kimi / DeepSeek / Anthropic / DeepSeek 设备登录）
 - [ ] 安全存储 API key（Android Keystore / iOS Keychain）
 - [ ] 配置从 Rust TOML 与移动端 DataStore 双向同步
 
-### Phase 4：iOS 与联邦同步（后续）
+### Phase 4：UX 重设计与 DeepSeek 追平（当前重点）
 
-- [ ] iOS SwiftUI 版本
+- [ ] Android UI 工程化拆分（theme / components / screens / viewmodel）
+- [ ] DeepSeek 式会话列表与聊天页（气泡、Markdown、复制、重发）
+- [ ] 主题/动态取色、字体缩放、深色模式
+- [ ] 历史会话顶部固定 Claw 入口
+- [ ] 联网搜索 / 深度思考开关映射到 `DeepSeekDeviceOptions`
+- [ ] 消息管理（删除、清空会话、会话搜索）
+
+### Phase 5：Claw 联邦与同步
+
+- [x] Claw Gateway 远程模式（原生 WebSocket 协议）
 - [ ] 通过 `clarity-gateway` 与桌面端会话同步
 - [ ] 推送通知（claw 任务完成）
+
+### Phase 6：iOS（后续）
+
+- [ ] iOS SwiftUI 版本
 
 ---
 
@@ -438,10 +454,11 @@ Mobile → clarity-claw::quick_chat(gateway_url)
 
 ## 11. 下一步建议
 
-1. 在 `clarity/crates/` 下创建 `clarity-mobile-core`，写好 `Cargo.toml` 与最小 FFI。
-2. 在 `clarity/mobile/android/` 下创建空 Android 项目，配置 Gradle 调用 `cargo-ndk`。
-3. 跑通第一个端到端用例：Kotlin 按钮点击 → Rust 返回 `"clarity-mobile-core v0.3.0"`。
-4. 再接入 `Agent::run` 实现第一个对话。
+1. **保留引擎，重做 Android presentation 层**：`clarity-mobile-core` 已稳定，下一步重点是把 `mobile/android/app/src/main/java/.../MainActivity.kt` 从单文件 demo 拆分为 `theme / components / screens / viewmodel` 四层。
+2. **参考 DeepSeek 客户端重画核心页面**：会话列表、聊天页、设置页，优先保证聊天主路径的精致度。
+3. **顶部固定 Claw 入口**：在 ThreadList 顶部保留一个独立入口，不影响普通 Chat 使用。
+4. **渐进补齐功能**：Markdown 气泡、复制、重发、主题切换、搜索/深度思考开关。
+5. iOS 待 Android 主路径稳定后再启动。
 
 ---
 

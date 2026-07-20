@@ -14,6 +14,7 @@
 //! 设计参考 std::process::Command 的构建器模式。
 
 pub mod builder;
+pub mod kimiclaw_agent_loader;
 mod parallel;
 pub mod registry;
 pub mod runner;
@@ -33,6 +34,7 @@ pub use clarity_contract::subagent::{
 
 // Re-export local types with logic.
 pub use builder::SubagentBuilder;
+pub use kimiclaw_agent_loader::{kimiclaw_agents_dir, load_kimiclaw_agents};
 pub use parallel::{ParallelExecutor, SubagentBatch, run_parallel};
 pub use runner::{ExecutionContext, OutputCollector, SubagentRunner};
 pub use store::SubagentStore;
@@ -88,6 +90,15 @@ impl SubagentManager {
     /// 设置 Jumpy Outcome Predictor（builder 模式）
     pub fn with_predictor(mut self, predictor: Arc<dyn OutcomePredictor>) -> Self {
         self.predictor = Some(predictor);
+        self
+    }
+
+    /// Load KimiClaw plugin agent definitions from `~/.kimi_openclaw` and
+    /// register them in the labor market.
+    pub fn with_kimiclaw_agents<P: AsRef<std::path::Path>>(mut self, openclaw_home: P) -> Self {
+        for def in load_kimiclaw_agents(openclaw_home) {
+            self.runner.register_type(def);
+        }
         self
     }
 

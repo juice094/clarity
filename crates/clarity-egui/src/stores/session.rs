@@ -5,12 +5,18 @@
 use crate::ui::types::*;
 use std::collections::HashMap;
 
+/// Cached `AgentTurn` per aggregated unit index, keyed by session id.
+pub type AgentTurnCache = Vec<Option<crate::components::agent_turn::AgentTurn>>;
+
 /// Holds session UI state.
 pub struct SessionStore {
     pub sessions: Vec<Session>,
     pub active_session_id: String,
     /// Per-session draft buffer. Key = session_id.
     pub drafts: HashMap<String, String>,
+    /// Per-session cache of constructed `AgentTurn`s, keyed by session id.
+    /// Cleared for the last (possibly streaming) unit each frame.
+    pub turn_cache: HashMap<String, AgentTurnCache>,
 }
 
 impl SessionStore {

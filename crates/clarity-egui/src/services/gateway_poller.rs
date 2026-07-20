@@ -7,16 +7,16 @@ impl App {
         let gateway = std::env::var("CLARITY_GATEWAY_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:18790".to_string());
         let batch_ids: Vec<String> = self
-            .subagent_store
+            .subagent_store()
             .parallel_batches
             .iter()
             .map(|b| b.batch_id.clone())
             .collect();
-        let tx = self.ui_tx.clone();
+        let tx = self.context.ui_tx.clone();
 
-        self.subagent_store.last_parallel_poll = std::time::Instant::now();
+        self.subagent_store_mut().last_parallel_poll = std::time::Instant::now();
 
-        self.runtime.spawn(async move {
+        self.context.runtime.spawn(async move {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
@@ -49,13 +49,13 @@ impl App {
     pub(crate) fn poll_gateway_health(&mut self) {
         let gateway = std::env::var("CLARITY_GATEWAY_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:18790".to_string());
-        let tx = self.ui_tx.clone();
+        let tx = self.context.ui_tx.clone();
 
         // Set Checking while the request is in flight.
-        self.chat_store.gateway_status = GatewayStatus::Checking;
+        self.chat_store_mut().gateway_status = GatewayStatus::Checking;
         let _ = tx.send(UiEvent::GatewayHealth(GatewayStatus::Checking));
 
-        self.runtime.spawn(async move {
+        self.context.runtime.spawn(async move {
             let client = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()

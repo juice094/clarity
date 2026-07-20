@@ -58,6 +58,7 @@ pub mod endpoint;
 pub mod error;
 pub mod hooks;
 pub mod hub;
+pub mod knowledge;
 pub mod logging;
 #[cfg(feature = "mcp")]
 pub mod mcp;

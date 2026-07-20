@@ -2,112 +2,81 @@
 //!
 //! Sprint 39: Non-intrusive snapshot UI. Triggered from chat bubble hint or
 //! titlebar icon. Does not consume permanent panel space.
+//!
+//! Migrated to the Clarity Design Protocol v1.0.
 
 use crate::App;
-use crate::design_system::{self, Space};
+use clarity_ui::design_system::{Elevation, Space, TextStyle, code_frame, gap, text};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::icon_button::icon_button;
+use clarity_ui::widgets::modal::Modal;
 use std::time::{Duration, Instant};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Renders the snapshot modal UI.
 pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
-    if app.view_state.modal != Some(clarity_core::ui::ModalType::Snapshot) {
+    if app.current_modal() != Some(&clarity_core::ui::ModalType::Snapshot) {
         return;
     }
 
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // Refresh snapshot list lazily
-    if app.snapshot_store.last_refresh.elapsed() > REFRESH_INTERVAL {
-        app.snapshot_store.last_refresh = Instant::now();
-        app.snapshot_store.snapshots = app.state.agent.snapshot_list();
+    if app.context.snapshot_store.last_refresh.elapsed() > REFRESH_INTERVAL {
+        app.context.snapshot_store.last_refresh = Instant::now();
+        app.context.snapshot_store.snapshots = app.context.state.agent.snapshot_list();
     }
-
-    // Full-screen click blocker
-    let screen = ctx.screen_rect();
-    let blocker_id = egui::Id::new("snapshot_blocker");
-    egui::Area::new(blocker_id)
-        .order(egui::Order::Background)
-        .interactable(true)
-        .show(ctx, |ui| {
-            let response = ui.allocate_response(screen.size(), egui::Sense::click());
-            ui.painter_at(response.rect)
-                .rect_filled(response.rect, 0.0, theme.overlay);
-        });
 
     // ESC closes modal
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-        app.view_state.close_modal();
-        app.snapshot_store.confirm_restore_id = None;
-        app.snapshot_store.selected_id = None;
+        app.close_modal();
+        app.context.snapshot_store.confirm_restore_id = None;
+        app.context.snapshot_store.selected_id = None;
         return;
     }
 
-    egui::Window::new("📸 Snapshot History")
-        .collapsible(false)
-        .resizable(false)
-        .movable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .frame(
-            egui::Frame::group(&ctx.style())
-                .fill(theme.surface)
-                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                .stroke(egui::Stroke::NONE)
-                .inner_margin(egui::Margin::same(20)),
-        )
+    Modal::new("snapshot")
+        .width(420.0)
+        .max_height(600.0)
         .show(ctx, |ui| {
-            ui.set_min_width(420.0);
-            ui.set_max_width(520.0);
-
             // Header
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("Workspace Snapshots")
-                        .size(theme.text_lg)
-                        .strong()
-                        .color(theme.text),
-                );
+                text(ui, "Workspace Snapshots", TextStyle::Title);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(crate::theme::ICON_X)
-                                    .font(theme.font_icon(theme.text_base)),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                        )
-                        .clicked()
+                    if icon_button(
+                        ui,
+                        crate::theme::ICON_X,
+                        theme.text_base,
+                        egui::Color32::TRANSPARENT,
+                        egui::CornerRadius::same(theme.radius_sm as u8),
+                        &theme,
+                    )
+                    .clicked()
                     {
-                        app.view_state.close_modal();
-                        app.snapshot_store.confirm_restore_id = None;
-                        app.snapshot_store.selected_id = None;
+                        app.close_modal();
+                        app.context.snapshot_store.confirm_restore_id = None;
+                        app.context.snapshot_store.selected_id = None;
                     }
                 });
             });
-            design_system::gap(ui, Space::S2);
+            gap(ui, Space::S2);
 
-            let snapshots = app.snapshot_store.snapshots.clone();
+            let snapshots = app.context.snapshot_store.snapshots.clone();
             if snapshots.is_empty() {
                 ui.vertical_centered(|ui| {
-                    design_system::gap(ui, Space::S5);
-                    ui.label(
-                        egui::RichText::new("No snapshots available")
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
+                    gap(ui, Space::S5);
+                    text(ui, "No snapshots available", TextStyle::Small);
+                    text(
+                        ui,
+                        "Snapshots are created automatically before/after each agent turn \
+                         when the working directory is a Git repository.",
+                        TextStyle::Small,
                     );
-                    ui.label(
-                        egui::RichText::new(
-                            "Snapshots are created automatically before/after each agent turn \
-                             when the working directory is a Git repository.",
-                        )
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
-                    );
-                    design_system::gap(ui, Space::S5);
+                    gap(ui, Space::S5);
                 });
             } else {
-                // Snapshot list
+                // ponytail: ScrollArea is not yet wrapped in clarity-ui.
                 egui::ScrollArea::vertical()
                     .max_height(320.0)
                     .show(ui, |ui| {
@@ -118,12 +87,12 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
             }
 
             // Footer hint
-            design_system::gap(ui, Space::S1);
+            gap(ui, Space::S1);
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("? Restoring creates a backup of current state first")
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
+                text(
+                    ui,
+                    "? Restoring creates a backup of current state first",
+                    TextStyle::Small,
                 );
             });
         });
@@ -135,26 +104,18 @@ fn render_snapshot_row(
     info: &clarity_core::agent::snapshot::SnapshotInfo,
     theme: &crate::theme::Theme,
 ) {
-    let is_selected = app.snapshot_store.selected_id == Some(info.id);
-    let is_confirming = app.snapshot_store.confirm_restore_id == Some(info.id);
+    let is_selected = app.context.snapshot_store.selected_id == Some(info.id);
+    let is_confirming = app.context.snapshot_store.confirm_restore_id == Some(info.id);
 
     // Row card
-    let frame = egui::Frame::new()
-        .fill(if is_selected {
-            theme.bg_hover
-        } else {
-            egui::Color32::TRANSPARENT
-        })
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .stroke(egui::Stroke::new(
-            1.0_f32,
-            if is_selected {
-                theme.border_strong
-            } else {
-                egui::Color32::TRANSPARENT
-            },
-        ))
-        .inner_margin(egui::Margin::symmetric(10, 8));
+    // ponytail: Using Elevation::Elevated.frame directly because card() doesn't
+    // expose selected-state fill/stroke overrides.
+    let mut frame = Elevation::Elevated.frame(theme);
+    if is_selected {
+        frame = frame
+            .fill(theme.bg_hover)
+            .stroke(egui::Stroke::new(1.0, theme.border_strong));
+    }
 
     frame.show(ui, |ui| {
         ui.set_min_width(ui.available_width());
@@ -166,60 +127,53 @@ fn render_snapshot_row(
             } else {
                 theme.status_online
             };
+            // ponytail: color + mono combination has no TextStyle constant.
             ui.label(
                 egui::RichText::new(format!("#{}", info.id))
-                    .font(theme.font_mono(theme.text_sm))
+                    .monospace()
+                    .size(theme.text_sm)
                     .color(theme.text_muted),
             );
+            // ponytail: color-coded tag has no TextStyle constant.
             ui.label(
                 egui::RichText::new(info.label.split('-').next().unwrap_or("snap"))
                     .size(theme.text_xs)
                     .color(tag_color),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new(format_time_ago(&info.timestamp))
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
-                );
+                text(ui, format_time_ago(&info.timestamp), TextStyle::Small);
             });
         });
 
         // Hash (monospace, dim)
+        // ponytail: dim + mono combination has no TextStyle constant.
         ui.label(
             egui::RichText::new(&info.hash[..8.min(info.hash.len())])
-                .font(theme.font_mono(theme.text_xs))
+                .monospace()
+                .size(theme.text_xs)
                 .color(theme.text_dim),
         );
 
-        design_system::gap(ui, Space::S0);
+        gap(ui, Space::S0);
 
         // Action buttons
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Restore button
-                let restore_btn = ui.add(
-                    egui::Button::new(
-                        egui::RichText::new(format!("{} Restore", crate::theme::ICON_REFRESH))
-                            .font(theme.font_icon(theme.text_sm))
-                            .color(if is_confirming {
-                                theme.danger
-                            } else {
-                                theme.text_dim
-                            }),
-                    )
-                    .fill(egui::Color32::TRANSPARENT)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                );
+                let restore_btn = if is_confirming {
+                    ui.add(Button::new("Restore").danger_ghost())
+                } else {
+                    ui.add(Button::new("Restore").ghost())
+                };
                 if restore_btn.clicked() {
                     if is_confirming {
                         // Execute restore
                         app.view_state.turn = clarity_core::ui::TurnState::Restoring;
-                        app.snapshot_store.confirm_restore_id = None;
-                        let agent = app.state.agent.clone();
-                        let tx = app.ui_tx.clone();
+                        app.context.snapshot_store.confirm_restore_id = None;
+                        let agent = app.context.state.agent.clone();
+                        let tx = app.context.ui_tx.clone();
                         let id = info.id;
-                        app.runtime.spawn(async move {
+                        app.context.runtime.spawn(async move {
                             match agent.restore_snapshot(id).await {
                                 Ok(()) => {
                                     let _ = tx.send(crate::ui::types::UiEvent::SnapshotRestored {
@@ -238,42 +192,32 @@ fn render_snapshot_row(
                             }
                         });
                     } else {
-                        app.snapshot_store.confirm_restore_id = Some(info.id);
-                        app.snapshot_store.selected_id = Some(info.id);
+                        app.context.snapshot_store.confirm_restore_id = Some(info.id);
+                        app.context.snapshot_store.selected_id = Some(info.id);
                     }
                 }
 
                 // Preview / diff button
-                let preview_btn = ui.add(
-                    egui::Button::new(
-                        egui::RichText::new(if is_selected {
-                            "👁 Hide"
-                        } else {
-                            "👁 Preview"
-                        })
-                        .size(theme.text_xs)
-                        .color(theme.accent),
-                    )
-                    .fill(egui::Color32::TRANSPARENT)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                );
+                let preview_label = if is_selected { "Hide" } else { "Preview" };
+                let preview_btn = ui.add(Button::new(preview_label).ghost());
                 if preview_btn.clicked() {
-                    app.snapshot_store.selected_id = if is_selected { None } else { Some(info.id) };
+                    app.context.snapshot_store.selected_id =
+                        if is_selected { None } else { Some(info.id) };
                 }
             });
         });
 
         // Confirmation row
         if is_confirming {
-            design_system::gap(ui, Space::S1);
-            egui::Frame::new()
+            gap(ui, Space::S1);
+            Elevation::Elevated
+                .frame(theme)
                 .fill(theme.danger.linear_multiply(0.08))
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
+                    // ponytail: danger-colored text has no TextStyle constant.
                     ui.label(
                         egui::RichText::new(format!(
-                            "⚠️ Roll back to snapshot #{}? Current state will be backed up first.",
+                            "Roll back to snapshot #{}? Current state will be backed up first.",
                             info.id
                         ))
                         .size(theme.text_sm)
@@ -283,35 +227,38 @@ fn render_snapshot_row(
         }
 
         // Diff preview (inline)
-        if is_selected && app.snapshot_store.preview.is_some() {
-            design_system::gap(ui, Space::S1);
-            egui::Frame::new()
-                .fill(theme.code_block_bg)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::same(10))
-                .show(ui, |ui| {
-                    ui.set_max_width(ui.available_width());
-                    egui::ScrollArea::vertical()
-                        .max_height(120.0)
-                        .show(ui, |ui| {
-                            if let Some(ref preview) = app.snapshot_store.preview {
-                                for line in preview.lines() {
-                                    let color = if line.starts_with('+') {
-                                        theme.ok
-                                    } else if line.starts_with('-') {
-                                        theme.danger
-                                    } else {
-                                        theme.text_dim
-                                    };
-                                    ui.monospace(egui::RichText::new(line).color(color).size(11.0));
-                                }
+        if is_selected && app.context.snapshot_store.preview.is_some() {
+            gap(ui, Space::S1);
+            code_frame(ui, |ui| {
+                ui.set_max_width(ui.available_width());
+                // ponytail: ScrollArea is not yet wrapped in clarity-ui.
+                egui::ScrollArea::vertical()
+                    .max_height(120.0)
+                    .show(ui, |ui| {
+                        if let Some(ref preview) = app.context.snapshot_store.preview {
+                            for line in preview.lines() {
+                                let color = if line.starts_with('+') {
+                                    theme.ok
+                                } else if line.starts_with('-') {
+                                    theme.danger
+                                } else {
+                                    theme.text_dim
+                                };
+                                // ponytail: color-coded monospace diff lines have no TextStyle constant.
+                                ui.label(
+                                    egui::RichText::new(line)
+                                        .monospace()
+                                        .color(color)
+                                        .size(theme.text_xs),
+                                );
                             }
-                        });
-                });
+                        }
+                    });
+            });
         }
     });
 
-    design_system::gap(ui, Space::S0);
+    gap(ui, Space::S0);
 }
 
 /// Format an RFC3339 timestamp as a relative string ("2m ago", "1h ago").
@@ -334,19 +281,5 @@ fn format_time_ago(timestamp: &str) -> String {
             }
         }
         None => timestamp.to_string(),
-    }
-}
-
-// ── Panel trait implementation ──
-
-pub struct SnapshotModal;
-
-impl crate::design_system::Panel for SnapshotModal {
-    fn title(&self, _app: &crate::App) -> &str {
-        "Snapshot"
-    }
-    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        render_snapshot_modal(app, &ctx);
     }
 }

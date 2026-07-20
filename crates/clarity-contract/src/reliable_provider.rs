@@ -345,6 +345,12 @@ impl LlmProvider for ReliableProvider {
         Err(last_err.unwrap_or_else(|| AgentError::Llm("All providers failed in stream".into())))
     }
 
+    fn reset_conversation_context(&self) {
+        for provider in &self.providers {
+            provider.reset_conversation_context();
+        }
+    }
+
     fn set_prompt_cache_key(&self, key: &str) {
         for provider in &self.providers {
             provider.set_prompt_cache_key(key);
@@ -356,6 +362,12 @@ impl LlmProvider for ReliableProvider {
             .first()
             .map(|p| p.capabilities())
             .unwrap_or_default()
+    }
+
+    fn capture_auth_token(&self) -> Option<String> {
+        // Return the first provider's auth token. In practice only one provider
+        // in the chain (the active one) will hold a session token.
+        self.providers.first().and_then(|p| p.capture_auth_token())
     }
 }
 

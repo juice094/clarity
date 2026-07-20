@@ -1,0 +1,23 @@
+[package]
+name = "clarity-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared egui UI primitives and design tokens for Clarity"
+
+[dependencies]
+egui = { workspace = true }
+egui_extras = { workspace = true }
+lucide-icons = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+egui_kittest = { workspace = true, features = ["snapshot", "wgpu"] }
+
+[lints]
+workspace = true

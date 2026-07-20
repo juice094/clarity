@@ -1,15 +1,51 @@
 //! Markdown cold-path parser + hot-path renderer.
 //!
-//! ARCHITECTURE CONSTRAINT (Pretext-aligned):
-//!   - `parse_markdown()` is the ONLY place where string parsing happens.
-//!   - `render_blocks()` is the hot path: it ONLY iterates pre-parsed blocks.
-//!   - NEVER parse `Message::content` inside the hot path.
+//! The hot-path renderer now delegates to [`egui_commonmark`]. `parse_markdown`
+//! and [`RenderBlock`] are kept as a compatibility shim for height estimation
+//! and layout decisions.
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
-use crate::design_system::{self, Space};
-use crate::theme::Theme;
 use crate::ui::types::{InlineSpan, RenderBlock};
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use parking_lot::Mutex;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+// ============================================================================
+// CommonMark cache — survives across frames, but bounded to avoid unbounded
+// growth. When the accumulated rendered-text budget is exceeded the cache is
+// dropped and rebuilt. ponytail: a per-session cache would be more precise,
+// but this bounds memory without changing every call site.
+// ============================================================================
+
+static COMMONMARK_CACHE: OnceLock<Mutex<CommonMarkCache>> = OnceLock::new();
+static COMMONMARK_BYTES: AtomicUsize = AtomicUsize::new(0);
+/// Rough budget for rendered markdown text kept alive in the cache. Images and
+// syntax-highlighted code can push actual memory higher, so this is a text-byte cap.
+const COMMONMARK_BUDGET: usize = 8 * 1024 * 1024;
+
+fn with_commonmark_cache<R>(f: impl FnOnce(&mut CommonMarkCache) -> R) -> R {
+    let cache = COMMONMARK_CACHE.get_or_init(|| Mutex::new(CommonMarkCache::default()));
+    f(&mut cache.lock())
+}
+
+/// Render raw Markdown text via [`egui_commonmark`].
+pub fn render_markdown(ui: &mut egui::Ui, text: &str, text_color: egui::Color32) {
+    // Scope the override so it does not leak to sibling widgets.
+    let text_len = text.len();
+    ui.scope(|ui| {
+        ui.visuals_mut().override_text_color = Some(text_color);
+        with_commonmark_cache(|cache| {
+            CommonMarkViewer::new().show(ui, cache, text);
+            let prev = COMMONMARK_BYTES.fetch_add(text_len, Ordering::Relaxed);
+            if prev + text_len > COMMONMARK_BUDGET {
+                *cache = CommonMarkCache::default();
+                COMMONMARK_BYTES.store(0, Ordering::Relaxed);
+            }
+        });
+    });
+}
 
 // ============================================================================
 // Markdown Parser — Cold path (called once when Message content changes)
@@ -377,257 +413,8 @@ fn try_parse_unified_diff(
     Some((hunks, consumed))
 }
 
-// ============================================================================
-// Layout — Hot path (called every frame, only iterates pre-parsed blocks)
-// ============================================================================
-
-/// Renders the blocks UI.
-pub fn render_blocks(
-    ui: &mut egui::Ui,
-    blocks: &[RenderBlock],
-    theme: &Theme,
-    text_color: egui::Color32,
-) {
-    for (i, block) in blocks.iter().enumerate() {
-        if i > 0 {
-            design_system::gap(ui, Space::S0);
-        }
-        match block {
-            RenderBlock::Paragraph(spans) => {
-                render_spans(ui, spans, theme, text_color, theme.text_base, false);
-            }
-            RenderBlock::Heading(level, spans) => {
-                // Map heading levels to the theme typography scale.
-                // H1=2xl(36px), H2=xl(22px), H3=lg(18px), H4=md(15px), H5=base(14px)
-                let size = match level {
-                    1 => theme.text_2xl,
-                    2 => theme.text_xl,
-                    3 => theme.text_lg,
-                    4 => theme.text_md,
-                    _ => theme.text_base,
-                };
-                render_spans(ui, spans, theme, text_color, size, true);
-            }
-            RenderBlock::CodeBlock { lang, code } => {
-                render_code_block(ui, lang, code, theme);
-            }
-            RenderBlock::ListItem(spans) => {
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("•")
-                            .size(theme.text_base)
-                            .color(text_color),
-                    );
-                    render_spans(ui, spans, theme, text_color, theme.text_base, false);
-                });
-            }
-            RenderBlock::Blockquote(spans) => {
-                ui.horizontal(|ui| {
-                    let (rect, _) =
-                        ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
-                    ui.painter()
-                        .rect_filled(rect, egui::CornerRadius::same(2), theme.accent);
-                    design_system::gap(ui, Space::S1);
-                    render_spans(ui, spans, theme, theme.text_muted, theme.text_base, false);
-                });
-            }
-            RenderBlock::HorizontalRule => {
-                design_system::gap(ui, Space::S0);
-                // TUI-style separator with box-drawing characters.
-                let w = ui.available_width();
-                let dash = "\u{2500}";
-                let count = (w / 10.0) as usize;
-                ui.add(egui::Label::new(
-                    egui::RichText::new(dash.repeat(count.max(1)))
-                        .size(theme.text_xs)
-                        .color(theme.border)
-                        .monospace(),
-                ));
-                design_system::gap(ui, Space::S0);
-            }
-            RenderBlock::Table { headers, rows } => {
-                render_table(ui, i, headers, rows, theme, text_color);
-            }
-            RenderBlock::Diff { hunks, file_path } => {
-                design_system::gap(ui, Space::S0);
-                if let Some(path) = file_path {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{} {}",
-                                crate::theme::ICON_FILE_CODE,
-                                path
-                            ))
-                            .size(theme.text_xs)
-                            .color(theme.accent)
-                            .monospace(),
-                        );
-                    });
-                    design_system::gap(ui, Space::S0);
-                }
-                let config = crate::widgets::diff_viewer::DiffViewConfig {
-                    show_file_header: true,
-                    show_line_numbers: true,
-                    collapse_unchanged: true,
-                    collapse_threshold: 6,
-                    compact: false,
-                    max_height: None,
-                    show_actions: false,
-                    side_by_side: false,
-                };
-                crate::widgets::diff_viewer::render_diff_view(ui, hunks, theme, &config);
-                design_system::gap(ui, Space::S0);
-            }
-        }
-    }
-}
-
-fn render_table(
-    ui: &mut egui::Ui,
-    idx: usize,
-    headers: &[String],
-    rows: &[Vec<String>],
-    theme: &Theme,
-    text_color: egui::Color32,
-) {
-    if headers.is_empty() {
-        return;
-    }
-    design_system::gap(ui, Space::S0);
-    egui::Frame::new()
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .inner_margin(egui::Margin::same(8))
-        .show(ui, |ui| {
-            // Namespace the grid id to avoid collisions with other grids that may
-            // share the same parent id and numeric index.
-            egui::Grid::new(ui.id().with(("md_table", idx)))
-                .spacing([12.0, 6.0])
-                .show(ui, |ui| {
-                    // Header row
-                    for h in headers {
-                        ui.label(
-                            egui::RichText::new(h)
-                                .size(theme.text_sm)
-                                .strong()
-                                .color(text_color),
-                        );
-                    }
-                    ui.end_row();
-
-                    // Separator line
-                    let available = ui.available_width();
-                    let row_y = ui.cursor().min.y;
-                    ui.painter().line_segment(
-                        [
-                            egui::pos2(ui.cursor().min.x, row_y),
-                            egui::pos2(ui.cursor().min.x + available, row_y),
-                        ],
-                        egui::Stroke::new(1.0_f32, theme.border),
-                    );
-                    ui.end_row();
-
-                    // Data rows
-                    for row in rows {
-                        for cell in row {
-                            ui.label(
-                                egui::RichText::new(cell)
-                                    .size(theme.text_sm)
-                                    .color(theme.text_muted),
-                            );
-                        }
-                        ui.end_row();
-                    }
-                });
-        });
-    design_system::gap(ui, Space::S0);
-}
-
-fn render_spans(
-    ui: &mut egui::Ui,
-    spans: &[InlineSpan],
-    theme: &Theme,
-    base_color: egui::Color32,
-    size: f32,
-    strong: bool,
-) {
-    ui.horizontal_wrapped(|ui| {
-        for span in spans {
-            render_span(ui, span, theme, base_color, size, strong);
-        }
-    });
-}
-
-fn render_span(
-    ui: &mut egui::Ui,
-    span: &InlineSpan,
-    theme: &Theme,
-    base_color: egui::Color32,
-    size: f32,
-    strong: bool,
-) {
-    match span {
-        InlineSpan::Text(text) => {
-            // Detect file paths and render as clickable links.
-            if looks_like_file_path(text) {
-                let label = format!("{} {}", crate::theme::ICON_FILE_CODE, text);
-                let resp = ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(label)
-                            .color(theme.accent)
-                            .size(size)
-                            .monospace(),
-                    )
-                    .sense(egui::Sense::click()),
-                );
-                if resp.clicked() {
-                    // Open in system editor on primary click, copy path on secondary.
-                    let path_str = text.trim().to_string();
-                    let file_url = format!("file:///{}", path_str.replace('\\', "/"));
-                    let _ = webbrowser::open(&file_url);
-                }
-                if resp.secondary_clicked() {
-                    ui.ctx().copy_text(text.to_string());
-                }
-                if resp.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                }
-                resp.on_hover_text(format!("Open {} — Right-click to copy path", text));
-            } else {
-                let mut rt = egui::RichText::new(text).color(base_color).size(size);
-                if strong {
-                    rt = rt.strong();
-                }
-                ui.label(rt);
-            }
-        }
-        InlineSpan::Bold(text) => {
-            ui.label(
-                egui::RichText::new(text)
-                    .color(base_color)
-                    .size(size)
-                    .strong(),
-            );
-        }
-        InlineSpan::Code(text) => {
-            ui.label(
-                egui::RichText::new(text)
-                    .monospace()
-                    .color(theme.text_strong)
-                    .background_color(theme.code_block_bg)
-                    .size(theme.text_base),
-            );
-        }
-        InlineSpan::Link { text, url } => {
-            ui.hyperlink_to(
-                egui::RichText::new(text).color(theme.accent).size(size),
-                url,
-            );
-        }
-    }
-}
-
 /// Detect strings that look like file paths with optional line numbers.
+#[allow(dead_code)]
 fn looks_like_file_path(text: &str) -> bool {
     let s = text.trim();
     if s.len() < 4 || s.len() > 200 {
@@ -656,232 +443,6 @@ fn looks_like_file_path(text: &str) -> bool {
             .next_back()
             .is_some_and(|p| p.parse::<usize>().is_ok());
     has_separator || has_ext || has_lineno
-}
-
-fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
-    design_system::gap(ui, Space::S0);
-    // Calibrate line height from the monospace font metrics so inter-line
-    // spacing tracks font scale, DPI, and font family changes.
-    let code_line_h = theme.line_height_mono_at(ui.ctx(), theme.text_base);
-
-    // Split into lines for line-number rendering.
-    let lines: Vec<&str> = code.lines().collect();
-    let line_count = lines.len();
-    let collapse_threshold: usize = 30;
-    // Unique key per code block (hash of content prevents cross-block state sharing).
-    let collapse_key = ui.id().with(("code_collapse", code));
-    let collapsed: bool = line_count > collapse_threshold
-        && ui.ctx().data(|d| d.get_temp(collapse_key).unwrap_or(true));
-    let visible_lines: usize = if collapsed {
-        collapse_threshold.min(lines.len())
-    } else {
-        lines.len()
-    };
-    let ln_width = if visible_lines > 1 {
-        // Right-aligned line number gutter.
-        let digits = line_count.to_string().len().max(1);
-        (digits as f32) * 9.0 + theme.space_12
-    } else {
-        0.0
-    };
-
-    egui::Frame::new()
-        .fill(theme.code_block_bg)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .shadow(theme.shadow_card)
-        .inner_margin(egui::Margin::symmetric(14, 12))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-
-            // ── Header: lang badge + copy button ──
-            ui.horizontal(|ui| {
-                if !lang.is_empty() {
-                    let badge = egui::Frame::new()
-                        .fill(theme.bg_hover)
-                        .corner_radius(egui::CornerRadius::same(4))
-                        .inner_margin(egui::Margin::symmetric(8, 2))
-                        .show(ui, |ui| {
-                            ui.label(
-                                egui::RichText::new(lang)
-                                    .size(theme.text_xs)
-                                    .color(theme.accent)
-                                    .monospace(),
-                            );
-                        });
-                    let _ = badge; // Frame response consumed.
-                }
-                design_system::gap(ui, Space::S0);
-                if !lang.is_empty() {
-                    ui.label(
-                        egui::RichText::new(format!("{} lines", line_count))
-                            .size(theme.text_xs)
-                            .color(theme.text_dim),
-                    );
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Copy button with "Copied!" feedback
-                    let copy_key = ui.id().with(("copy_feedback", code));
-                    let copied_at: Option<f64> = ui.ctx().data(|d| d.get_temp(copy_key));
-                    let just_copied = copied_at
-                        .map(|t| ui.ctx().input(|i| i.time) - t < 1.5)
-                        .unwrap_or(false);
-                    let copy_label = if just_copied {
-                        format!("{} Copied!", crate::theme::ICON_CHECK)
-                    } else {
-                        format!("{} Copy", crate::theme::ICON_COPY)
-                    };
-                    let copy_color = if just_copied {
-                        theme.ok
-                    } else {
-                        theme.text_dim
-                    };
-                    if ui
-                        .add_sized(
-                            [if just_copied { 72.0 } else { 64.0 }, 22.0],
-                            egui::Button::new(
-                                egui::RichText::new(copy_label)
-                                    .size(theme.text_xs)
-                                    .color(copy_color),
-                            )
-                            .fill(theme.surface)
-                            .corner_radius(egui::CornerRadius::same(4)),
-                        )
-                        .clicked()
-                    {
-                        ui.ctx().copy_text(code.to_string());
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(copy_key, ui.ctx().input(|i| i.time)));
-                        ui.ctx().request_repaint();
-                    }
-                    // Run button for shell/python code
-                    let runnable = matches!(
-                        lang.to_lowercase().as_str(),
-                        "sh" | "bash" | "shell" | "py" | "python"
-                    );
-                    if runnable {
-                        ui.add_space(4.0);
-                        if ui
-                            .add_sized(
-                                [56.0, 22.0],
-                                egui::Button::new(
-                                    egui::RichText::new(format!(
-                                        "{} Run",
-                                        crate::theme::ICON_TERMINAL,
-                                    ))
-                                    .size(theme.text_xs)
-                                    .color(theme.accent),
-                                )
-                                .fill(theme.surface)
-                                .corner_radius(egui::CornerRadius::same(4)),
-                            )
-                            .clicked()
-                        {
-                            // Copy code to clipboard so user can paste into terminal.
-                            ui.ctx().copy_text(code.to_string());
-                        }
-                    }
-                });
-            });
-            design_system::gap(ui, Space::S0);
-
-            // ── Code lines with syntax highlighting ──
-            let highlighted = crate::ui::syntax_highlight::try_highlight(lang, code);
-            let digits = line_count.to_string().len().max(1);
-            let show_collapse = line_count > collapse_threshold;
-
-            if visible_lines > 1 {
-                for (idx, styled_tokens) in highlighted.iter().enumerate() {
-                    if collapsed && idx >= collapse_threshold {
-                        break;
-                    }
-                    let ln = idx + 1;
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = theme.space_8;
-                        // Line number gutter.
-                        ui.add_sized(
-                            [ln_width, theme.text_base],
-                            egui::Label::new(
-                                egui::RichText::new(format!("{:>width$}", ln, width = digits))
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim)
-                                    .monospace(),
-                            ),
-                        );
-                        // Code line content with per-token syntax colors.
-                        if styled_tokens.is_empty() || styled_tokens[0].1.is_empty() {
-                            ui.label(
-                                egui::RichText::new(" ")
-                                    .monospace()
-                                    .color(theme.text)
-                                    .size(theme.text_base)
-                                    .line_height(Some(code_line_h)),
-                            );
-                        } else {
-                            for (color, text) in styled_tokens {
-                                ui.label(
-                                    egui::RichText::new(text.as_str())
-                                        .monospace()
-                                        .color(*color)
-                                        .size(theme.text_base)
-                                        .line_height(Some(code_line_h)),
-                                );
-                            }
-                        }
-                    });
-                }
-                // Show expand button for collapsed large blocks.
-                if show_collapse && collapsed {
-                    design_system::gap(ui, Space::S0);
-                    let remaining = line_count - collapse_threshold;
-                    if ui
-                        .add_sized(
-                            [ui.available_width(), 24.0],
-                            egui::Button::new(
-                                egui::RichText::new(format!(
-                                    "{} Show all {} lines  {}",
-                                    crate::theme::ICON_CARET_DOWN,
-                                    line_count,
-                                    crate::theme::ICON_CARET_DOWN,
-                                ))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                            )
-                            .fill(theme.bg_hover),
-                        )
-                        .clicked()
-                    {
-                        ui.ctx().data_mut(|d| d.insert_temp(collapse_key, false));
-                        ui.ctx().request_repaint();
-                    }
-                    // prevent unused variable warning
-                    let _ = remaining;
-                }
-            } else {
-                // Single line with syntax highlighting.
-                if let Some(tokens) = highlighted.first() {
-                    ui.horizontal(|ui| {
-                        for (color, text) in tokens {
-                            ui.label(
-                                egui::RichText::new(text.as_str())
-                                    .monospace()
-                                    .color(*color)
-                                    .size(theme.text_base)
-                                    .line_height(Some(code_line_h)),
-                            );
-                        }
-                    });
-                } else {
-                    ui.label(
-                        egui::RichText::new(code)
-                            .monospace()
-                            .color(theme.text)
-                            .size(theme.text_base)
-                            .line_height(Some(code_line_h)),
-                    );
-                }
-            }
-        });
-    design_system::gap(ui, Space::S0);
 }
 
 #[cfg(test)]

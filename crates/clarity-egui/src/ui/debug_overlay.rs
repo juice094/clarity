@@ -137,8 +137,8 @@ mod tests {
         let ctx = egui::Context::default();
         let mut f_opt = Some(f);
         let mut output = None;
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(f) = f_opt.take() {
                     output = Some(f(ui));
                 }

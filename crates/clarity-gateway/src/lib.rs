@@ -48,6 +48,7 @@
 //! - `handlers` — 所有 Axum handler，包括聊天补全、任务管理、Admin 配置、文件操作
 //! - `session_store` — SQLite 持久化会话存储，支持历史加载、追加与过期清理
 //! - `ws` — WebSocket handler，提供实时消息推送
+//! - `transports` — `ClawTransport` 服务端适配器，统一 `/ws` 与 `/openclaw/ws` 的协议处理
 //! - `channels` — 第三方通道集成（Discord、Telegram、Webhook）
 //! - `session` — 会话 ID 与入口类型定义
 //!
@@ -79,6 +80,8 @@ pub mod channels;
 /// HTTP/Axum request handlers.
 pub mod handlers;
 pub mod health;
+/// OpenClaw-compatible JSON-RPC WebSocket endpoint.
+pub mod openclaw_server;
 /// Persistent SQLite-backed store for Claw Mesh role-context events.
 pub mod role_context_store;
 /// Shared application state and dual-port server runner.
@@ -87,5 +90,7 @@ pub mod server;
 pub mod session;
 /// Persistent SQLite session store.
 pub mod session_store;
+/// Server-side `ClawTransport` adapters for `/ws` and `/openclaw/ws`.
+pub mod transports;
 /// WebSocket real-time messaging handler.
 pub mod ws;

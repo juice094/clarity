@@ -9,9 +9,52 @@ use crate::theme::Theme;
 use crate::ui::rich_inline::{PositionedFragment, inline_spans_to_items, layout_rich_inline};
 use crate::ui::types::InlineSpan;
 use pretext_core::EngineProfile;
+use pretext_core::rich_inline::RichInlineItem;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// Line spacing multiplier applied to the egui row height.
 const LINE_HEIGHT_FACTOR: f32 = 1.2;
+
+/// Fingerprint used to decide whether a cached rich-paragraph layout is still
+/// valid. Any input that can change line breaking must be represented.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct LayoutKey {
+    span_hash: u64,
+    max_width_bits: u64,
+    theme_hash: u64,
+}
+
+/// Cached result of the expensive span → item → line-break pipeline.
+#[derive(Clone)]
+struct LayoutCache {
+    key: LayoutKey,
+    items: Vec<RichInlineItem>,
+    lines: Vec<Vec<PositionedFragment>>,
+}
+
+fn hash_spans(spans: &[InlineSpan]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for span in spans {
+        std::mem::discriminant(span).hash(&mut hasher);
+        match span {
+            InlineSpan::Text(s) | InlineSpan::Bold(s) | InlineSpan::Code(s) => s.hash(&mut hasher),
+            InlineSpan::Link { text, url } => {
+                text.hash(&mut hasher);
+                url.hash(&mut hasher);
+            }
+        }
+    }
+    hasher.finish()
+}
+
+fn hash_theme(theme: &Theme) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    theme.font_body.hash(&mut hasher);
+    theme.font_mono.hash(&mut hasher);
+    theme.text_base.to_bits().hash(&mut hasher);
+    hasher.finish()
+}
 
 /// Render a rich paragraph and return the exact vertical space consumed.
 ///
@@ -26,23 +69,44 @@ pub fn rich_paragraph(
     profile: &EngineProfile,
     max_width: f32,
 ) -> f32 {
-    let items = inline_spans_to_items(spans, theme);
-    if items.is_empty() {
+    let key = LayoutKey {
+        span_hash: hash_spans(spans),
+        max_width_bits: max_width.to_bits() as u64,
+        theme_hash: hash_theme(theme),
+    };
+    let cache_id = ui.id().with("rich_paragraph_layout");
+
+    let cached: Option<Arc<LayoutCache>> = ui.data(|d| d.get_temp(cache_id));
+    let cache = match cached.filter(|c| c.key == key) {
+        Some(c) => c,
+        None => {
+            let items = inline_spans_to_items(spans, theme);
+            let lines = if items.is_empty() {
+                Vec::new()
+            } else {
+                layout_rich_inline(&items, max_width, metrics, profile)
+            };
+            let new_cache = Arc::new(LayoutCache { key, items, lines });
+            ui.data_mut(|d| d.insert_temp(cache_id, new_cache.clone()));
+            new_cache
+        }
+    };
+
+    if cache.lines.is_empty() {
         return 0.0;
     }
 
     let body_font_id = metrics.to_egui_font_id(&crate::pretext::font_body(theme));
-    let row_height = ui.fonts(|fonts| fonts.row_height(&body_font_id)) * LINE_HEIGHT_FACTOR;
-    let lines = layout_rich_inline(&items, max_width, metrics, profile);
-    let desired_height = lines.len() as f32 * row_height;
+    let row_height = ui.fonts_mut(|fonts| fonts.row_height(&body_font_id)) * LINE_HEIGHT_FACTOR;
+    let desired_height = cache.lines.len() as f32 * row_height;
 
     let (rect, _response) =
         ui.allocate_at_least(egui::vec2(max_width, desired_height), egui::Sense::hover());
 
-    for (line_idx, line) in lines.iter().enumerate() {
+    for (line_idx, line) in cache.lines.iter().enumerate() {
         let line_y = rect.min.y + line_idx as f32 * row_height;
         for frag in line {
-            draw_fragment(ui, frag, line_y, row_height, &items, theme, metrics);
+            draw_fragment(ui, frag, line_y, row_height, &cache.items, theme, metrics);
         }
     }
 
@@ -115,8 +179,8 @@ mod tests {
         let metrics = EguiFontMetrics::new(ctx.clone());
         let profile = EngineProfile::chromium();
 
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 let height = rich_paragraph(ui, &[], &theme, &metrics, &profile, 200.0);
                 assert_eq!(height, 0.0);
             });
@@ -130,8 +194,8 @@ mod tests {
         let metrics = EguiFontMetrics::new(ctx.clone());
         let profile = EngineProfile::chromium();
 
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 let spans = vec![InlineSpan::Text("Hello world".into())];
                 let height = rich_paragraph(ui, &spans, &theme, &metrics, &profile, 200.0);
                 assert!(height > 0.0);
@@ -146,8 +210,8 @@ mod tests {
         let metrics = EguiFontMetrics::new(ctx.clone());
         let profile = EngineProfile::chromium();
 
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 let spans = vec![InlineSpan::Text(
                     "This is a very long text that should wrap into multiple lines.".into(),
                 )];

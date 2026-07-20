@@ -46,6 +46,7 @@ smol_str = { version = "0.3", features = ["serde"] }
 
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }
+clarity-knowledge = { path = "../clarity-knowledge" }
 rusqlite = { version = "0.34", features = ["bundled-full"], optional = true }
 clarity-mcp = { path = "../clarity-mcp" }
 clarity-wire = { path = "../clarity-wire" }

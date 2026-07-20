@@ -63,6 +63,8 @@ pub enum ShortcutAction {
     ToggleShare,
     /// Show the keyboard shortcuts reference.
     ShowShortcuts,
+    /// Jump to the bottom of the chat stream.
+    ScrollToBottom,
 }
 
 impl ShortcutAction {
@@ -90,6 +92,7 @@ impl ShortcutAction {
             ShortcutAction::ToggleFiles => "Ctrl+Shift+F",
             ShortcutAction::ToggleShare => "Ctrl+Shift+S",
             ShortcutAction::ShowShortcuts => "Ctrl+/",
+            ShortcutAction::ScrollToBottom => "End",
         }
     }
 
@@ -117,6 +120,7 @@ impl ShortcutAction {
             ShortcutAction::ToggleFiles => "Toggle files panel",
             ShortcutAction::ToggleShare => "Toggle share panel",
             ShortcutAction::ShowShortcuts => "Show this reference",
+            ShortcutAction::ScrollToBottom => "Scroll to bottom of chat",
         }
     }
     /// Stable kebab-case identifier shared with the CommandPalette.
@@ -145,6 +149,7 @@ impl ShortcutAction {
             ShortcutAction::ToggleFiles => ids::TOGGLE_FILES,
             ShortcutAction::ToggleShare => ids::TOGGLE_SHARE,
             ShortcutAction::ShowShortcuts => ids::SHOW_SHORTCUTS,
+            ShortcutAction::ScrollToBottom => ids::SCROLL_TO_BOTTOM,
         }
     }
 }
@@ -183,7 +188,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
     }
 
     if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
-        && !app.chat_store.input.trim().is_empty()
+        && !app.chat_store().input.trim().is_empty()
         && app.view_state.turn != clarity_core::ui::TurnState::Loading
     {
         actions.push(ShortcutAction::SendMessage);
@@ -240,6 +245,13 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         actions.push(ShortcutAction::ShowShortcuts);
     }
 
+    // Jump to the latest chat message when the chat view is active.
+    if app.current_main() == &clarity_core::ui::AppView::Chat
+        && ctx.input(|i| i.key_pressed(egui::Key::End))
+    {
+        actions.push(ShortcutAction::ScrollToBottom);
+    }
+
     // ── Line-mode navigation (S7 Phase 2D) ──
     #[cfg(feature = "line-mode")]
     {
@@ -273,12 +285,12 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
 /// Returns `true` when a modal dialog is open that should block main-UI shortcuts.
 pub fn is_modal_open(app: &App) -> bool {
-    !app.ui_store.pending_approvals.is_empty()
-        || app.view_state.main == clarity_core::ui::AppView::Settings
-        || app.view_state.modal == Some(clarity_core::ui::ModalType::TeamCreate)
-        || app.view_state.modal == Some(clarity_core::ui::ModalType::CronCreate)
-        || app.view_state.modal == Some(clarity_core::ui::ModalType::Snapshot)
-        || app.view_state.modal == Some(clarity_core::ui::ModalType::TaskCreate)
+    !app.context.ui_store.pending_approvals.is_empty()
+        || app.current_main() == &clarity_core::ui::AppView::Settings
+        || app.current_modal() == Some(&clarity_core::ui::ModalType::TeamCreate)
+        || app.current_modal() == Some(&clarity_core::ui::ModalType::CronCreate)
+        || app.current_modal() == Some(&clarity_core::ui::ModalType::Snapshot)
+        || app.current_modal() == Some(&clarity_core::ui::ModalType::TaskCreate)
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +339,7 @@ mod tests {
             (ShortcutAction::NavigateTop, ids::NAVIGATE_TOP),
             (ShortcutAction::NavigateBottom, ids::NAVIGATE_BOTTOM),
             (ShortcutAction::CopyLine, ids::COPY_LINE),
+            (ShortcutAction::ScrollToBottom, ids::SCROLL_TO_BOTTOM),
         ];
         for (action, expected) in all {
             assert_eq!(

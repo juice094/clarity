@@ -57,9 +57,9 @@ impl Agent {
             turn_id: String::new(),
             turn: Some(clarity_wire::TurnState::Loading),
         });
-        let (final_response, completed, tool_names) = self
+        let loop_result = self
             .run_sync_loop(&mut messages, &mut tool_prompt_manager, llm, &cancel_token)
-            .await?;
+            .await;
 
         self.maybe_snapshot_post_turn().await;
 
@@ -67,6 +67,17 @@ impl Agent {
             let mut inner = self.inner.write();
             inner.last_turn_message_count = messages.len();
         }
+
+        // If the sync loop failed, the turn must still be cleared so the agent
+        // does not remain stuck in the Running state (matches streaming path).
+        let (final_response, completed, tool_names) = match loop_result {
+            Ok(v) => v,
+            Err(e) => {
+                self.finish_turn();
+                return Err(e);
+            }
+        };
+
         let result = self
             .finalize_sync_turn(
                 query.as_ref(),
@@ -90,6 +101,11 @@ impl Agent {
                     let _ = future.await;
                 });
             }
+        }
+
+        // Update knowledge field with references from this turn
+        if let Some(ref field) = self.knowledge_field {
+            crate::knowledge::update_on_turn(field, query.as_ref(), &messages);
         }
 
         result
@@ -264,10 +280,17 @@ impl Agent {
         self.ensure_initialized().await?;
         let (mut tool_prompt_manager, llm, cancel_token) = self.setup_turn().await?;
         self.maybe_snapshot_pre_turn().await;
-        let (final_response, completed, tool_names) = self
+        let loop_result = self
             .run_sync_loop(&mut messages, &mut tool_prompt_manager, llm, &cancel_token)
-            .await?;
+            .await;
         self.maybe_snapshot_post_turn().await;
+        let (final_response, completed, tool_names) = match loop_result {
+            Ok(v) => v,
+            Err(e) => {
+                self.finish_turn();
+                return Err(e);
+            }
+        };
         self.finish_sync_turn(final_response, completed, &tool_names)
             .await
     }

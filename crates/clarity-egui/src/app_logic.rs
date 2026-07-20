@@ -2,6 +2,8 @@ use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};
 
+use clarity_chrome::Chrome;
+
 use crate::App;
 use crate::app_state::AppState;
 use crate::session::{load_sessions, new_session, save_session_internal};
@@ -226,20 +228,21 @@ impl App {
         mark("load_sessions");
 
         let theme = Theme::default();
-        let mut style = (*cc.egui_ctx.style()).clone();
+        let egui_theme = cc.egui_ctx.theme();
+        let mut style = (*cc.egui_ctx.style_of(egui_theme)).clone();
         theme.apply(&mut style);
-        cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_style_of(egui_theme, style);
 
         let settings_edit = GuiSettings::load();
         let font_scale = settings_edit
             .font_scale
             .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
-        let content_width = settings_edit.content_width.unwrap_or(600.0);
+        let content_width = settings_edit.content_width.unwrap_or(800.0);
         let right_rail_visible = settings_edit.right_rail_visible;
         let right_rail_context = settings_edit.right_rail_context;
         let right_rail_card_order = settings_edit.right_rail_card_order.clone();
         let plugin_order = settings_edit.plugin_order.clone();
-        let debug_layout_overlay = settings_edit.debug_layout_overlay;
+        let _debug_layout_overlay = settings_edit.debug_layout_overlay;
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -282,7 +285,8 @@ impl App {
         };
         mark("skill_watcher");
 
-        let settings_store = crate::stores::SettingsStore {
+        let mut settings_app = clarity_apps::SettingsApp::new();
+        settings_app.store = clarity_apps::SettingsStore {
             settings_edit,
             settings_vm,
             settings_active_tab: 0,
@@ -294,36 +298,74 @@ impl App {
             provider_registry: crate::provider::ProviderRegistry::load(),
             testing_provider: None,
             refreshing_provider: None,
-            kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
+            kimi_code_login_state: clarity_apps::KimiCodeLoginState::Idle,
             claw_editing_index: None,
             claw_form: crate::settings::OpenClawConnection::default(),
         };
         // Discover Claw devices after settings are loaded so user-configured
         // OpenClaw connections participate in the bot list.
         let device_state =
-            crate::claw::discover(&settings_store.settings_edit.openclaw_connections);
+            crate::claw::discover(&settings_app.store.settings_edit.openclaw_connections);
 
-        let mut app = Self {
-            state,
-            runtime,
-            ui_tx,
-            ui_rx,
-            session_store: crate::stores::SessionStore {
-                sessions,
-                active_session_id: active_id,
-                drafts: std::collections::HashMap::new(),
-            },
-            chat_store: crate::stores::ChatStore {
+        // Build domain stores locally so they can be handed off to AppContext.
+        let session_store = crate::stores::SessionStore {
+            sessions,
+            active_session_id: active_id,
+            drafts: std::collections::HashMap::new(),
+            turn_cache: std::collections::HashMap::new(),
+        };
+        let ui_store = crate::stores::UiStore {
+            network_banner: None,
+            frame_count: 0,
+            last_fps_time: cc.egui_ctx.input(|i| i.time),
+            fps: 0.0,
+            start: now,
+            theme,
+            content_max_width: content_width,
+            right_rail_width: None,
+            locale: settings_app
+                .store
+                .settings_edit
+                .language
+                .as_deref()
+                .map(crate::i18n::Locale::from_code)
+                .unwrap_or_default(),
+            last_scroll_offset: 0.0,
+            preview_item: None,
+            last_input_modified: now,
+            pending_approvals: Vec::new(),
+            toasts: vec![],
+            focus_target: None,
+            kimi_conversation_style: true,
+            line_cursor_selected: None,
+            line_cursor_total_lines: 0,
+            shell_prompt: String::new(),
+            active_project: None,
+            pretext_probe_open: false,
+            pretext_probe_wrap_width: 400.0,
+            pretext_estimate_enabled: true,
+            // Populated at runtime by device_state.snapshot() — see
+            // the frame-loop sync in update().
+            bot_instances: Vec::new(),
+            active_bot_id: String::new(),
+            last_active_session_id: String::new(),
+            request_repaint: false,
+            claw_history: Vec::new(),
+            ..Default::default()
+        };
+        let chat_app = {
+            let mut chat_app = clarity_apps::ChatApp::new();
+            chat_app.store = clarity_apps::chat::ChatStore {
                 input: String::new(),
                 attachments: vec![],
-                agent_status: AgentStatus::Unconfigured,
-                gateway_status: crate::ui::types::GatewayStatus::Checking,
+                agent_status: clarity_apps::chat::AgentStatus::Unconfigured,
+                gateway_status: clarity_apps::chat::GatewayStatus::Checking,
                 tool_calls: first_session_tool_calls,
                 pending_send: None,
                 last_usage: None,
                 pending_plan: None,
                 plan_tracker: None,
-                stick_to_bottom: true,
+                stick_to_bottom: false,
                 editing_message_idx: None,
                 edit_buffer: String::new(),
                 last_snapshot: None,
@@ -335,16 +377,17 @@ impl App {
                 find_current: 0,
                 find_last_query: String::new(),
                 in_flight_since: None,
-                draft_status: crate::ui::types::DraftStatus::None,
+                draft_status: clarity_apps::chat::DraftStatus::None,
                 status_message: None,
                 claw_in_flight_session_id: None,
                 chunks_since_save: 0,
                 context_items: Vec::new(),
-                token_usage: crate::stores::chat::TokenUsage::default(),
-            },
-            settings_store,
-            device_state,
-            task_store: crate::stores::TaskStore {
+                token_usage: clarity_apps::chat::TokenUsage::default(),
+            };
+            chat_app
+        };
+        let dashboard_app = clarity_apps::DashboardApp {
+            task_store: clarity_apps::dashboard::TaskStore {
                 tasks: vec![],
                 last_task_refresh: now,
                 task_create_name: String::new(),
@@ -354,7 +397,7 @@ impl App {
                 viewing_task_id: None,
                 viewing_task_result: None,
             },
-            cron_store: crate::stores::CronStore {
+            cron_store: clarity_apps::dashboard::CronStore {
                 tasks: vec![],
                 last_refresh: now,
                 create_name: String::new(),
@@ -363,74 +406,24 @@ impl App {
                 create_expr: String::new(),
                 create_priority: 2,
             },
-            ui_store: crate::stores::UiStore {
-                network_banner: None,
-                frame_count: 0,
-                last_fps_time: cc.egui_ctx.input(|i| i.time),
-                fps: 0.0,
-                start: now,
-                theme,
-                content_max_width: content_width,
-                right_rail_width: None,
-                locale: crate::i18n::Locale::default(),
-                last_scroll_offset: 0.0,
-                preview_item: None,
-                last_input_modified: now,
-                pending_approvals: Vec::new(),
-                toasts: vec![],
-                focus_target: None,
-                kimi_conversation_style: true,
-                line_cursor_selected: None,
-                line_cursor_total_lines: 0,
-                shell_prompt: String::new(),
-                active_project: None,
-                pretext_probe_open: false,
-                pretext_probe_wrap_width: 400.0,
-                pretext_estimate_enabled: true,
-                // Populated at runtime by device_state.snapshot() — see
-                // the frame-loop sync in update().
-                bot_instances: Vec::new(),
-                active_bot_id: String::new(),
-                last_active_session_id: String::new(),
-                request_repaint: false,
-                claw_history: Vec::new(),
-                ..Default::default()
-            },
-            subagent_store: crate::stores::SubAgentStore {
+            subagent_store: clarity_apps::dashboard::SubAgentStore {
                 parallel_batches: vec![],
                 last_parallel_poll: now,
                 running_agents: std::collections::HashMap::new(),
                 last_gateway_health_poll: now,
                 viewing_subagent_id: None,
             },
-            mcp_store: crate::stores::McpStore {
-                mcp_config: crate::ui::mcp_panel::load_mcp_config(),
-                mcp_changed: false,
-                connected_tools: vec![],
-                last_mcp_poll: now,
-                last_mcp_mtime: initial_mcp_mtime,
-            },
-            onboarding_store: crate::stores::OnboardingStore {
-                onboarding_state: if crate::onboarding::should_show_onboarding() {
-                    crate::onboarding::OnboardingState::ChooseProvider
-                } else {
-                    crate::onboarding::OnboardingState::Hidden
-                },
-                onboarding_progress_rx: None,
-                downloading_auto: false,
-                cancel_token: None,
-            },
             team_store: {
                 let persisted = clarity_tools::team::load_teams_sync();
                 let teams = persisted
                     .into_iter()
-                    .map(|tc| crate::stores::Team {
+                    .map(|tc| clarity_apps::dashboard::Team {
                         name: tc.name,
                         goal: tc.goal,
                         members: tc
                             .members
                             .into_iter()
-                            .map(|m| crate::stores::TeamMember {
+                            .map(|m| clarity_apps::dashboard::TeamMember {
                                 name: m.name,
                                 description: m.description,
                                 agent_type: m.agent_type,
@@ -440,7 +433,7 @@ impl App {
                         timeout_secs: tc.timeout_secs,
                     })
                     .collect();
-                crate::stores::TeamStore {
+                clarity_apps::dashboard::TeamStore {
                     teams,
                     create_name: String::new(),
                     create_goal: String::new(),
@@ -449,61 +442,127 @@ impl App {
                     create_timeout_secs: 300,
                 }
             },
-            project_store: crate::stores::ProjectStore::new(),
-            snapshot_store: crate::stores::SnapshotStore::default(),
+        };
+        // P1d: assemble the unified app enum array. Order must match AppView:
+        // 0=Chat, 1=Settings, 2=Dashboard.
+        let apps = [
+            clarity_apps::ClarityAppEnum::Chat(chat_app),
+            clarity_apps::ClarityAppEnum::Settings(settings_app),
+            clarity_apps::ClarityAppEnum::Dashboard(dashboard_app),
+        ];
+        let mcp_store = crate::stores::McpStore {
+            mcp_config: crate::ui::mcp_panel::load_mcp_config(),
+            mcp_changed: false,
+            connected_tools: vec![],
+            last_mcp_poll: now,
+            last_mcp_mtime: initial_mcp_mtime,
+        };
+        let onboarding_store = crate::stores::OnboardingStore {
+            onboarding_state: if crate::onboarding::should_show_onboarding() {
+                crate::onboarding::OnboardingState::ChooseProvider
+            } else {
+                crate::onboarding::OnboardingState::Hidden
+            },
+            onboarding_progress_rx: None,
+            downloading_auto: false,
+            cancel_token: None,
+        };
+        let project_store = crate::stores::ProjectStore::new();
+        let snapshot_store = crate::stores::SnapshotStore::default();
+        let mut knowledge_store = crate::stores::KnowledgeStore::new();
+        knowledge_store.set_field(state.knowledge_field.clone());
+        let console_store = crate::stores::ConsoleStore::default();
+        let files_store = crate::stores::FilesStore::default();
+        let share_store = crate::stores::ShareStore::default();
+        let template_store = crate::stores::TemplateStore::default();
+
+        let claw_device_identity = clarity_claw::DeviceIdentity::load_or_generate()
+            .map(Some)
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to load or generate Clarity device identity: {}", e);
+                None
+            });
+        let claw_device_token = clarity_claw::load_paired_token().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load Clarity device token: {}", e);
+            None
+        });
+
+        let context = crate::app_context::AppContext {
+            state,
+            runtime,
+            ui_tx,
+            session_store,
+            ui_store,
+            mcp_store,
+            onboarding_store,
+            project_store,
+            snapshot_store,
+            knowledge_store,
+            console_store,
+            files_store,
+            share_store,
+            template_store,
             gateway_manager,
             skill_watcher,
             tray_manager,
+            device_state,
+            claw_ws: None,
+            claw_ws_device_id: String::new(),
+            claw_device_identity,
+            claw_device_token,
+            claw_pairing_client: None,
+            claw_pairing_state: clarity_shell::PairingState::default(),
+        };
+
+        let view_state = {
+            let mut vs = clarity_core::ui::ViewState::new();
+            vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
+            vs.left_rail_expanded = true;
+            // Sessions are the primary navigation entry point; keep the
+            // history section expanded on startup so users can see and
+            // switch between Chat / Claw / Work contexts immediately.
+            vs.expansions.nav_history = true;
+            vs.right_rail_context = right_rail_context;
+            // S6 redesign: debug overlay is opt-in per session. Do not restore a
+            // previously-enabled overlay on launch to avoid confusing users.
+            vs.debug_layout_overlay = false;
+            if right_rail_card_order.is_empty() {
+                vs.right_rail_card_order = vec![
+                    clarity_core::ui::RightRailCard::Progress,
+                    clarity_core::ui::RightRailCard::Context,
+                ];
+            } else {
+                vs.right_rail_card_order = right_rail_card_order;
+            }
+            vs
+        };
+        let main_router = clarity_core::ui::Router::new(clarity_core::ui::AppView::Chat);
+        let modal_router = clarity_core::ui::Router::empty();
+        // S6 redesign: right rail starts collapsed to give the chat stage full
+        // width. The persisted `right_rail_visible` setting is still honored
+        // after the user explicitly toggles a panel; it just no longer forces
+        // the rail open on launch.
+        let _right_rail_visible = right_rail_visible;
+        let right_rail_router = clarity_core::ui::Router::default();
+
+        let mut app = Self {
+            context,
+            ui_rx,
+            view_state,
+            main_router,
+            modal_router,
+            right_rail_router,
+            shortcuts_help_open: false,
+            command_palette: crate::widgets::command_palette::CommandPalette::new(),
+            pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
+            panel_animation: crate::animation::PanelAnimationState::default(),
+            main_stage_transition: None,
+            prev_main_view: clarity_core::ui::AppView::Chat,
+            apps,
+            chrome: Some(Chrome::new(crate::chrome::AppChromeRenderer)),
             tray_quit_requested: false,
             last_tray_status: None,
             last_frame_width: None,
-            command_palette: crate::widgets::command_palette::CommandPalette::new(),
-            shortcuts_help_open: false,
-            view_state: {
-                let mut vs = clarity_core::ui::ViewState::new();
-                vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
-                vs.left_rail_expanded = true;
-                // Sessions are the primary navigation entry point; keep the
-                // history section expanded on startup so users can see and
-                // switch between Chat / Claw / Work contexts immediately.
-                vs.expansions.nav_history = true;
-                vs.right_rail_visible = right_rail_visible;
-                vs.right_rail_context = right_rail_context;
-                vs.debug_layout_overlay = debug_layout_overlay;
-                if right_rail_card_order.is_empty() {
-                    vs.right_rail_card_order = vec![
-                        clarity_core::ui::RightRailCard::Progress,
-                        clarity_core::ui::RightRailCard::Context,
-                    ];
-                } else {
-                    vs.right_rail_card_order = right_rail_card_order;
-                }
-                vs
-            },
-            pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
-            claw_ws: None,
-            claw_ws_device_id: String::new(),
-            // Always ensure a device identity is available. OpenClaw remote
-            // Gateways reject token-only connections and clear scopes, which
-            // causes sessions.send to fail with an empty error payload.
-            claw_device_identity: clarity_claw::DeviceIdentity::load_or_generate()
-                .map(Some)
-                .unwrap_or_else(|e| {
-                    tracing::warn!("Failed to load or generate Clarity device identity: {}", e);
-                    None
-                }),
-            claw_device_token: clarity_claw::load_paired_token().unwrap_or_else(|e| {
-                tracing::warn!("Failed to load Clarity device token: {}", e);
-                None
-            }),
-            claw_pairing_client: None,
-            claw_pairing_state: crate::PairingState::default(),
-            knowledge_store: crate::stores::KnowledgeStore::new(),
-            console_store: crate::stores::ConsoleStore::default(),
-            files_store: crate::stores::FilesStore::default(),
-            share_store: crate::stores::ShareStore::default(),
-            template_store: crate::stores::TemplateStore::default(),
-            panel_animation: crate::animation::PanelAnimationState::default(),
         };
         mark("app_struct_init");
 
@@ -511,9 +570,13 @@ impl App {
         // Templates are empty shells — users are expected to rename and
         // populate them. Names use the locale-aware "Work Templates" label
         // as a prefix so they read naturally in any language.
-        if !app.settings_store.settings_edit.work_templates_initialized {
+        if !app
+            .settings_store()
+            .settings_edit
+            .work_templates_initialized
+        {
             let base = app.t("Work Templates");
-            app.settings_store.settings_edit.work_templates = vec![
+            app.settings_store_mut().settings_edit.work_templates = vec![
                 crate::settings::WorkTemplate {
                     name: format!("{} 1", base),
                     prompt: String::new(),
@@ -527,13 +590,15 @@ impl App {
                     prompt: String::new(),
                 },
             ];
-            app.settings_store.settings_edit.work_templates_initialized = true;
+            app.settings_store_mut()
+                .settings_edit
+                .work_templates_initialized = true;
         }
 
         // Sync the initial plugin order back into settings so that new defaults
         // are persisted on first run.
-        if app.settings_store.settings_edit.plugin_order.is_empty() {
-            app.settings_store.settings_edit.plugin_order = plugin_order;
+        if app.settings_store().settings_edit.plugin_order.is_empty() {
+            app.settings_store_mut().settings_edit.plugin_order = plugin_order;
         }
         app.refresh_tasks();
         mark("App::new complete");
@@ -542,85 +607,15 @@ impl App {
 
     /// Adds a transient toast notification.
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, level: ToastLevel) {
-        crate::handlers::system::push_toast(&mut self.ui_store, message, level);
-    }
-
-    /// Refresh the cached shell prompt (cwd + git branch).
-    /// Called periodically from App::update to avoid IO on every frame.
-    pub(crate) fn refresh_shell_prompt(&mut self) {
-        let cwd = std::env::current_dir()
-            .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-            .unwrap_or_default();
-        let branch = Self::detect_git_branch().unwrap_or_default();
-        let prompt = if branch.is_empty() {
-            cwd
-        } else {
-            format!("{} {}", cwd, branch)
-        };
-        self.ui_store.shell_prompt = prompt;
-    }
-
-    /// Detect current git branch by reading .git/HEAD (no subprocess spawn).
-    fn detect_git_branch() -> Option<String> {
-        let head = std::fs::read_to_string(".git/HEAD").ok()?;
-        let line = head.trim();
-        if let Some(prefix) = line.strip_prefix("ref: refs/heads/") {
-            return Some(prefix.to_string());
-        }
-        // Detached HEAD: show abbreviated hash
-        if line.len() >= 7 {
-            return Some(line[..7].to_string());
-        }
-        None
-    }
-
-    /// Poll mcp.json for external changes and hot-reload if modified.
-    pub(crate) fn check_mcp_config_reload(&mut self) {
-        if self.mcp_store.last_mcp_poll.elapsed() < Duration::from_secs(5) {
-            return;
-        }
-        self.mcp_store.last_mcp_poll = Instant::now();
-
-        let path = match clarity_core::mcp::config::default_config_path() {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::debug!("MCP default config path unavailable: {}", e);
-                return;
-            }
-        };
-
-        let mtime = match std::fs::metadata(&path).and_then(|m| m.modified()) {
-            Ok(t) => Some(t),
-            Err(e) => {
-                tracing::debug!("Failed to read mcp.json metadata: {}", e);
-                None
-            }
-        };
-
-        if mtime == self.mcp_store.last_mcp_mtime {
-            return;
-        }
-        self.mcp_store.last_mcp_mtime = mtime;
-
-        let config = match clarity_core::mcp::config::McpConfig::load_default() {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!("MCP config reload failed: {}", e);
-                self.push_toast(format!("MCP 配置加载失败: {}", e), ToastLevel::Error);
-                return;
-            }
-        };
-
-        self.hot_reload_mcp(config);
+        crate::handlers::system::push_toast(&mut self.context.ui_store, message, level);
     }
 
     /// Disconnect old MCP tools and register new ones from the given config.
     pub(crate) fn hot_reload_mcp(&mut self, config: clarity_core::mcp::config::McpConfig) {
-        let old_tools = self.mcp_store.connected_tools.clone();
-        let agent = self.state.agent.clone();
-        let tx = self.ui_tx.clone();
-        self.runtime.spawn(async move {
+        let old_tools = self.context.mcp_store.connected_tools.clone();
+        let agent = self.context.state.agent.clone();
+        let tx = self.context.ui_tx.clone();
+        self.context.runtime.spawn(async move {
             for name in &old_tools {
                 let _ = agent.registry().unregister(name);
             }
@@ -654,7 +649,7 @@ impl App {
     /// unchanged sessions. On failure, surfaces the error as a toast so the
     /// user is aware their data may not be durable.
     pub(crate) fn save_current_session(&mut self) {
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             let now = crate::session::now_millis();
             match save_session_internal(session) {
                 Ok(()) => {
@@ -666,7 +661,7 @@ impl App {
                 Err(e) => {
                     tracing::warn!("Failed to save session {}: {}", session.id, e);
                     crate::handlers::system::push_toast(
-                        &mut self.ui_store,
+                        &mut self.context.ui_store,
                         format!("Failed to save session: {}", e),
                         crate::ui::types::ToastLevel::Error,
                     );
@@ -679,46 +674,47 @@ impl App {
     /// Keeps `chat_store.input` intact so callers can pre-fill it with a draft
     /// or prompt; clears everything else that belongs to the previous turn.
     fn reset_chat_input_state(&mut self) {
-        self.chat_store.attachments.clear();
-        self.chat_store.last_snapshot = None;
-        self.chat_store.editing_message_idx = None;
-        self.chat_store.edit_buffer.clear();
-        self.chat_store.input_history_idx = None;
-        self.chat_store.pending_send = None;
-        self.chat_store.draft_status = DraftStatus::None;
-        self.chat_store.status_message = None;
-        self.chat_store.tool_calls.clear();
-        self.chat_store.stick_to_bottom = true;
-        self.chat_store.last_usage = None;
-        self.ui_store.focus_target = Some(FocusTarget::ChatInput);
+        let chat_store = self.chat_store_mut();
+        chat_store.attachments.clear();
+        chat_store.last_snapshot = None;
+        chat_store.editing_message_idx = None;
+        chat_store.edit_buffer.clear();
+        chat_store.input_history_idx = None;
+        chat_store.pending_send = None;
+        chat_store.draft_status = clarity_apps::chat::DraftStatus::None;
+        chat_store.status_message = None;
+        chat_store.tool_calls.clear();
+        chat_store.stick_to_bottom = true;
+        chat_store.last_usage = None;
+        self.context.ui_store.focus_target = Some(FocusTarget::ChatInput);
     }
 
     /// Creates a new plain chat session.
     pub(crate) fn new_session(&mut self) {
         // If the current session is empty, reuse it rather than accumulating blank tabs.
         let is_empty = self
+            .context
             .session_store
             .active_session()
             .map(|s| s.messages.is_empty())
             .unwrap_or(false);
         if is_empty {
-            self.chat_store.input = String::new();
+            self.chat_store_mut().input = String::new();
             self.reset_chat_input_state();
             return;
         }
 
         // Current session has real messages — save it and create a fresh one.
-        let old_id = self.session_store.active_session_id.clone();
+        let old_id = self.context.session_store.active_session_id.clone();
         self.save_current_session();
-        if !self.chat_store.input.trim().is_empty() {
-            self.session_store
-                .drafts
-                .insert(old_id, self.chat_store.input.clone());
+        if !self.chat_store().input.trim().is_empty() {
+            let input = self.chat_store().input.clone();
+            self.context.session_store.drafts.insert(old_id, input);
         } else {
-            self.session_store.drafts.remove(&old_id);
+            self.context.session_store.drafts.remove(&old_id);
         }
 
-        let count = self.session_store.sessions.len();
+        let count = self.context.session_store.sessions.len();
         let context = self.infer_new_session_context();
         let s = new_session(count, context);
         let id = s.id.clone();
@@ -726,12 +722,18 @@ impl App {
         // Emit event-driven session creation so navigation and future backend
         // Thread* wire messages converge on the same path.
         let _ = self
+            .context
             .ui_tx
             .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
         self.process_events();
 
         self.reset_chat_input_state();
-        self.chat_store.input = self.session_store.drafts.remove(&id).unwrap_or_default();
+        self.chat_store_mut().input = self
+            .context
+            .session_store
+            .drafts
+            .remove(&id)
+            .unwrap_or_default();
     }
 
     /// Enter a Claw session for the given role and session key.
@@ -753,6 +755,7 @@ impl App {
 
         // Look for an existing Claw session with the same role and session key.
         let existing_id = self
+            .context
             .session_store
             .sessions
             .iter()
@@ -767,7 +770,13 @@ impl App {
 
         if let Some(id) = existing_id {
             // Pin to the selected device when one is given.
-            if let Some(session) = self.session_store.sessions.iter_mut().find(|s| s.id == id) {
+            if let Some(session) = self
+                .context
+                .session_store
+                .sessions
+                .iter_mut()
+                .find(|s| s.id == id)
+            {
                 if let SessionContext::Claw { affinity, .. } = &mut session.context {
                     if let Some(dev) = device_id.as_ref() {
                         *affinity = DeviceAffinity::Specific(dev.clone());
@@ -775,9 +784,10 @@ impl App {
                 }
             }
             self.switch_to_session(id);
-            self.ui_store.active_bot_id = device_id
+            self.context.ui_store.active_bot_id = device_id
                 .or_else(|| {
-                    self.device_state
+                    self.context
+                        .device_state
                         .pick_instance(&role, &DeviceAffinity::AnyOnline)
                         .map(|b| b.id)
                 })
@@ -787,7 +797,7 @@ impl App {
         }
 
         // No existing session for this key: create one.
-        let count = self.session_store.sessions.len();
+        let count = self.context.session_store.sessions.len();
         let role_for_sync = role.clone();
         let affinity = device_id
             .clone()
@@ -802,12 +812,14 @@ impl App {
             },
         );
         let _ = self
+            .context
             .ui_tx
             .send(crate::ui::types::UiEvent::ThreadCreated { session });
         self.process_events();
-        self.ui_store.active_bot_id = device_id
+        self.context.ui_store.active_bot_id = device_id
             .or_else(|| {
-                self.device_state
+                self.context
+                    .device_state
                     .pick_instance(&role_for_sync, &DeviceAffinity::AnyOnline)
                     .map(|b| b.id)
             })
@@ -824,13 +836,14 @@ impl App {
     fn resolve_claw_session_key(&self, role: &str, device_id: Option<&str>) -> String {
         device_id
             .and_then(|id| {
-                self.device_state
+                self.context
+                    .device_state
                     .snapshot()
                     .into_iter()
                     .find(|b| b.id == id)
                     .and_then(|b| b.session_key)
             })
-            .or_else(|| self.device_state.session_key_for_role(role))
+            .or_else(|| self.context.device_state.session_key_for_role(role))
             .unwrap_or_else(|| crate::session::claw_session_key(role))
     }
 
@@ -839,18 +852,21 @@ impl App {
     /// Used to decide which Gateway features (e.g. role-context sync) are
     /// available for the active connection.
     pub(crate) fn active_claw_protocol(&self) -> Option<crate::claw::ClawProtocol> {
-        self.claw_ws.as_ref()?;
-        let device_id = if self.claw_ws_device_id.is_empty() {
-            &self.ui_store.active_bot_id
+        self.context.claw_ws.as_ref()?;
+        let device_id = if self.context.claw_ws_device_id.is_empty() {
+            &self.context.ui_store.active_bot_id
         } else {
-            &self.claw_ws_device_id
+            &self.context.claw_ws_device_id
         };
-        self.device_state.connection(device_id).map(|c| c.protocol)
+        self.context
+            .device_state
+            .connection(device_id)
+            .map(|c| c.protocol)
     }
 
     /// Trigger a role-context sync for `role` if a Claw WebSocket is connected.
     fn maybe_sync_claw_role_context(&self, role: &str) {
-        let Some(ref ws) = self.claw_ws else {
+        let Some(ref ws) = self.context.claw_ws else {
             return;
         };
         // OpenClaw/KimiClaw uses syncthing-rust for role-context sync, not the
@@ -860,10 +876,11 @@ impl App {
             return;
         }
         let device_id = self
+            .context
             .claw_device_identity
             .as_ref()
             .map(|id| id.device_id())
-            .unwrap_or_else(|| self.claw_ws_device_id.clone());
+            .unwrap_or_else(|| self.context.claw_ws_device_id.clone());
         // ponytail: since_event_id should be derived from the session's already
         // known events once local role-context state is tracked. Passing None
         // fetches all events and relies on the merger to deduplicate.
@@ -877,10 +894,23 @@ impl App {
     ///
     /// Note: Claw sessions are no longer created via "New Session". They are
     /// entered by clicking a Claw device/role in the left navigation tree.
+    /// Return the currently available plugins in user-persisted order.
+    ///
+    /// Built-ins come first, followed by skills, MCP tools, and web tabs.
+    /// The result is cheap to compute; call every frame the plugin picker is open.
+    pub(crate) fn current_plugins(&self) -> Vec<crate::stores::PluginItem> {
+        let all = crate::stores::all_plugins(
+            &self.context.state.agent,
+            self.context.mcp_store.mcp_config.as_ref(),
+            &self.settings_store().settings_edit,
+        );
+        crate::stores::ordered_plugins(&all, &self.settings_store().settings_edit.plugin_order)
+    }
+
     fn infer_new_session_context(&self) -> SessionContext {
         infer_new_session_context_impl(
-            self.project_store.selected_project_id.as_deref(),
-            &self.project_store.projects,
+            self.context.project_store.selected_project_id.as_deref(),
+            &self.context.project_store.projects,
             self.view_state.new_session_mode,
         )
     }
@@ -891,18 +921,21 @@ impl App {
 fn infer_new_session_context_impl(
     selected_project_id: Option<&str>,
     projects: &[Project],
-    mode: clarity_core::ui::NewSessionMode,
+    _mode: clarity_core::ui::NewSessionMode,
 ) -> SessionContext {
-    if mode == clarity_core::ui::NewSessionMode::Chat {
+    // ponytail: Work/Chat toggle is gone. New sessions are Chat by default.
+    // If a project is explicitly selected, bind to it (Work context) so files/
+    // workspace tools still resolve; otherwise keep a plain Chat session.
+    let Some(project_id) = selected_project_id else {
         return SessionContext::Chat;
-    }
-
-    let has_workspace = selected_project_id
-        .and_then(|pid| projects.iter().find(|p| p.id == pid))
+    };
+    let has_workspace = projects
+        .iter()
+        .find(|p| p.id == project_id)
         .map(|p| p.has_workspace)
         .unwrap_or(true);
     SessionContext::Work {
-        workspace_id: selected_project_id.map(|s| s.into()),
+        workspace_id: Some(project_id.into()),
         has_workspace,
     }
 }
@@ -910,13 +943,13 @@ fn infer_new_session_context_impl(
 impl App {
     /// Stop.
     pub(crate) fn stop(&mut self) {
-        self.state.agent.cancel();
+        self.context.state.agent.cancel();
         // run_streaming will detect cancellation, return AgentError::Cancelled,
         // and send UiEvent::Done → process_events calls reset() and is_loading=false.
     }
     /// Convenience: translate `key` for the current locale.
     pub(crate) fn t(&self, key: &'static str) -> &'static str {
-        self.ui_store.locale.t(key)
+        self.context.ui_store.locale.t(key)
     }
 
     /// S3.2 (ADR-006 follow-up): centralized "commit settings" primitive.
@@ -929,9 +962,9 @@ impl App {
     /// Returns `Err` only on disk save failure; caller decides whether to
     /// skip downstream side effects.
     pub(crate) fn commit_settings(&self) -> Result<(), String> {
-        self.settings_store.settings_edit.save()?;
-        let mut guard = self.state.cached_settings.lock();
-        *guard = self.settings_store.settings_edit.clone();
+        self.settings_store().settings_edit.save()?;
+        let mut guard = self.context.state.cached_settings.lock();
+        *guard = self.settings_store().settings_edit.clone();
         Ok(())
     }
 
@@ -941,12 +974,15 @@ impl App {
     /// or plugin order changes. Errors are logged but not surfaced as toasts
     /// to avoid spamming the user every frame.
     pub(crate) fn persist_layout_settings(&mut self) {
-        self.settings_store.settings_edit.right_rail_visible = self.view_state.right_rail_visible;
-        self.settings_store.settings_edit.right_rail_context = self.view_state.right_rail_context;
-        self.settings_store.settings_edit.right_rail_card_order =
-            self.view_state.right_rail_card_order.clone();
-        self.settings_store.settings_edit.debug_layout_overlay =
-            self.view_state.debug_layout_overlay;
+        let right_rail_visible = self.is_right_rail_visible();
+        let right_rail_context = self.view_state.right_rail_context;
+        let right_rail_card_order = self.view_state.right_rail_card_order.clone();
+        let debug_layout_overlay = self.view_state.debug_layout_overlay;
+        let settings_store = self.settings_store_mut();
+        settings_store.settings_edit.right_rail_visible = right_rail_visible;
+        settings_store.settings_edit.right_rail_context = right_rail_context;
+        settings_store.settings_edit.right_rail_card_order = right_rail_card_order;
+        settings_store.settings_edit.debug_layout_overlay = debug_layout_overlay;
         if let Err(e) = self.commit_settings() {
             tracing::warn!("Failed to persist layout settings: {}", e);
         }
@@ -987,11 +1023,12 @@ impl App {
             return;
         }
 
-        let workspace_id = self.project_store.selected_project_id.clone();
+        let workspace_id = self.context.project_store.selected_project_id.clone();
         let has_workspace = workspace_id
             .as_ref()
             .and_then(|pid| {
-                self.project_store
+                self.context
+                    .project_store
                     .projects
                     .iter()
                     .find(|p| &p.id == pid)
@@ -1005,93 +1042,98 @@ impl App {
 
         // If the current session is empty, repurpose it for the template.
         let is_empty = self
+            .context
             .session_store
             .active_session()
             .map(|s| s.messages.is_empty())
             .unwrap_or(false);
         if is_empty {
-            if let Some(session) = self.session_store.active_session_mut() {
+            if let Some(session) = self.context.session_store.active_session_mut() {
                 session.context = context;
                 session.project_id = workspace_id;
             }
             self.reset_chat_input_state();
-            self.chat_store.input = prompt.to_string();
+            self.chat_store_mut().input = prompt.to_string();
             return;
         }
 
         // Current session has real messages — save it and create a fresh Work session.
-        let old_id = self.session_store.active_session_id.clone();
+        let old_id = self.context.session_store.active_session_id.clone();
         self.save_current_session();
-        if !self.chat_store.input.trim().is_empty() {
-            self.session_store
-                .drafts
-                .insert(old_id, self.chat_store.input.clone());
+        if !self.chat_store().input.trim().is_empty() {
+            let input = self.chat_store().input.clone();
+            self.context.session_store.drafts.insert(old_id, input);
         } else {
-            self.session_store.drafts.remove(&old_id);
+            self.context.session_store.drafts.remove(&old_id);
         }
 
-        let count = self.session_store.sessions.len();
+        let count = self.context.session_store.sessions.len();
         let s = new_session(count, context);
         let _ = self
+            .context
             .ui_tx
             .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
         self.process_events();
 
         self.reset_chat_input_state();
-        self.chat_store.input = prompt.to_string();
+        self.chat_store_mut().input = prompt.to_string();
     }
 
     /// Switch the active session, preserving the current session's draft and
     /// restoring the target session's input and tool-call state.
     pub(crate) fn switch_to_session(&mut self, session_id: String) {
         self.save_current_session();
-        let old_id = self.session_store.active_session_id.clone();
-        if !self.chat_store.input.trim().is_empty() {
-            self.session_store
-                .drafts
-                .insert(old_id, self.chat_store.input.clone());
+        let old_id = self.context.session_store.active_session_id.clone();
+        if !self.chat_store().input.trim().is_empty() {
+            let input = self.chat_store().input.clone();
+            self.context.session_store.drafts.insert(old_id, input);
         } else {
-            self.session_store.drafts.remove(&old_id);
+            self.context.session_store.drafts.remove(&old_id);
         }
 
         // Event-driven activation: the centralized handler updates SessionStore
         // so future backend ThreadActive wire messages use the same path.
-        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadActive {
-            thread_id: session_id.clone(),
-            title: None,
-        });
+        let _ = self
+            .context
+            .ui_tx
+            .send(crate::ui::types::UiEvent::ThreadActive {
+                thread_id: session_id.clone(),
+                title: None,
+            });
         self.process_events();
 
         // SAFE: unwrap_or_default is acceptable — a missing draft means the
         // session input was empty, which is the expected default.
-        let active_id = self.session_store.active_session_id.clone();
-        self.chat_store.input = self
+        let active_id = self.context.session_store.active_session_id.clone();
+        self.chat_store_mut().input = self
+            .context
             .session_store
             .drafts
             .remove(&active_id)
             .unwrap_or_default();
         if let Some(s) = self
+            .context
             .session_store
             .sessions
             .iter()
             .find(|s| s.id == active_id)
             .cloned()
         {
-            self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
+            self.chat_store_mut().tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         }
 
         // If we switched to a Claw session and a Gateway WebSocket is already
         // connected, make sure the Gateway is subscribed to this session's key
         // and sync its role context. Without this, switching sessions while
         // connected would leave us subscribed to the previous session's stream.
-        if let Some(session) = self.session_store.active_session() {
+        if let Some(session) = self.context.session_store.active_session() {
             if let crate::ui::types::SessionContext::Claw {
                 role, session_key, ..
             } = &session.context
             {
                 let session_key = session_key.clone();
                 let role = role.clone();
-                if let Some(ref ws) = self.claw_ws {
+                if let Some(ref ws) = self.context.claw_ws {
                     let is_openclaw = self.active_claw_protocol()
                         == Some(crate::claw::ClawProtocol::OpenClawJsonRpc);
                     if !is_openclaw {
@@ -1108,21 +1150,91 @@ impl App {
     /// Propagate the current `settings_edit.approval_mode` to the agent and
     /// the mode-aware approval runtime. Idempotent.
     pub(crate) fn apply_approval_mode_to_runtime(&self) {
-        let mode =
-            crate::app_state::parse_approval_mode(&self.settings_store.settings_edit.approval_mode);
-        self.state.agent.set_approval_mode(mode);
-        self.state.mode_aware_approval_runtime.set_mode(mode);
+        let mode = crate::app_state::parse_approval_mode(
+            &self.settings_store().settings_edit.approval_mode,
+        );
+        self.context.state.agent.set_approval_mode(mode);
+        self.context
+            .state
+            .mode_aware_approval_runtime
+            .set_mode(mode);
     }
 
     /// Spawn an async task that triggers `reload_llm`. Fire-and-forget; errors
     /// are logged via `tracing::warn!`.
     pub(crate) fn trigger_llm_reload(&self) {
-        let state = self.state.clone();
-        self.runtime.spawn(async move {
+        let state = self.context.state.clone();
+        self.context.runtime.spawn(async move {
             if let Err(e) = crate::app_state::reload_llm(&state).await {
                 tracing::warn!("reload_llm failed: {}", e);
             }
         });
+    }
+
+    /// Open or focus the right-rail tab matching `panel`.
+    ///
+    /// If the tab already exists in the dock it is activated; otherwise a new
+    /// tab is pushed to the focused leaf. The rail is made visible.
+    pub(crate) fn open_or_focus_right_rail_tab(&mut self, panel: clarity_core::ui::RightRailPanel) {
+        use crate::panels::right_ide_panel::RightRailTab;
+        if panel == clarity_core::ui::RightRailPanel::None {
+            return;
+        }
+        let Some(tab) = RightRailTab::from_panel(panel) else {
+            return;
+        };
+        let dock = &mut self.context.ui_store.right_rail_dock;
+        if let Some(path) = dock.find_tab(&tab) {
+            if let Err(e) = dock.set_active_tab(path) {
+                tracing::debug!("Failed to focus right-rail tab: {:?}", e);
+            }
+        } else {
+            dock.push_to_focused_leaf(tab);
+        }
+        if self.current_right_rail() != Some(&panel) {
+            self.right_rail_router.navigate(panel);
+        }
+    }
+
+    /// Close the right-rail tab matching `panel` if it is open.
+    ///
+    /// If the closed tab was active or the last remaining tab, the rail is
+    /// hidden.
+    #[allow(dead_code)] // public helper reserved for future command/menu callers
+    pub(crate) fn close_right_rail_tab(&mut self, panel: clarity_core::ui::RightRailPanel) {
+        use crate::panels::right_ide_panel::RightRailTab;
+        let Some(tab) = RightRailTab::from_panel(panel) else {
+            return;
+        };
+        let dock = &mut self.context.ui_store.right_rail_dock;
+        let Some(path) = dock.find_tab(&tab) else {
+            return;
+        };
+        let was_active = dock
+            .find_active_focused()
+            .map(|(_, active)| *active == tab)
+            .unwrap_or(false);
+        let was_last = dock.iter_all_tabs().count() == 1;
+        if dock.remove_tab(path).is_some() && (was_active || was_last) {
+            self.collapse_right_rail();
+        }
+    }
+
+    /// Toggle the right-rail tab matching `panel` within the given context.
+    ///
+    /// If the tab is already active and visible, the rail collapses. Otherwise
+    /// the context is set and the tab is opened or focused.
+    pub(crate) fn toggle_right_rail_tab(
+        &mut self,
+        panel: clarity_core::ui::RightRailPanel,
+        ctx: clarity_core::ui::RightRailContext,
+    ) {
+        if self.is_right_rail_visible() && self.current_right_rail() == Some(&panel) {
+            self.collapse_right_rail();
+        } else {
+            self.view_state.set_right_rail_context(ctx);
+            self.open_or_focus_right_rail_tab(panel);
+        }
     }
 
     /// Save current settings to disk and reload the LLM.
@@ -1148,7 +1260,7 @@ impl App {
     /// Increase the global font scale by one step, persist, and re-apply the theme.
     pub(crate) fn increase_font_scale(&mut self) {
         let current = self
-            .settings_store
+            .settings_store()
             .settings_edit
             .font_scale
             .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
@@ -1160,7 +1272,7 @@ impl App {
     /// Decrease the global font scale by one step, persist, and re-apply the theme.
     pub(crate) fn decrease_font_scale(&mut self) {
         let current = self
-            .settings_store
+            .settings_store()
             .settings_edit
             .font_scale
             .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
@@ -1174,9 +1286,10 @@ impl App {
     /// Applies the theme directly without a transition overlay because only
     /// typography sizes change — the colour palette is unaffected.
     pub(crate) fn set_font_scale(&mut self, scale: f32) {
-        self.settings_store.settings_edit.font_scale = Some(scale);
-        let theme_name = self.settings_store.settings_edit.theme.clone();
-        self.ui_store.theme = match theme_name.as_str() {
+        let theme_name = self.settings_store().settings_edit.theme.clone();
+        let settings_store = self.settings_store_mut();
+        settings_store.settings_edit.font_scale = Some(scale);
+        self.context.ui_store.theme = match theme_name.as_str() {
             "light" => crate::theme::Theme::light(),
             "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
             "tokyo_night" => crate::theme::Theme::tokyo_night(),
@@ -1191,24 +1304,27 @@ impl App {
     /// Apply a new theme with a brief 250ms fade-in transition to avoid the
     /// jarring flash that occurs with an instantaneous palette swap.
     pub(crate) fn set_theme_with_transition(&mut self, theme: crate::theme::Theme) {
-        self.ui_store.theme_transition_start = Some(std::time::Instant::now());
-        self.ui_store.theme = theme;
+        self.context.ui_store.theme_transition_start = Some(std::time::Instant::now());
+        self.context.ui_store.theme = theme;
     }
 
     /// Set a session's archived flag.
     pub(crate) fn set_session_archived(&mut self, id: String, archived: bool) {
         // Event-driven archive update so backend ThreadUpdated wire messages use
         // the same centralized SessionStore mutation path.
-        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadUpdated {
-            thread_id: id.clone(),
-            title: None,
-            archived: Some(archived),
-        });
+        let _ = self
+            .context
+            .ui_tx
+            .send(crate::ui::types::UiEvent::ThreadUpdated {
+                thread_id: id.clone(),
+                title: None,
+                archived: Some(archived),
+            });
         self.process_events();
         // Clean up the draft buffer for archived sessions so the HashMap
         // doesn't accumulate stale entries indefinitely.
         if archived {
-            self.session_store.drafts.remove(&id);
+            self.context.session_store.drafts.remove(&id);
         }
     }
 }
@@ -1236,7 +1352,7 @@ mod tests {
     }
 
     #[test]
-    fn infer_new_session_context_chat_ignores_project() {
+    fn infer_new_session_context_project_selection_creates_work_context() {
         let projects = vec![Project {
             id: "p-1".into(),
             name: "Project One".into(),
@@ -1248,7 +1364,13 @@ mod tests {
             &projects,
             clarity_core::ui::NewSessionMode::Chat,
         );
-        assert_eq!(ctx, SessionContext::Chat);
+        assert_eq!(
+            ctx,
+            SessionContext::Work {
+                workspace_id: Some("p-1".into()),
+                has_workspace: true,
+            }
+        );
     }
 
     #[test]
@@ -1315,17 +1437,11 @@ mod tests {
     }
 
     #[test]
-    fn infer_new_session_context_work_without_project_defaults_workspace_true() {
+    fn infer_new_session_context_without_project_defaults_to_chat() {
         let projects = vec![];
         let ctx =
             infer_new_session_context_impl(None, &projects, clarity_core::ui::NewSessionMode::Work);
-        assert_eq!(
-            ctx,
-            SessionContext::Work {
-                workspace_id: None,
-                has_workspace: true,
-            }
-        );
+        assert_eq!(ctx, SessionContext::Chat);
     }
 
     #[test]

@@ -78,6 +78,7 @@ impl Agent {
             skill_factory: None,
             plan_controller: Arc::new(tokio::sync::Mutex::new(None)),
             orchestrator: None,
+            knowledge_field: None,
             inner: Arc::new(parking_lot::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
@@ -118,6 +119,12 @@ impl Agent {
         orchestrator: Arc<dyn clarity_contract::subagent::SubagentOrchestrator>,
     ) -> Self {
         self.orchestrator = Some(orchestrator);
+        self
+    }
+
+    /// Set the knowledge field for dynamic session/file activation.
+    pub fn with_knowledge_field(mut self, field: Arc<clarity_knowledge::KnowledgeField>) -> Self {
+        self.knowledge_field = Some(field);
         self
     }
 
@@ -435,12 +442,27 @@ impl Agent {
                         clarity_memory::MemoryCompiler::new(store, session_store, adapter, config),
                     ));
                     let output_dir = compiled_dir.clone();
+                    let knowledge_field = self.knowledge_field();
                     self.set_memory_compile_callback(move || {
                         let compiler = compiler.clone();
                         let output_dir = output_dir.clone();
+                        let knowledge_field = knowledge_field.clone();
                         async move {
                             let mut compiler = compiler.lock().await;
-                            compiler.compile_all(&output_dir).await
+                            let result = compiler.compile_all(&output_dir).await;
+                            if result.is_ok() {
+                                if let Some(ref field) = knowledge_field {
+                                    if let Err(e) =
+                                        crate::knowledge::index_compiled_memories(field, &output_dir)
+                                    {
+                                        tracing::warn!(
+                                            "Failed to index compiled memories into knowledge field: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                            result
                         }
                     })
                     .await;
@@ -707,6 +729,22 @@ impl Agent {
     /// Get the memory store (if configured)
     pub fn memory_store(&self) -> Option<Arc<dyn MemoryStore>> {
         self.inner.read().memory_store.clone()
+    }
+
+    /// Get the knowledge field (if configured).
+    pub fn knowledge_field(&self) -> Option<Arc<clarity_knowledge::KnowledgeField>> {
+        self.knowledge_field.clone()
+    }
+
+    /// Index all `.md` files under `vault_root` into the knowledge field.
+    ///
+    /// Returns the number of files indexed, or `Ok(0)` if no knowledge field is
+    /// configured. Failures for individual files are logged and skipped.
+    pub fn index_vault(&self, vault_root: &std::path::Path) -> anyhow::Result<usize> {
+        match self.knowledge_field {
+            Some(ref field) => field.index_directory(vault_root).map_err(Into::into),
+            None => Ok(0),
+        }
     }
 
     /// Get the skill registry (if configured)

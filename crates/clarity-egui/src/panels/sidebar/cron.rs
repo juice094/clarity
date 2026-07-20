@@ -1,6 +1,8 @@
-use crate::design_system::{self, Space};
+use crate::design_system::{self, Space, TextStyle};
 use crate::App;
+use crate::widgets::icon_button_toolbar;
 use clarity_core::background::cron::CronTask;
+use clarity_ui::widgets::button::Button;
 
 /// Actions emitted by the cron section UI.
 #[allow(dead_code)]
@@ -13,17 +15,12 @@ pub enum CronSectionAction {
 /// Render Cron Jobs as a collapsible section inside the left sidebar.
 #[allow(dead_code)]
 pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
-    let theme = &app.ui_store.theme;
-    let task_count = app.cron_store.tasks.len();
+    let theme = &app.context.ui_store.theme;
+    let task_count = app.cron_store().tasks.len();
     let expanded = app.view_state.expansions.cron;
 
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Cron Jobs")
-                .size(theme.text_sm)
-                .strong()
-                .color(theme.text),
-        );
+        design_system::text(ui, "Cron Jobs", TextStyle::CaptionStrong);
         if task_count > 0 {
             ui.label(
                 egui::RichText::new(format!("({})", task_count))
@@ -32,6 +29,8 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
             );
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // ponytail: keep raw button to preserve accent text colour; Button has no
+            // accent-text variant.
             if ui
                 .button(
                     egui::RichText::new("+ New")
@@ -40,8 +39,7 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.view_state
-                    .open_modal(clarity_core::ui::ModalType::CronCreate);
+                app.open_modal(clarity_core::ui::ModalType::CronCreate);
             }
             design_system::gap(ui, Space::S0);
 
@@ -50,14 +48,7 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
             } else {
                 crate::theme::ICON_CARET_RIGHT
             };
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::RichText::new(arrow).font(theme.font_icon(theme.text_sm)),
-                    )
-                    .fill(egui::Color32::TRANSPARENT)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                )
+            if icon_button_toolbar(ui, arrow, theme.text_sm, theme)
                 .clicked()
             {
                 app.view_state.expansions.cron = !expanded;
@@ -67,12 +58,12 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
 
     if expanded {
         design_system::gap(ui, Space::S1);
-        let action = render_cron_task_list(ui, &app.cron_store.tasks, theme);
+        let action = render_cron_task_list(ui, &app.cron_store().tasks, theme);
         match action {
             CronSectionAction::Delete(task_id) => {
-                let bg_manager = std::sync::Arc::clone(&app.state.bg_manager);
-                let tx = app.ui_tx.clone();
-                app.runtime.spawn(async move {
+                let bg_manager = std::sync::Arc::clone(&app.context.state.bg_manager);
+                let tx = app.context.ui_tx.clone();
+                app.context.runtime.spawn(async move {
                     if let Err(e) = bg_manager.cancel_cron(&task_id).await {
                         tracing::warn!("Failed to cancel cron: {}", e);
                     }
@@ -82,9 +73,9 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
                 });
             }
             CronSectionAction::ToggleEnabled(task_id, enabled) => {
-                let bg_manager = std::sync::Arc::clone(&app.state.bg_manager);
-                let tx = app.ui_tx.clone();
-                app.runtime.spawn(async move {
+                let bg_manager = std::sync::Arc::clone(&app.context.state.bg_manager);
+                let tx = app.context.ui_tx.clone();
+                app.context.runtime.spawn(async move {
                     if let Err(e) = bg_manager.set_cron_enabled(&task_id, enabled).await {
                         tracing::warn!("Failed to set cron enabled: {}", e);
                     }
@@ -128,108 +119,73 @@ fn render_cron_task_list(
                 };
                 let status_label = if task.enabled { "Enabled" } else { "Disabled" };
 
-                egui::Frame::new()
-                    .fill(theme.surface)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::same(8))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
+                design_system::card(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
 
-                        // Row 1: name + delete button
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(&task.task_spec.name)
-                                    .size(theme.text_sm)
-                                    .strong()
-                                    .color(theme.text),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new("Delete").size(theme.text_xs),
-                                            )
-                                            .fill(theme.danger)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            )),
-                                        )
-                                        .clicked()
-                                    {
-                                        action = CronSectionAction::Delete(task.task_id.clone());
-                                    }
-                                    design_system::gap(ui, Space::S0);
+                    // Row 1: name + delete button
+                    ui.horizontal(|ui| {
+                        design_system::text(ui, &task.task_spec.name, TextStyle::CaptionStrong);
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if ui
+                                    .add(Button::new("Delete").danger().small())
+                                    .clicked()
+                                {
+                                    action = CronSectionAction::Delete(task.task_id.clone());
+                                }
+                                design_system::gap(ui, Space::S0);
 
-                                    // Enable/disable toggle
-                                    let enabled = task.enabled;
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new(if enabled {
-                                                    "Disable"
-                                                } else {
-                                                    "Enable"
-                                                })
-                                                .size(theme.text_xs),
-                                            )
-                                            .fill(if enabled {
-                                                theme.bg_elevated
-                                            } else {
-                                                theme.accent
-                                            })
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            )),
-                                        )
-                                        .clicked()
-                                    {
-                                        action = CronSectionAction::ToggleEnabled(
-                                            task.task_id.clone(),
-                                            !enabled,
-                                        );
-                                    }
-                                    design_system::gap(ui, Space::S0);
-
-                                    ui.label(
-                                        egui::RichText::new(status_label)
-                                            .size(theme.text_xs)
-                                            .color(status_color),
+                                // Enable/disable toggle
+                                let enabled = task.enabled;
+                                let toggle_label = if enabled { "Disable" } else { "Enable" };
+                                let toggle_btn = if enabled {
+                                    Button::new(toggle_label).secondary().small()
+                                } else {
+                                    Button::new(toggle_label).primary().small()
+                                };
+                                if ui.add(toggle_btn).clicked() {
+                                    action = CronSectionAction::ToggleEnabled(
+                                        task.task_id.clone(),
+                                        !enabled,
                                     );
-                                },
-                            );
-                        });
+                                }
+                                design_system::gap(ui, Space::S0);
 
-                        // Cron expression
-                        ui.label(
-                            egui::RichText::new(format!("⏱ {}", task.schedule.expr))
-                                .size(theme.text_sm)
-                                .color(theme.text_muted)
-                                .monospace(),
+                                ui.label(
+                                    egui::RichText::new(status_label)
+                                        .size(theme.text_xs)
+                                        .color(status_color),
+                                );
+                            },
                         );
-
-                        // Next run time
-                        let next_run_str = task
-                            .schedule
-                            .next_run
-                            .format("%Y-%m-%d %H:%M UTC")
-                            .to_string();
-                        ui.label(
-                            egui::RichText::new(format!("Next: {next_run_str}"))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-
-                        // Description (if any)
-                        if !task.task_spec.description.is_empty() {
-                            ui.label(
-                                egui::RichText::new(&task.task_spec.description)
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            );
-                        }
                     });
+
+                    // Cron expression
+                    ui.label(
+                        egui::RichText::new(format!("⏱ {}", task.schedule.expr))
+                            .size(theme.text_sm)
+                            .color(theme.text_muted)
+                            .monospace(),
+                    );
+
+                    // Next run time
+                    let next_run_str = task
+                        .schedule
+                        .next_run
+                        .format("%Y-%m-%d %H:%M UTC")
+                        .to_string();
+                    design_system::text(ui, format!("Next: {next_run_str}"), TextStyle::Small);
+
+                    // Description (if any)
+                    if !task.task_spec.description.is_empty() {
+                        design_system::text(
+                            ui,
+                            &task.task_spec.description,
+                            TextStyle::Small,
+                        );
+                    }
+                });
                 design_system::gap(ui, Space::S0);
             }
         });

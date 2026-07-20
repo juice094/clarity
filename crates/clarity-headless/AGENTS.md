@@ -14,7 +14,7 @@ cargo test -p clarity-headless --lib
 
 ## 关键文件
 
-- `src/main.rs` — 全 crate 入口；`clap` CLI（`Run` / `Jumpy` 子命令）、`build_provider()`、`run_command()`、`jumpy_command()`
+- `src/main.rs` — 全 crate 入口；`clap` CLI（`Run` / `Jumpy` / `AcpBridge` / `OpenClawPair` 子命令）、`build_provider()`、`run_command()`、`jumpy_command()`、`acp_bridge_command()`、`openclaw_pair_command()`
 
 ## 约定
 

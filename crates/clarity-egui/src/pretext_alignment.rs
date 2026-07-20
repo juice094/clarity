@@ -60,11 +60,11 @@ fn run_alignment(content: &str, ctx: &egui::Context, metrics: &EguiFontMetrics) 
     let estimated = estimate_height(&msg, MAX_WIDTH, &theme, metrics);
 
     // Ensure fonts are loaded before measuring actual render height.
-    let _ = ctx.run(egui::RawInput::default(), |_| {});
+    let _ = ctx.run_ui(egui::RawInput::default(), |_ui| {});
 
     let mut actual = 0.0f32;
-    let _ = ctx.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             ui.allocate_ui_with_layout(
                 egui::vec2(MAX_WIDTH, f32::INFINITY),
                 egui::Layout::top_down(egui::Align::LEFT),
@@ -91,7 +91,7 @@ fn run_alignment(content: &str, ctx: &egui::Context, metrics: &EguiFontMetrics) 
 #[test]
 fn pretext_estimate_matches_rendered_height_for_agent_text() {
     let ctx = egui::Context::default();
-    let _ = ctx.run(egui::RawInput::default(), |_| {});
+    let _ = ctx.run_ui(egui::RawInput::default(), |_ui| {});
     let metrics = EguiFontMetrics::new(ctx.clone());
 
     let mut max_delta = 0.0f32;
@@ -118,7 +118,7 @@ fn pretext_estimate_matches_rendered_height_for_agent_text() {
 #[test]
 fn pretext_estimate_matches_rendered_height_for_user_text() {
     let ctx = egui::Context::default();
-    let _ = ctx.run(egui::RawInput::default(), |_| {});
+    let _ = ctx.run_ui(egui::RawInput::default(), |_ui| {});
     let metrics = EguiFontMetrics::new(ctx.clone());
     let theme = Theme::default();
 
@@ -130,8 +130,8 @@ fn pretext_estimate_matches_rendered_height_for_user_text() {
         let estimated = estimate_height(&msg, MAX_WIDTH, &theme, &metrics);
 
         let mut actual = 0.0f32;
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 ui.allocate_ui_with_layout(
                     egui::vec2(MAX_WIDTH, f32::INFINITY),
                     egui::Layout::top_down(egui::Align::RIGHT),
@@ -166,7 +166,7 @@ fn pretext_estimate_matches_rendered_height_for_user_text() {
 #[ignore = "release-mode performance benchmark; run with cargo test -p clarity-egui --bin clarity-egui --release -- --ignored"]
 fn pretext_message_list_performance_1000() {
     let ctx = egui::Context::default();
-    let _ = ctx.run(egui::RawInput::default(), |_| {});
+    let _ = ctx.run_ui(egui::RawInput::default(), |_ui| {});
     let metrics = EguiFontMetrics::new(ctx.clone());
     let theme = Theme::default();
 
@@ -194,8 +194,8 @@ fn pretext_message_list_performance_1000() {
 
     let render_start = Instant::now();
     let mut total_rendered = 0.0f32;
-    let _ = ctx.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             for (i, msg) in messages.iter().enumerate() {
                 ui.allocate_ui_with_layout(
                     egui::vec2(MAX_WIDTH, f32::INFINITY),

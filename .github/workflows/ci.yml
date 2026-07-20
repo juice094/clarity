@@ -29,7 +29,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --lib --bins --exclude clarity-slint
+      - run: cargo check --workspace --lib --bins
 
   hermes-feature-check:
     name: Hermes Feature Check
@@ -52,7 +52,7 @@ jobs:
             echo "hermes-memory repository not found; skipping hermes feature check."
             exit 0
           fi
-          cargo check --workspace --lib --bins --exclude clarity-slint --features hermes
+          cargo check --workspace --lib --bins --features hermes
 
   test:
     name: Test
@@ -75,7 +75,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06-v2
-      - run: cargo test --workspace --lib --exclude clarity-slint
+      - run: cargo test --workspace --lib
 
   integration-test:
     name: Integration Tests
@@ -113,7 +113,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06-v2
-      - run: cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2
+      - run: cargo test --workspace --bins -- --test-threads=2
 
   doc-test:
     name: Doc Tests
@@ -132,7 +132,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06-v2
-      - run: cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2
+      - run: cargo test --workspace --doc -- --test-threads=2
 
   session-migration-test:
     name: Session Migration Tests
@@ -179,7 +179,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06-v2
-      - run: cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+      - run: cargo clippy --workspace --lib --bins --tests -- -D warnings
 
   fmt:
     name: Rustfmt
@@ -254,7 +254,7 @@ jobs:
           fi
           cargo modules structure --package clarity-core --max-depth 3
       - name: Check rustdoc compilation
-        run: cargo doc --workspace --no-deps --exclude clarity-slint
+        run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: "-D warnings"
 
@@ -282,7 +282,7 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Generate LCOV coverage report
-        run: cargo llvm-cov --workspace --lib --exclude clarity-slint --lcov --output-path lcov.info
+        run: cargo llvm-cov --workspace --lib --lcov --output-path lcov.info
       - name: Print coverage summary
         run: cargo llvm-cov report --summary
       - name: Generate HTML coverage report

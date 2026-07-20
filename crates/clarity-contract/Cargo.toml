@@ -19,6 +19,7 @@ uuid = { workspace = true }
 tracing = { workspace = true }
 regex = { workspace = true }
 rand = { workspace = true }
+futures = { workspace = true }
 parking_lot = "0.12"
 dirs = "5.0"
 

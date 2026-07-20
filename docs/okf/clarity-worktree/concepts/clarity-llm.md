@@ -18,7 +18,6 @@ LLM provider abstraction + Candle GGUF local inference.
 - `runtime_router` alias routing
 - Candle GGUF local inference
 - OAuth device flow auth
-- `AnthropicAdapter`: expose any `LlmProvider` behind an Anthropic Messages API facade
 
 ## Notes
 

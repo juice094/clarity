@@ -26,6 +26,7 @@ use clarity_core::memory::{
     LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker,
 };
 use clarity_core::registry::ToolRegistry;
+use clarity_core::tools::{AskUserTool, ThinkTool};
 use clarity_llm::LlmFactory;
 use std::path::PathBuf;
 
@@ -110,8 +111,44 @@ fn load_channel_configs() -> (
     )
 }
 
+/// Detect whether Gateway is forced to run on the DeepSeek device-login
+/// provider without a tools-capable API key fallback.
+///
+/// In this mode the full built-in tool set (file/shell/MCP/subagent) is too
+/// heavy for `deepseek-device` and causes empty completions, so we fall back
+/// to the same mobile-safe tool set used by `clarity-mobile-core`.
+fn is_device_only_env() -> bool {
+    std::env::var("DEEPSEEK_DEVICE_MOBILE").is_ok() && std::env::var("DEEPSEEK_API_KEY").is_err()
+}
+
+/// Build the tool registry appropriate for the active provider.
+///
+/// When only DeepSeek device-login credentials are available, register only
+/// the lightweight tools that the device endpoint can tolerate. Otherwise use
+/// the full built-in tool set.
+fn build_tool_registry(device_only_mode: bool) -> ToolRegistry {
+    if device_only_mode {
+        let registry = ToolRegistry::new();
+        let _ = registry.register(ThinkTool::new());
+        let _ = registry.register(AskUserTool::new());
+        // WebSearch/WebFetch are excluded from the Gateway device-only tool set:
+        // they can trigger long-running/hanging network calls that starve the
+        // shared single-turn Agent semaphore and cause other WebSocket sessions
+        // to time out. DeepSeek-style search remains available in the local
+        // Android runtime, which does not share this global queue.
+        info!("Using minimal device-only tool set for deepseek-device mode");
+        registry
+    } else {
+        ToolRegistry::with_builtin_tools()
+    }
+}
+
 /// 创建并配置 Agent
-async fn create_agent() -> anyhow::Result<Arc<Agent>> {
+///
+/// Returns the configured Agent and a flag indicating whether the active
+/// provider is the DeepSeek device-login endpoint, which requires a reduced
+/// tool set and skipped MCP registration.
+async fn create_agent() -> anyhow::Result<(Arc<Agent>, bool)> {
     info!("Creating Agent with built-in tools...");
 
     // 加载 TOML 配置（默认 → ~/.config/clarity/ → .clarity.toml → 环境变量覆盖）
@@ -120,8 +157,15 @@ async fn create_agent() -> anyhow::Result<Arc<Agent>> {
         config.export_to_env();
     }
 
+    // The active alias registry can point to deepseek-device even when an API
+    // key env var is also present (e.g. a cached device token). Treat that as
+    // device-only mode too.
+    let active_alias = clarity_gateway::handlers::config::load_active_alias().await;
+    let device_only_mode =
+        is_device_only_env() || active_alias.as_deref() == Some("deepseek-device");
+
     // 创建工具注册表
-    let registry = ToolRegistry::with_builtin_tools();
+    let registry = build_tool_registry(device_only_mode);
 
     // 配置 Agent（window 入口：方法论驱动，或被外部 agent workspace 覆盖）
     let window_context = r#"# Methodology
@@ -135,6 +179,13 @@ You are a methodological query assistant. When answering:
         .with_max_iterations(10)
         .with_read_only(false)
         .with_entry_context(window_context);
+
+    // DeepSeek device-login endpoints do not tolerate multi-turn tool loops or
+    // large tool schemas; cap iterations and keep the registry lightweight.
+    if device_only_mode {
+        config.max_iterations = 5;
+        info!("Reducing max iterations to 5 for deepseek-device mode");
+    }
 
     // 如果存在外部 agent workspace，加载其 agent.yaml 作为人格/记忆入口
     let agent_workspace = std::env::var("CLARITY_AGENT_WORKSPACE")
@@ -309,7 +360,7 @@ You are a methodological query assistant. When answering:
         }
     }
 
-    Ok(Arc::new(agent))
+    Ok((Arc::new(agent), device_only_mode))
 }
 
 /// Try connecting to an MCP LLM server via stdio.
@@ -435,13 +486,17 @@ async fn load_and_register_mcp_tools(agent: &Agent) {
 #[tokio::main]
 async fn main() {
     // 初始化日志（自动脱敏）
-    clarity_core::logging::init_with_default("clarity_gateway=debug,tower_http=debug");
+    // Include clarity_llm::deepseek_device debug output so we can diagnose
+    // empty completions from the DeepSeek device-login endpoint.
+    clarity_core::logging::init_with_default(
+        "clarity_gateway=debug,tower_http=debug,clarity_llm=debug",
+    );
 
     info!("🚀 Clarity Gateway starting...");
 
     // 创建 Agent
-    let agent: Arc<Agent> = match create_agent().await {
-        Ok(agent) => agent,
+    let (agent, device_only_mode): (Arc<Agent>, bool) = match create_agent().await {
+        Ok(pair) => pair,
         Err(e) => {
             error!("Failed to create agent: {}", e);
             std::process::exit(1);
@@ -449,7 +504,13 @@ async fn main() {
     };
 
     // 加载并注册 MCP 工具
-    load_and_register_mcp_tools(&agent).await;
+    // Skip MCP in deepseek-device-only mode: those tools add schemas the device
+    // endpoint cannot parse and cause empty completions.
+    if device_only_mode {
+        info!("Skipping MCP tool registration in deepseek-device mode");
+    } else {
+        load_and_register_mcp_tools(&agent).await;
+    }
 
     // 创建后台任务管理器
     let task_manager = {
@@ -607,7 +668,7 @@ agent:
         unsafe {
             std::env::set_var("CLARITY_AGENT_WORKSPACE", workspace.as_os_str());
         }
-        let agent = create_agent().await.expect("agent should be created");
+        let (agent, _device_only) = create_agent().await.expect("agent should be created");
         // SAFETY: paired with the set_var above; restores the prior state.
         unsafe {
             std::env::remove_var("CLARITY_AGENT_WORKSPACE");

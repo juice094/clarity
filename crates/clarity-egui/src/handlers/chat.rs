@@ -14,9 +14,10 @@ fn is_active(session_store: &SessionStore, session_id: &str) -> bool {
 
 /// Persist a specific session, regardless of whether it is active.
 fn save_target_session(app: &mut crate::App, session_id: &str) {
-    if app.session_store.active_session_id == session_id {
+    if app.context.session_store.active_session_id == session_id {
         app.save_current_session();
     } else if let Some(session) = app
+        .context
         .session_store
         .sessions
         .iter_mut()
@@ -149,7 +150,7 @@ pub fn on_session_meta(
     session_id: &str,
     provider_state: HashMap<String, String>,
 ) {
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         for (provider_id, blob) in provider_state {
             session.provider_state.insert(provider_id, blob);
         }
@@ -171,23 +172,23 @@ pub fn on_status_update(
 
 /// Handles the done event.
 pub fn on_done(app: &mut crate::App, session_id: &str) {
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         session.in_flight = false;
     }
-    app.chat_store.in_flight_since = None;
+    app.chat_store_mut().in_flight_since = None;
 
     // The agent run has finished; reset global UI state. We keep a single
     // active run at a time, so this is safe even if the user switched to a
     // different session while streaming.
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
-    app.chat_store.agent_status = AgentStatus::Online;
-    app.chat_store.draft_status = DraftStatus::None;
-    app.chat_store.status_message = None;
-    app.chat_store.chunks_since_save = 0;
-    app.state.agent.reset();
+    app.chat_store_mut().agent_status = AgentStatus::Online;
+    app.chat_store_mut().draft_status = DraftStatus::None;
+    app.chat_store_mut().status_message = None;
+    app.chat_store_mut().chunks_since_save = 0;
+    app.context.state.agent.reset();
 
     // Trigger deferred markdown parse now that streaming is complete.
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         if let Some(last) = session.messages.last_mut() {
             if last.role == Role::Agent {
                 last.prepare();
@@ -201,15 +202,15 @@ pub fn on_done(app: &mut crate::App, session_id: &str) {
 
     save_target_session(app, session_id);
 
-    if is_active(&app.session_store, session_id) {
+    if is_active(&app.context.session_store, session_id) {
         // Capture the latest snapshot created by this turn.
-        let snapshots = app.state.agent.snapshot_list();
-        app.chat_store.last_snapshot = snapshots.last().cloned();
+        let snapshots = app.context.state.agent.snapshot_list();
+        app.chat_store_mut().last_snapshot = snapshots.last().cloned();
         // Auto-send any queued message only if the finished session is still
         // active; otherwise the queued message belongs to a background session.
-        if let Some((text, attachments)) = app.chat_store.pending_send.take() {
-            app.chat_store.input = text;
-            app.chat_store.attachments = attachments;
+        if let Some((text, attachments)) = app.chat_store_mut().pending_send.take() {
+            app.chat_store_mut().input = text;
+            app.chat_store_mut().attachments = attachments;
             app.send();
         }
     }
@@ -217,34 +218,34 @@ pub fn on_done(app: &mut crate::App, session_id: &str) {
 
 /// Handles the error event.
 pub fn on_error(app: &mut crate::App, session_id: &str, msg: String) {
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         session.in_flight = false;
     }
-    app.chat_store.in_flight_since = None;
+    app.chat_store_mut().in_flight_since = None;
 
     // A run ended with an error; reset global UI state so the user can send
     // again. The error toast is only shown for the active session to avoid
     // interrupting a different conversation.
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
-    app.chat_store.agent_status = AgentStatus::Online;
-    app.chat_store.draft_status = DraftStatus::None;
-    app.chat_store.status_message = None;
+    app.chat_store_mut().agent_status = AgentStatus::Online;
+    app.chat_store_mut().draft_status = DraftStatus::None;
+    app.chat_store_mut().status_message = None;
 
-    if is_active(&app.session_store, session_id) {
-        crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
+    if is_active(&app.context.session_store, session_id) {
+        crate::handlers::system::push_toast(&mut app.context.ui_store, &msg, ToastLevel::Error);
         // Release queued message back to input so user can retry.
-        if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {
-            if app.chat_store.input.is_empty() {
-                app.chat_store.input = text;
+        if let Some((text, mut attachments)) = app.chat_store_mut().pending_send.take() {
+            if app.chat_store_mut().input.is_empty() {
+                app.chat_store_mut().input = text;
             } else {
-                app.chat_store.input.push('\n');
-                app.chat_store.input.push_str(&text);
+                app.chat_store_mut().input.push('\n');
+                app.chat_store_mut().input.push_str(&text);
             }
-            app.chat_store.attachments.append(&mut attachments);
+            app.chat_store_mut().attachments.append(&mut attachments);
         }
     }
 
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         let mut m = Message {
             role: Role::Agent,
             content: msg.clone(),
@@ -610,7 +611,7 @@ pub fn on_shell_result(
         output.trim_end(),
         exit_marker
     );
-    if let Some(session) = app.session_store.session_mut(session_id) {
+    if let Some(session) = app.context.session_store.session_mut(session_id) {
         let mut msg = Message {
             role: Role::Agent,
             content: content.clone(),
@@ -626,8 +627,8 @@ pub fn on_shell_result(
         session.updated_at = crate::session::now_millis();
     }
     save_target_session(app, session_id);
-    if is_active(&app.session_store, session_id) {
-        app.chat_store.stick_to_bottom = true;
+    if is_active(&app.context.session_store, session_id) {
+        app.chat_store_mut().stick_to_bottom = true;
     }
 }
 
@@ -710,6 +711,10 @@ mod tests {
             updated_at: now,
             last_saved_at: now,
             turn_heights: Vec::new(),
+            estimate_buffer: Vec::new(),
+            line_offset_buffer: Vec::new(),
+            estimate_key: None,
+            cached_total_height: None,
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,
@@ -721,6 +726,7 @@ mod tests {
             sessions,
             active_session_id: active.into(),
             drafts: HashMap::new(),
+            turn_cache: HashMap::new(),
         }
     }
 
@@ -1031,6 +1037,10 @@ mod tests {
             updated_at: crate::session::now_millis(),
             last_saved_at: crate::session::now_millis(),
             turn_heights: Vec::new(),
+            estimate_buffer: Vec::new(),
+            line_offset_buffer: Vec::new(),
+            estimate_key: None,
+            cached_total_height: None,
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,

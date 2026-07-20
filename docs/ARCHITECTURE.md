@@ -68,23 +68,23 @@ tags: [architecture]
                         │
           ┌─────────────┴───────────────────────────────────────────────┐
           │              Shared Infrastructure Layer                     │
-          ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
-          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
-          │contract  │memory    │mcp       │llm       │  tools          │
-          │          │          │          │          │                 │
-          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │
-          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search │
-          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task │
-          │  trait   │• chunking│• WS      │• local   │                 │
-          └──────────┴──────────┴──────────┴──────────┴─────────────────┘
-          ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
-          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
-          │wire      │channels  │secrets   │thread-   │  telemetry      │
-          │          │          │          │  store   │                 │
-          │• SPMC    │• Discord │• enc2:   │• Thread  │  • WideEvent    │
-          │  events  │• Slack   │  secrets │  Store   │  • SQLite sink  │
-          │• ViewCmd │• Webhook │          │• rollout │  • ConfigAudit  │
-          └──────────┴──────────┴──────────┴──────────┴─────────────────┘
+          ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────────────┤
+          │clarity-  │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
+          │contract  │memory    │knowledge │mcp       │llm       │  tools          │
+          │          │          │          │          │          │                 │
+          │• shared  │• SQLite  │• graph   │• stdio   │• OpenAI  │  • file / shell │
+          │  types   │• BM25    │• field   │• SSE     │• Anthropic│ • web / search │
+          │• Tool    │• vector  │• wikilink│• HTTP    │• Kimi    │  • team / task │
+          │  trait   │• chunking│• activate│• WS      │• local   │                 │
+          └──────────┴──────────┴──────────┴──────────┴──────────┴─────────────────┘
+          ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────────────┤
+          │clarity-  │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
+          │wire      │channels  │secrets   │thread-   │knowledge │  telemetry      │
+          │          │          │          │  store   │          │                 │
+          │• SPMC    │• Discord │• enc2:   │• Thread  │• graph   │  • WideEvent    │
+          │  events  │• Slack   │  secrets │  Store   │• field   │  • SQLite sink  │
+          │• ViewCmd │• Webhook │          │• rollout │• wikilink│  • ConfigAudit  │
+          └──────────┴──────────┴──────────┴──────────┴──────────┴─────────────────┘
           ┌─────────────────────────────────────────────────────────────┐
           │  clarity-subagents  — consumes clarity-core                  │
           │  (spawn / team / parallel execution)                         │
@@ -113,6 +113,7 @@ clarity-contract
     ▲
     ├── clarity-wire      (SPMC event bus)
     ├── clarity-memory    (SQLite + BM25 + vector)
+    ├── clarity-knowledge (knowledge graph + activation field)
     ├── clarity-mcp       (MCP client transports)
     ├── clarity-llm       (provider bindings)
     ├── clarity-tools     (built-in tools)
@@ -156,6 +157,7 @@ clarity-anthropic-proxy: Anthropic Messages API gateway over clarity-llm::anthro
 | `clarity-mcp` | ~2,000 | 37+ | `McpClient`, `McpRegistry`, `McpTransport` |
 | `clarity-tools` | ~4,500 | 99+ | `FileReadTool`, `BashTool`, `WebSearchTool`, `TaskCreateTool` |
 | `clarity-memory` | ~3,600 | 97+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
+| `clarity-knowledge` | ~1,300 | 26+ | `KnowledgeIndex`, `KnowledgeGraph`, `KnowledgeField`, `HybridRetriever`; supports CJK tokenization and Obsidian vault indexing |
 | `clarity-thread-store` | ~1,200 | 13+ | `ThreadStore`, `LocalThreadStore`, `LiveThread` |
 | `clarity-rollout` | ~800 | 6+ | `RolloutRecorder`, `RolloutItem`, `SessionMeta` |
 | `clarity-channels` | ~2,000 | 49+ | `ChannelSendTool`, channel adapters |
@@ -279,6 +281,25 @@ Tasks survive TUI/Web closure. `claw` monitors `.clarity/tasks/` via `notify` + 
 - `PersistentMemoryStore` — SQLite + FTS5
 - `SharedMemoryTicker` — Session-isolated memory ticker with compile callback
 - `MemoryCompiler` — Four-level pipeline: today → week → longterm → facts
+
+### 3.6b Knowledge Field Integration (`src/knowledge.rs`)
+
+`clarity-core` imports `clarity-knowledge`:
+- `KnowledgeField` — dynamic graph with activation, spreading, and decay
+- `update_on_turn()` — extracts wikilinks and `.md` references from each turn and injects activation
+- `index_compiled_memories()` — parses `.md` files produced by `MemoryCompiler` and indexes them into the field after each compilation run
+- `KnowledgeSearchTool` (via `clarity-tools`) — lets the Agent query the field explicitly
+
+UI integration (`clarity-egui`):
+- `AppState` creates an `Arc<KnowledgeField>` and injects it into the `Agent`
+- `KnowledgeStore` holds the shared `KnowledgeField` and exposes `index_vault()` / `start_watching_vault()` / `stop_watching_vault()` / `search_field()` / `refresh_top_activated(k)`
+- The right-rail Knowledge panel (`src/panels/right_ide_panel/knowledge_panel.rs`) renders a **Knowledge Field** section above the legacy OKF bundle browser:
+  - Vault path input + Index vault button → `KnowledgeStore::index_vault()`
+  - Watch vault / Stop watching button → `KnowledgeStore::start_watching_vault()` (baseline full index + incremental watcher) / `stop_watching_vault()`
+  - Search input + Search button → hybrid retrieval via `KnowledgeStore::search_field()`
+  - Top active button → `KnowledgeStore::refresh_top_activated(10)`
+  - Clickable result list with activation score and title
+  - Detail view for the selected result (path, snippet, matched tags)
 
 ### 3.7 UI State Machine (`src/ui/view_state.rs`)
 

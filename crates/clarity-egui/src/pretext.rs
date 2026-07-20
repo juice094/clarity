@@ -13,6 +13,8 @@
 //!   the current `Theme` tokens.
 
 use pretext_core::{Font, FontMetrics};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// A `pretext_core::FontMetrics` backend backed by egui's own font atlas.
 ///
@@ -20,15 +22,23 @@ use pretext_core::{Font, FontMetrics};
 /// `prepare()` phase. Because the measurement uses the same font stack that
 /// will later draw the text, width predictions should match rendered output
 /// as closely as egui's own layout engine allows.
+///
+/// `Font` → `egui::FontId` mappings are cached because the mapping involves
+/// string normalization (lowercase family lookup, weight threshold) and is
+/// called for every span during pretext preparation/layout.
 #[derive(Debug, Clone)]
 pub struct EguiFontMetrics {
     ctx: egui::Context,
+    font_id_cache: Arc<Mutex<HashMap<Font, egui::FontId>>>,
 }
 
 impl EguiFontMetrics {
     /// Create a new backend bound to the given egui context.
     pub fn new(ctx: egui::Context) -> Self {
-        Self { ctx }
+        Self {
+            ctx,
+            font_id_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Calibrated line height for the theme's body font.
@@ -38,31 +48,46 @@ impl EguiFontMetrics {
     #[allow(dead_code)] // gated behind cfg(feature = "line-mode")
     pub fn line_height(&self, theme: &crate::theme::Theme) -> f32 {
         let font_id = theme.font(theme.text_base);
-        self.ctx.fonts(|f| f.row_height(&font_id))
+        self.ctx.fonts_mut(|f| f.row_height(&font_id))
     }
 
     pub(crate) fn to_egui_font_id(&self, font: &Font) -> egui::FontId {
+        // Fast path: cache hit avoids repeated lowercase/contains checks.
+        if let Ok(cache) = self.font_id_cache.lock() {
+            if let Some(id) = cache.get(font) {
+                return id.clone();
+            }
+        }
+
         let size = font.size_px;
         let family_lower = font.family.to_lowercase();
         let is_monospace = family_lower.contains("mono")
             || family_lower.contains("code")
             || family_lower.contains("jetbrains");
 
-        if is_monospace {
+        let id = if is_monospace {
             egui::FontId::new(size, egui::FontFamily::Monospace)
         } else if font.weight.0 >= 500 {
             egui::FontId::new(size, egui::FontFamily::Name("bold".into()))
         } else {
             egui::FontId::new(size, egui::FontFamily::Proportional)
+        };
+
+        if let Ok(mut cache) = self.font_id_cache.lock() {
+            cache.insert(font.clone(), id.clone());
         }
+        id
     }
 }
 
 impl FontMetrics for EguiFontMetrics {
     fn measure(&self, text: &str, font: &Font) -> f32 {
         let font_id = self.to_egui_font_id(font);
-        self.ctx.fonts(|fonts| {
+        self.ctx.fonts_mut(|fonts| {
             // Color is irrelevant for width measurement; white is a safe neutral.
+            // ponytail: `layout_no_wrap` takes an owned `String`; the allocation
+            // is unavoidable at this API boundary. Higher-level widgets cache
+            // line layouts so this is only called during cold-path estimation.
             fonts
                 .layout_no_wrap(text.to_string(), font_id, egui::Color32::WHITE)
                 .rect
@@ -72,7 +97,8 @@ impl FontMetrics for EguiFontMetrics {
 
     fn supports_char(&self, c: char, font: &Font) -> bool {
         let font_id = self.to_egui_font_id(font);
-        self.ctx.fonts(|fonts| fonts.glyph_width(&font_id, c) > 0.0)
+        self.ctx
+            .fonts_mut(|fonts| fonts.glyph_width(&font_id, c) > 0.0)
     }
 }
 
@@ -80,7 +106,7 @@ impl EguiFontMetrics {
     /// Row height for the given pretext font descriptor, as reported by egui.
     pub(crate) fn row_height(&self, font: &Font) -> f32 {
         let font_id = self.to_egui_font_id(font);
-        self.ctx.fonts(|fonts| fonts.row_height(&font_id))
+        self.ctx.fonts_mut(|fonts| fonts.row_height(&font_id))
     }
 }
 

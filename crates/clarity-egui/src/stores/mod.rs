@@ -31,6 +31,7 @@ pub use files::*;
 pub use knowledge::*;
 pub use mcp::*;
 pub use onboarding::*;
+pub use plugin::*;
 pub use project::*;
 pub use session::*;
 pub use settings::*;

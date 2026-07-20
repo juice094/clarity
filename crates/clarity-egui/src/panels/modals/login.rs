@@ -1,92 +1,58 @@
 //! Kimi Code OAuth Device Flow login modal.
 
 use crate::App;
-use crate::design_system::{self, Space};
 use crate::stores::KimiCodeLoginState;
 use crate::ui::types::UiEvent;
+use clarity_ui::design_system::{Space, TextStyle, code_frame, gap, spinner, text};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::modal::Modal;
 
-/// Renders the oauth login modal UI.
+/// Renders the oauth login modal UI using the Clarity Design Protocol.
+///
+/// The modal shell itself (scrim + frame + centering) is owned by
+/// `clarity_ui::widgets::modal`; this function only renders the content.
 pub fn render_oauth_login_modal(
     app: &mut App,
     ctx: &egui::Context,
     config: &clarity_llm::auth::OAuthDeviceFlowConfig,
 ) {
-    if app.view_state.modal != Some(clarity_core::ui::ModalType::KimiCodeLogin) {
+    if app.current_modal() != Some(&clarity_core::ui::ModalType::KimiCodeLogin) {
         return;
     }
 
-    let screen = ctx.screen_rect();
-    let scrim = app.ui_store.theme.overlay;
-    ctx.layer_painter(egui::LayerId::background()).rect_filled(
-        screen,
-        egui::CornerRadius::same(0),
-        scrim,
-    );
-
     let mut close_requested = false;
-    egui::Area::new("kimi_login_scrim".into())
-        .interactable(true)
-        .order(egui::Order::Background)
-        .show(ctx, |ui| {
-            ui.set_min_size(screen.size());
-            if ui
-                .allocate_response(screen.size(), egui::Sense::click())
-                .clicked()
-                || ctx.input(|i| i.key_pressed(egui::Key::Escape))
-            {
-                close_requested = true;
-            }
-        });
 
-    let theme = app.ui_store.theme.clone();
-
-    egui::Window::new("Kimi Code Login")
-        .collapsible(false)
-        .resizable(false)
-        .fixed_size(egui::vec2(440.0, 320.0))
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .frame(
-            egui::Frame::window(&ctx.style())
-                .fill(theme.bg)
-                .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-                .inner_margin(egui::Margin::same(16)),
-        )
+    Modal::new("kimi_code_login")
+        .width(420.0)
+        .max_height(600.0)
         .show(ctx, |ui| {
-            let state = app.settings_store.kimi_code_login_state.clone();
+            let state = app.settings_store().kimi_code_login_state.clone();
             match state {
                 KimiCodeLoginState::Idle => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S2);
-                        ui.label(
-                            egui::RichText::new("Connect to Kimi Code")
-                                .size(theme.text_lg)
-                                .strong()
-                                .color(theme.text),
+                        gap(ui, Space::S2);
+                        text(ui, "Connect to Kimi Code", TextStyle::Title);
+                        gap(ui, Space::S1);
+                        text(
+                            ui,
+                            "Click below to start OAuth Device Flow.\nA browser window will open for authorization.",
+                            TextStyle::Body,
                         );
-                        design_system::gap(ui, Space::S1);
-                        ui.label(
-                            egui::RichText::new(
-                                "Click below to start OAuth Device Flow.\nA browser window will open for authorization.",
-                            )
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
-                        );
-                        design_system::gap(ui, Space::S3);
-                        if ui.add(theme.primary_button("Start Login")).clicked() {
+                        gap(ui, Space::S3);
+                        if ui
+                            .add(Button::new("Start Login").primary().width(80.0))
+                            .clicked()
+                        {
                             start_login(app, config.clone());
                         }
                     });
                 }
                 KimiCodeLoginState::Requesting => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S5);
-                        ui.label(
-                            egui::RichText::new("Requesting device code...")
-                                .size(theme.text_base)
-                                .color(theme.text),
-                        );
-                        design_system::gap(ui, Space::S2);
-                        ui.spinner();
+                        gap(ui, Space::S5);
+                        text(ui, "Requesting device code...", TextStyle::Body);
+                        gap(ui, Space::S2);
+                        spinner(ui);
                     });
                 }
                 KimiCodeLoginState::Waiting {
@@ -95,99 +61,53 @@ pub fn render_oauth_login_modal(
                     ..
                 } => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S1);
-                        ui.label(
-                            egui::RichText::new("Authorize this device")
-                                .size(theme.text_lg)
-                                .strong()
-                                .color(theme.text),
-                        );
-                        design_system::gap(ui, Space::S2);
-                        ui.label(
-                            egui::RichText::new("Enter this code in your browser:")
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
-                        design_system::gap(ui, Space::S0);
-                        egui::Frame::new()
-                            .fill(theme.bg_accent)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(16, 10))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new(user_code)
-                                        .font(theme.font(theme.text_xl))
-                                        .color(theme.accent)
-                                        .monospace(),
-                                );
-                            });
-                        design_system::gap(ui, Space::S2);
+                        gap(ui, Space::S1);
+                        text(ui, "Authorize this device", TextStyle::Title);
+                        gap(ui, Space::S2);
+                        text(ui, "Enter this code in your browser:", TextStyle::Body);
+                        gap(ui, Space::S0);
+                        code_frame(ui, |ui| {
+                            text(ui, &user_code, TextStyle::Mono);
+                        });
+                        gap(ui, Space::S2);
                         let url = verification_uri_complete.clone();
-                        if ui
-                            .hyperlink_to("Open verification page →", &url)
-                            .clicked()
-                        {
+                        // ponytail: hyperlink_to is not yet wrapped in clarity-ui.
+                        if ui.hyperlink_to("Open verification page →", &url).clicked() {
                             open_browser(&url);
                         }
-                        design_system::gap(ui, Space::S2);
-                        ui.label(
-                            egui::RichText::new("Waiting for authorization...")
-                                .size(theme.text_sm)
-                                .color(theme.text_muted),
-                        );
-                        ui.spinner();
+                        gap(ui, Space::S2);
+                        text(ui, "Waiting for authorization...", TextStyle::Small);
+                        spinner(ui);
                     });
                 }
                 KimiCodeLoginState::Polling => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S5);
-                        ui.label(
-                            egui::RichText::new("Completing login...")
-                                .size(theme.text_base)
-                                .color(theme.text),
-                        );
-                        design_system::gap(ui, Space::S2);
-                        ui.spinner();
+                        gap(ui, Space::S5);
+                        text(ui, "Completing login...", TextStyle::Body);
+                        gap(ui, Space::S2);
+                        spinner(ui);
                     });
                 }
                 KimiCodeLoginState::Success => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S5);
-                        ui.label(
-                            egui::RichText::new("✓ Login successful")
-                                .size(theme.text_lg)
-                                .strong()
-                                .color(theme.ok),
-                        );
-                        design_system::gap(ui, Space::S1);
-                        ui.label(
-                            egui::RichText::new("You can now use Kimi Code.")
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
-                        design_system::gap(ui, Space::S3);
-                        if ui.add(theme.primary_button("Close")).clicked() {
+                        gap(ui, Space::S5);
+                        text(ui, "Login successful", TextStyle::Title);
+                        gap(ui, Space::S1);
+                        text(ui, "You can now use Kimi Code.", TextStyle::Body);
+                        gap(ui, Space::S3);
+                        if ui.add(Button::new("Close").primary().width(80.0)).clicked() {
                             close_requested = true;
                         }
                     });
                 }
                 KimiCodeLoginState::Error(e) => {
                     ui.vertical_centered(|ui| {
-                        design_system::gap(ui, Space::S5);
-                        ui.label(
-                            egui::RichText::new("Login failed")
-                                .size(theme.text_lg)
-                                .strong()
-                                .color(theme.danger),
-                        );
-                        design_system::gap(ui, Space::S1);
-                        ui.label(
-                            egui::RichText::new(e)
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
-                        design_system::gap(ui, Space::S3);
-                        if ui.add(theme.primary_button("Retry")).clicked() {
+                        gap(ui, Space::S5);
+                        text(ui, "Login failed", TextStyle::Title);
+                        gap(ui, Space::S1);
+                        text(ui, &e, TextStyle::Body);
+                        gap(ui, Space::S3);
+                        if ui.add(Button::new("Retry").primary().width(80.0)).clicked() {
                             start_login(app, config.clone());
                         }
                     });
@@ -196,15 +116,15 @@ pub fn render_oauth_login_modal(
         });
 
     if close_requested {
-        app.view_state.close_modal();
-        app.settings_store.kimi_code_login_state = KimiCodeLoginState::Idle;
+        app.close_modal();
+        app.settings_store_mut().kimi_code_login_state = KimiCodeLoginState::Idle;
     }
 }
 
 fn start_login(app: &mut App, config: clarity_llm::auth::OAuthDeviceFlowConfig) {
-    app.settings_store.kimi_code_login_state = KimiCodeLoginState::Requesting;
-    let tx = app.ui_tx.clone();
-    let runtime = app.runtime.handle().clone();
+    app.settings_store_mut().kimi_code_login_state = KimiCodeLoginState::Requesting;
+    let tx = app.context.ui_tx.clone();
+    let runtime = app.context.runtime.handle().clone();
 
     runtime.spawn(async move {
         let client = clarity_llm::auth::OAuthDeviceFlowClient::with_config(config.clone());

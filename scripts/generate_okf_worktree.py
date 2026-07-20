@@ -71,7 +71,7 @@ CRATES = [
         "type": "memory",
         "layer": "infrastructure",
         "depends_on": ["clarity-contract"],
-        "consumed_by": ["clarity-core", "clarity-gateway", "clarity-mobile-core"],
+        "consumed_by": ["clarity-core", "clarity-gateway", "clarity-mobile-core", "clarity-knowledge"],
         "summary": "Hybrid memory: SQLite + BM25 + vector search.",
         "responsibilities": [
             "BM25 keyword retrieval",
@@ -81,6 +81,23 @@ CRATES = [
             "Session persistence",
         ],
         "note": "Features: `sqlite`, `embedding`.",
+    },
+    {
+        "id": "clarity-knowledge",
+        "name": "clarity-knowledge",
+        "type": "knowledge",
+        "layer": "infrastructure",
+        "depends_on": ["clarity-contract", "clarity-memory"],
+        "consumed_by": ["clarity-core"],
+        "summary": "Local knowledge indexing and AI-native interaction with activation dynamics.",
+        "responsibilities": [
+            "File-system scanning and incremental indexing",
+            "Hybrid retrieval (BM25 + vector + graph)",
+            "In-memory knowledge graph",
+            "Dynamic knowledge field with spreading activation",
+            "File-system change detection",
+        ],
+        "note": "No dependency on Obsidian/Syncthing; works with plain Markdown and wikilinks.",
     },
     {
         "id": "clarity-mcp",
@@ -233,6 +250,7 @@ CRATES = [
             "clarity-contract",
             "clarity-wire",
             "clarity-memory",
+            "clarity-knowledge",
             "clarity-mcp",
             "clarity-llm",
             "clarity-tools",
@@ -456,15 +474,15 @@ def write_index() -> None:
 id: clarity-worktree
 name: Clarity Project Worktree
 description: OKF knowledge bundle describing the Clarity crate topology, responsibilities, and dependency graph.
-version: 0.3.4-rc
-date: 2026-06-29
+version: 0.3.5-rc
+date: 2026-07-06
 source_repo: https://github.com/juice094/clarity
 ---
 
 # Clarity Project Worktree
 
-This OKF bundle describes the 20 crate directories in the Clarity workspace:
-19 active workspace members + 1 archived (`clarity-tauri`), plus the
+This OKF bundle describes the 21 crate directories in the Clarity workspace:
+20 active workspace members + 1 archived (`clarity-tauri`), plus the
 `tests/integration` integration-test crate.
 
 ## Layers

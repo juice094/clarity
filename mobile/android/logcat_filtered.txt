@@ -1,0 +1,6 @@
+--------- beginning of main
+07-07 07:11:12.969  3437  3437 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+07-07 07:11:12.975  3437  3437 I AndroidRuntime: Using default boot image
+07-07 07:11:12.975  3437  3437 I AndroidRuntime: Leaving lock profiling enabled
+07-07 07:11:13.104  3437  3437 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+07-07 07:11:14.230  3437  3437 D AndroidRuntime: Shutting down VM

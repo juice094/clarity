@@ -486,6 +486,7 @@ impl SubagentRunner {
                 store,
                 spec.git_context,
                 spec.capability_token.clone(),
+                spec.read_only,
             )
             .await?;
         collector.stage("agent_built");
@@ -727,6 +728,7 @@ impl SubagentRunner {
     }
 
     /// 构建代理
+    #[allow(clippy::too_many_arguments)] // Internal helper; grouping would add a new struct.
     async fn build_agent(
         &self,
         agent_id: &str,
@@ -735,6 +737,7 @@ impl SubagentRunner {
         _store: &SubagentStore,
         enable_git_context: bool,
         capability_token: Option<CapabilityToken>,
+        read_only_override: bool,
     ) -> Result<Agent, SubagentError> {
         let git_ctx = if enable_git_context {
             GitContext::collect(&self.working_dir)
@@ -745,7 +748,8 @@ impl SubagentRunner {
         };
 
         let mut builder = SubagentBuilder::new(self.tool_registry.clone(), &self.working_dir)
-            .with_git_context(git_ctx);
+            .with_git_context(git_ctx)
+            .with_read_only(read_only_override);
 
         if let Some(token) = capability_token {
             builder = builder.with_capability_token(token);
@@ -892,6 +896,11 @@ Your previous response was too brief. Please provide a more comprehensive summar
     /// 获取劳动力市场
     pub fn labor_market(&self) -> &LaborMarket {
         &self.labor_market
+    }
+
+    /// Register a custom agent type in the labor market.
+    pub fn register_type(&mut self, def: AgentTypeDefinition) {
+        self.labor_market.register(def);
     }
 
     /// 获取工作目录

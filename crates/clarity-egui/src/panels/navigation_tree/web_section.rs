@@ -4,8 +4,8 @@ use crate::App;
 
 /// Render a collapsible web bookmarks section.
 pub fn render_web_section(app: &mut App, ui: &mut egui::Ui, section_stable_id: &str) {
-    let theme = app.ui_store.theme.clone();
-    let links = app.settings_store.settings_edit.web_links.clone();
+    let theme = app.context.ui_store.theme.clone();
+    let links = app.settings_store().settings_edit.web_links.clone();
     let mut expanded = app.view_state.expansions.nav_web;
 
     crate::widgets::collapsible_section::collapsible_section(
@@ -44,8 +44,7 @@ pub fn render_web_section(app: &mut App, ui: &mut egui::Ui, section_stable_id: &
             let add_resp =
                 crate::widgets::nav_row(ui, &theme, crate::theme::ICON_PLUS, app.t("Add"), false);
             if add_resp.on_hover_text(app.t("Manage bookmarks")).clicked() {
-                app.view_state
-                    .open_modal(clarity_core::ui::ModalType::ManageWebLinks);
+                app.open_modal(clarity_core::ui::ModalType::ManageWebLinks);
             }
         },
     );

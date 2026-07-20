@@ -4,17 +4,19 @@
 //! Uses `egui::Area` with `Order::Foreground` to escape CentralPanel width limits.
 
 use crate::App;
+use crate::design_system::{self, TextStyle};
 use crate::ui::types::PreviewItem;
+use crate::widgets::icon_button_toolbar;
 
 /// Renders the file preview overlay UI.
 #[allow(dead_code)]
 pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
-    if app.ui_store.preview_item.is_none() {
+    if app.context.ui_store.preview_item.is_none() {
         return;
     }
 
-    let screen = ctx.screen_rect();
-    let theme = app.ui_store.theme.clone();
+    let screen = ctx.input(|i| i.viewport_rect());
+    let theme = app.context.ui_store.theme.clone();
 
     // ── Fullscreen scrim (visual) ──
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
@@ -54,7 +56,7 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
     };
 
     // ── Extract preview data ──
-    let Some(preview) = app.ui_store.preview_item.as_ref() else {
+    let Some(preview) = app.context.ui_store.preview_item.as_ref() else {
         return;
     };
     let (title, content, is_web, url) = match preview {
@@ -76,7 +78,8 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
             ui.set_max_height(preview_height);
 
             // Outer card: rounded corners + shadow, no stroke
-            egui::Frame::new()
+            clarity_ui::design_system::Elevation::Modal
+                .frame(&theme)
                 .fill(theme.surface)
                 .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
                 .shadow(theme.shadow_modal)
@@ -95,7 +98,8 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                             sw: 0,
                             se: 0,
                         };
-                        egui::Frame::new()
+                        clarity_ui::design_system::Elevation::Surface
+                            .frame(&theme)
                             .fill(theme.surface_strong)
                             .corner_radius(top_radius)
                             .stroke(egui::Stroke::NONE)
@@ -107,33 +111,25 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                     } else {
                                         crate::theme::ICON_FILE
                                     };
-                                    ui.label(
-                                        egui::RichText::new(icon)
-                                            .font(theme.font_icon(theme.text_sm)),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(&title)
-                                            .size(theme.text_sm)
-                                            .color(theme.text)
-                                            .monospace(),
+                                    clarity_ui::design_system::icon(ui, icon, theme.text_sm);
+                                    clarity_ui::design_system::text_with_color(
+                                        ui,
+                                        &title,
+                                        clarity_ui::design_system::TextStyle::Small.mono(),
+                                        theme.text,
                                     );
 
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
                                             // Close
-                                            if ui
-                                                .add(
-                                                    egui::Button::new(
-                                                        egui::RichText::new(crate::theme::ICON_X)
-                                                            .font(theme.font_icon(theme.text_base)),
-                                                    )
-                                                    .fill(egui::Color32::TRANSPARENT)
-                                                    .corner_radius(egui::CornerRadius::same(
-                                                        theme.radius_sm as u8,
-                                                    )),
-                                                )
-                                                .clicked()
+                                            if icon_button_toolbar(
+                                                ui,
+                                                crate::theme::ICON_X,
+                                                theme.text_base,
+                                                &theme,
+                                            )
+                                            .clicked()
                                             {
                                                 close_requested = true;
                                             }
@@ -144,18 +140,13 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                             } else {
                                                 crate::theme::ICON_MAXIMIZE
                                             };
-                                            if ui
-                                                .add(
-                                                    egui::Button::new(
-                                                        egui::RichText::new(fs_icon)
-                                                            .font(theme.font_icon(theme.text_base)),
-                                                    )
-                                                    .fill(egui::Color32::TRANSPARENT)
-                                                    .corner_radius(egui::CornerRadius::same(
-                                                        theme.radius_sm as u8,
-                                                    )),
-                                                )
-                                                .clicked()
+                                            if icon_button_toolbar(
+                                                ui,
+                                                fs_icon,
+                                                theme.text_base,
+                                                &theme,
+                                            )
+                                            .clicked()
                                             {
                                                 is_fullscreen = !is_fullscreen;
                                             }
@@ -169,11 +160,7 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                             crate::design_system::gap(ui, crate::design_system::Space::S1);
                             ui.horizontal(|ui| {
                                 crate::design_system::gap(ui, crate::design_system::Space::S3);
-                                ui.label(
-                                    egui::RichText::new(url)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_muted),
-                                );
+                                design_system::text(ui, url, TextStyle::Small);
                             });
                         }
 
@@ -185,11 +172,9 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                 egui::ScrollArea::vertical()
                                     .id_salt("preview_scroll_overlay")
                                     .show(ui, |ui| {
-                                        let parsed = crate::ui::markdown::parse_markdown(&content);
-                                        crate::ui::markdown::render_blocks(
+                                        crate::ui::markdown::render_markdown(
                                             ui,
-                                            &parsed,
-                                            &theme,
+                                            &content,
                                             theme.chat_text,
                                         );
                                     });
@@ -201,7 +186,7 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
         });
 
     if close_requested {
-        app.ui_store.preview_item = None;
+        app.context.ui_store.preview_item = None;
     }
     ctx.data_mut(|d| d.insert_temp(fullscreen_id, is_fullscreen));
 }

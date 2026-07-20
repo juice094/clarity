@@ -106,7 +106,10 @@ impl Tool for GlobTool {
             .map(|v| (v as usize).min(1000))
             .unwrap_or(100);
 
-        let mut matches = self.execute_glob(pattern, &ctx.working_dir)?;
+        // Expand leading ~ to the user's home directory (cross-platform).
+        let resolved_pattern = helpers::resolve_path(&ctx, pattern)?;
+        let mut matches =
+            self.execute_glob(&resolved_pattern.to_string_lossy(), &ctx.working_dir)?;
         let total = matches.len();
 
         // Apply limit
@@ -293,10 +296,25 @@ impl Tool for GrepTool {
             .map(|v| (v as usize).min(1000))
             .unwrap_or(100);
 
-        debug!("Grepping for '{}' in {:?}", pattern, paths);
+        // Expand leading ~ to the user's home directory for each search path.
+        let resolved_paths: Vec<String> = paths
+            .iter()
+            .map(|p| helpers::resolve_path(&ctx, p))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+
+        debug!("Grepping for '{}' in {:?}", pattern, resolved_paths);
 
         let mut matches = self
-            .search_files(pattern, &paths, case_sensitive, use_regex, &ctx.working_dir)
+            .search_files(
+                pattern,
+                &resolved_paths,
+                case_sensitive,
+                use_regex,
+                &ctx.working_dir,
+            )
             .await?;
 
         let total = matches.len();
@@ -388,5 +406,42 @@ mod tests {
         let matches = result["matches"].as_array().unwrap();
 
         assert_eq!(matches.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_glob_expands_tilde() {
+        let tool = GlobTool::new();
+        let ctx = ToolContext::new();
+
+        // Use a pattern that matches nothing so the test is hermetic and does
+        // not depend on the contents of the real home directory.
+        let args = json!({"pattern": "~/clarity_test_glob_should_not_exist_*.xyz"});
+        let result = tool.execute(args, ctx).await.unwrap();
+
+        let matches = result["matches"].as_array().unwrap();
+        assert!(
+            matches.is_empty(),
+            "expanded tilde pattern should match nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_grep_expands_tilde() {
+        let tool = GrepTool::new();
+        let ctx = ToolContext::new();
+
+        // A non-existent file under ~ should be expanded and then silently
+        // skipped, producing no matches instead of a path error.
+        let args = json!({
+            "pattern": "hello",
+            "paths": ["~/clarity_test_grep_should_not_exist.txt"]
+        });
+        let result = tool.execute(args, ctx).await.unwrap();
+
+        let matches = result["matches"].as_array().unwrap();
+        assert!(
+            matches.is_empty(),
+            "expanded tilde path should be skipped when missing"
+        );
     }
 }

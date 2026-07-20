@@ -74,6 +74,10 @@ impl PluginStore {
 /// Built-in plugins that are always available.
 pub fn builtin_plugins() -> Vec<PluginItem> {
     vec![
+        PluginItem::builtin("chat", "通用对话", "message_square"),
+        PluginItem::builtin("code", "代码助手", "file_code"),
+        PluginItem::builtin("work", "工作/项目", "briefcase"),
+        PluginItem::builtin("claw", "远程设备", "bot"),
         PluginItem::builtin("doc", "文档", "file_text"),
         PluginItem::builtin("web", "网站", "globe"),
         PluginItem::builtin("sheet", "表格", "table"),

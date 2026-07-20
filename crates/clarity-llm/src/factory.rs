@@ -20,6 +20,7 @@ use crate::model_registry::{
     ModelRegistry, build_provider_from_registry_entry, default_secret_store,
 };
 use crate::providers::{AnthropicLlm, KimiCodeLlm, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
+#[cfg(feature = "local-llm")]
 use crate::resolve_local_model_path;
 use clarity_contract::AgentError;
 use std::env;
@@ -89,6 +90,16 @@ impl LlmFactory {
 
         if env::var("OPENAI_API_KEY").is_ok() {
             return Ok(Box::new(OpenAiCompatibleLlm::from_env()?));
+        }
+
+        // Ollama auto-detection: explicit env vars take precedence, otherwise
+        // probe the default local endpoint. Local inference endpoints must not
+        // be routed through system proxies, so we use OllamaProvider directly.
+        if env::var("OLLAMA_HOST").is_ok() || env::var("OLLAMA_MODEL").is_ok() {
+            return Ok(Box::new(crate::ollama::OllamaProvider::from_env()?));
+        }
+        if let Ok(provider) = probe_default_ollama().await {
+            return Ok(Box::new(provider));
         }
 
         #[cfg(feature = "local-llm")]
@@ -297,5 +308,77 @@ impl LlmFactory {
     )]
     pub fn openai() -> Result<OpenAiCompatibleLlm, AgentError> {
         OpenAiCompatibleLlm::from_env()
+    }
+}
+
+/// Probe the default Ollama endpoint and return a provider if it responds.
+async fn probe_default_ollama() -> Result<crate::ollama::OllamaProvider, AgentError> {
+    let provider = crate::ollama::OllamaProvider::new("http://localhost:11434", "llama3");
+    let url = "http://localhost:11434/api/tags";
+    match provider
+        .client
+        .get(url)
+        .timeout(std::time::Duration::from_secs(2))
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                if body.get("models").is_some() {
+                    tracing::info!(
+                        "Ollama detected at localhost:11434; using as fallback provider"
+                    );
+                    return Ok(provider);
+                }
+            }
+        }
+        Ok(resp) => {
+            tracing::debug!("Ollama probe returned status {}", resp.status());
+        }
+        Err(e) => {
+            tracing::debug!("Ollama probe failed: {}", e);
+        }
+    }
+    Err(AgentError::Llm(
+        "Ollama not reachable at localhost:11434".into(),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn probe_default_ollama_succeeds_when_tags_endpoint_responds() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf).await;
+            let response = "HTTP/1.1 200 OK\r\n\
+                Content-Type: application/json\r\n\
+                \r\n\
+                {\"models\":[{\"name\":\"llama3\"}]}\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        // Point the probe at the mock server instead of the real default port.
+        let provider =
+            crate::ollama::OllamaProvider::new(format!("http://127.0.0.1:{}", port), "llama3");
+        let url = format!("http://127.0.0.1:{}/api/tags", port);
+        let resp = provider
+            .client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await;
+        assert!(resp.is_ok(), "probe should reach mock server");
+        let resp = resp.unwrap();
+        assert!(resp.status().is_success());
+        let body = resp.json::<serde_json::Value>().await.unwrap();
+        assert!(body.get("models").is_some());
     }
 }

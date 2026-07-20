@@ -42,12 +42,12 @@ fn read_attachment_text(path: &std::path::Path) -> Option<String> {
 impl App {
     /// Execute a shell command directly (!cmd), bypassing the LLM entirely.
     pub(crate) fn execute_shell_direct(&mut self, cmd: String) {
-        let tx = self.ui_tx.clone();
-        let working_dir = self.state.agent.config().working_dir.clone();
-        let session_id = self.session_store.active_session_id.clone();
+        let tx = self.context.ui_tx.clone();
+        let working_dir = self.context.state.agent.config().working_dir.clone();
+        let session_id = self.context.session_store.active_session_id.clone();
 
         // Add the command as a user message immediately.
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             let mut msg = Message {
                 role: Role::User,
                 content: format!("!{}", cmd),
@@ -63,9 +63,9 @@ impl App {
             session.updated_at = crate::session::now_millis();
         }
         self.save_current_session();
-        self.chat_store.stick_to_bottom = true;
+        self.chat_store_mut().stick_to_bottom = true;
 
-        self.runtime.spawn(async move {
+        self.context.runtime.spawn(async move {
             let (shell, arg) = if cfg!(target_os = "windows") {
                 ("powershell", "-Command")
             } else {
@@ -111,11 +111,12 @@ impl App {
     /// Upgrade the active Chat session to a Work session bound to the currently
     /// selected project (if any).
     pub(crate) fn upgrade_active_session_to_work(&mut self) {
-        let workspace_id = self.project_store.selected_project_id.clone();
+        let workspace_id = self.context.project_store.selected_project_id.clone();
         let has_workspace = workspace_id
             .as_ref()
             .and_then(|pid| {
-                self.project_store
+                self.context
+                    .project_store
                     .projects
                     .iter()
                     .find(|p| &p.id == pid)
@@ -128,7 +129,7 @@ impl App {
             has_workspace,
         };
 
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             session.context = context;
             session.project_id = workspace_id;
             session.updated_at = crate::session::now_millis();
@@ -140,20 +141,21 @@ impl App {
 
     /// Send.
     pub(crate) fn send(&mut self) {
-        let text = self.chat_store.input.trim().to_string();
-        if text.is_empty() && self.chat_store.attachments.is_empty() {
+        let text = self.chat_store_mut().input.trim().to_string();
+        if text.is_empty() && self.chat_store_mut().attachments.is_empty() {
             return;
         }
 
         let active_context = self
+            .context
             .session_store
             .active_session()
             .map(|s| s.context.clone());
         let is_claw_session = matches!(active_context, Some(SessionContext::Claw { .. }));
         let is_work_session = matches!(active_context, Some(SessionContext::Work { .. }));
-        let selected_provider = self.settings_store.settings_edit.provider.clone();
+        let selected_provider = self.settings_store().settings_edit.provider.clone();
         let provider_tools_available = self
-            .settings_store
+            .settings_store()
             .provider_registry
             .get(&selected_provider)
             .map(|p| p.supports_tools())
@@ -190,18 +192,18 @@ impl App {
                     "The selected provider does not support workspace tools.",
                     ToastLevel::Warn,
                 );
-                self.chat_store.input.clear();
+                self.chat_store_mut().input.clear();
                 return;
             }
             self.upgrade_active_session_to_work();
-            self.chat_store.input.clear();
-            self.chat_store.attachments.clear();
+            self.chat_store_mut().input.clear();
+            self.chat_store_mut().attachments.clear();
             return;
         }
 
         // Clear any stale plan tracker / snapshot hint from a previous turn.
-        self.chat_store.plan_tracker = None;
-        self.chat_store.last_snapshot = None;
+        self.chat_store_mut().plan_tracker = None;
+        self.chat_store_mut().last_snapshot = None;
 
         // If currently streaming, steer: cancel the current turn and queue the
         // message for immediate send when the cancellation completes.
@@ -212,33 +214,33 @@ impl App {
             }
             self.view_state.turn = clarity_core::ui::TurnState::Stopping;
             self.stop();
-            self.chat_store.pending_send =
-                Some((text, std::mem::take(&mut self.chat_store.attachments)));
-            self.chat_store.input.clear();
+            self.chat_store_mut().pending_send =
+                Some((text, std::mem::take(&mut self.chat_store_mut().attachments)));
+            self.chat_store_mut().input.clear();
             return;
         }
 
         let mut full_message = text.clone();
-        for att in &self.chat_store.attachments {
+        for att in &self.chat_store_mut().attachments {
             if let Some(content) = read_attachment_text(&att.path) {
                 full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
             } else {
                 full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
             }
         }
-        self.chat_store.attachments.clear();
+        self.chat_store_mut().attachments.clear();
 
         // Inject # quick-add context items as a system prefix.
-        if !self.chat_store.context_items.is_empty() {
+        if !self.chat_store_mut().context_items.is_empty() {
             let mut ctx_prefix = String::from("[Context]\n");
-            for item in &self.chat_store.context_items {
+            for item in &self.chat_store_mut().context_items {
                 ctx_prefix.push_str(&format!("{}: {}\n", item.display, item.payload));
             }
             full_message = format!("{}\n\n{}", ctx_prefix, full_message);
-            self.chat_store.context_items.clear();
+            self.chat_store_mut().context_items.clear();
         }
 
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             let mut msg = Message {
                 role: Role::User,
                 content: full_message.clone(),
@@ -262,24 +264,26 @@ impl App {
                 };
             }
         }
-        self.chat_store.input.clear();
-        self.session_store
+        self.chat_store_mut().input.clear();
+        self.context
+            .session_store
             .drafts
-            .remove(&self.session_store.active_session_id);
-        let session_id = self.session_store.active_session_id.clone();
-        if let Some(session) = self.session_store.session_mut(&session_id) {
+            .remove(&self.context.session_store.active_session_id);
+        let session_id = self.context.session_store.active_session_id.clone();
+        if let Some(session) = self.context.session_store.session_mut(&session_id) {
             session.in_flight = true;
         }
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
-        self.chat_store.agent_status = AgentStatus::Busy;
-        self.chat_store.in_flight_since = Some(std::time::Instant::now());
-        self.chat_store.tool_calls.clear();
+        self.chat_store_mut().agent_status = AgentStatus::Busy;
+        self.chat_store_mut().in_flight_since = Some(std::time::Instant::now());
+        self.chat_store_mut().tool_calls.clear();
 
-        let state = self.state.clone();
-        let tx = self.ui_tx.clone();
+        let state = self.context.state.clone();
+        let tx = self.context.ui_tx.clone();
         let query = full_message;
         let provider_id = selected_provider.clone();
         let restored_state = self
+            .context
             .session_store
             .active_session()
             .and_then(|s| s.provider_state.get(&provider_id).cloned());
@@ -288,7 +292,7 @@ impl App {
         if let Some(plan_query) = text.strip_prefix("/plan ") {
             let plan_query = plan_query.to_string();
             let plan_session_id = session_id.clone();
-            self.runtime.spawn(async move {
+            self.context.runtime.spawn(async move {
                 if let Err(e) = ensure_llm(&state).await {
                     if let Err(err) = tx.send(UiEvent::Error {
                         session_id: plan_session_id,
@@ -335,7 +339,7 @@ impl App {
             let subagent_prompt = query.strip_prefix(prefix).unwrap_or(&query).to_string();
             let agent_type_string = agent_type.to_string();
             let subagent_session_id = session_id.clone();
-            self.runtime.spawn(async move {
+            self.context.runtime.spawn(async move {
                 if let Err(e) = ensure_llm(&state).await {
                     if let Err(err) = tx.send(UiEvent::Error {
                         session_id: subagent_session_id,
@@ -462,7 +466,7 @@ impl App {
             return;
         }
 
-        self.runtime.spawn(async move {
+        self.context.runtime.spawn(async move {
             if let Err(e) = ensure_llm(&state).await {
                 if let Err(err) = tx.send(UiEvent::Error {
                     session_id: session_id.clone(),
@@ -591,34 +595,34 @@ impl App {
             return;
         }
 
-        let text = self.chat_store.input.trim().to_string();
-        if text.is_empty() && self.chat_store.attachments.is_empty() {
+        let text = self.chat_store_mut().input.trim().to_string();
+        if text.is_empty() && self.chat_store_mut().attachments.is_empty() {
             return;
         }
 
-        let session_id = self.session_store.active_session_id.clone();
+        let session_id = self.context.session_store.active_session_id.clone();
 
         let mut full_message = text.clone();
-        for att in &self.chat_store.attachments {
+        for att in &self.chat_store_mut().attachments {
             if let Some(content) = read_attachment_text(&att.path) {
                 full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
             } else {
                 full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
             }
         }
-        self.chat_store.attachments.clear();
+        self.chat_store_mut().attachments.clear();
 
         // Inject # quick-add context items as a system prefix.
-        if !self.chat_store.context_items.is_empty() {
+        if !self.chat_store_mut().context_items.is_empty() {
             let mut ctx_prefix = String::from("[Context]\n");
-            for item in &self.chat_store.context_items {
+            for item in &self.chat_store_mut().context_items {
                 ctx_prefix.push_str(&format!("{}: {}\n", item.display, item.payload));
             }
             full_message = format!("{}\n\n{}", ctx_prefix, full_message);
-            self.chat_store.context_items.clear();
+            self.chat_store_mut().context_items.clear();
         }
 
-        if let Some(session) = self.session_store.active_session_mut() {
+        if let Some(session) = self.context.session_store.active_session_mut() {
             let mut msg = Message {
                 role: Role::User,
                 content: full_message.clone(),
@@ -641,28 +645,29 @@ impl App {
                 };
             }
         }
-        if let Some(session) = self.session_store.session_mut(&session_id) {
+        if let Some(session) = self.context.session_store.session_mut(&session_id) {
             session.in_flight = true;
         }
-        self.chat_store.input.clear();
-        self.session_store
+        self.chat_store_mut().input.clear();
+        self.context
+            .session_store
             .drafts
-            .remove(&self.session_store.active_session_id);
+            .remove(&self.context.session_store.active_session_id);
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
-        self.chat_store.agent_status = AgentStatus::Busy;
-        self.chat_store.in_flight_since = Some(std::time::Instant::now());
-        self.chat_store.tool_calls.clear();
-        self.chat_store.claw_in_flight_session_id = Some(session_id.clone());
+        self.chat_store_mut().agent_status = AgentStatus::Busy;
+        self.chat_store_mut().in_flight_since = Some(std::time::Instant::now());
+        self.chat_store_mut().tool_calls.clear();
+        self.chat_store_mut().claw_in_flight_session_id = Some(session_id.clone());
 
-        let ws = match self.claw_ws {
+        let ws = match self.context.claw_ws {
             Some(ref ws) => ws.clone(),
             None => {
-                if let Some(session) = self.session_store.session_mut(&session_id) {
+                if let Some(session) = self.context.session_store.session_mut(&session_id) {
                     session.in_flight = false;
                 }
-                self.chat_store.claw_in_flight_session_id = None;
+                self.chat_store_mut().claw_in_flight_session_id = None;
                 self.view_state.turn = clarity_core::ui::TurnState::Idle;
-                let _ = self.ui_tx.send(UiEvent::Error {
+                let _ = self.context.ui_tx.send(UiEvent::Error {
                     session_id,
                     message: "OpenClaw connection is not available".into(),
                 });
@@ -674,7 +679,7 @@ impl App {
         // target device is managed by the connection loop in main.rs; sending
         // only needs the session key. Non-Claw sessions must not reach this
         // path.
-        let session_key = match self.session_store.active_session() {
+        let session_key = match self.context.session_store.active_session() {
             Some(Session {
                 context:
                     SessionContext::Claw {
@@ -684,19 +689,19 @@ impl App {
                     },
                 ..
             }) => {
-                let target = self.device_state.pick_instance(role, affinity);
+                let target = self.context.device_state.pick_instance(role, affinity);
                 match target {
                     Some(bot) => {
-                        self.device_state.set_last_picked(role, &bot.id);
+                        self.context.device_state.set_last_picked(role, &bot.id);
                         session_key.clone()
                     }
                     None => {
-                        if let Some(session) = self.session_store.session_mut(&session_id) {
+                        if let Some(session) = self.context.session_store.session_mut(&session_id) {
                             session.in_flight = false;
                         }
-                        self.chat_store.claw_in_flight_session_id = None;
+                        self.chat_store_mut().claw_in_flight_session_id = None;
                         self.view_state.turn = clarity_core::ui::TurnState::Idle;
-                        let _ = self.ui_tx.send(UiEvent::Error {
+                        let _ = self.context.ui_tx.send(UiEvent::Error {
                             session_id,
                             message: "No Claw device available".into(),
                         });
@@ -705,12 +710,12 @@ impl App {
                 }
             }
             _ => {
-                if let Some(session) = self.session_store.session_mut(&session_id) {
+                if let Some(session) = self.context.session_store.session_mut(&session_id) {
                     session.in_flight = false;
                 }
-                self.chat_store.claw_in_flight_session_id = None;
+                self.chat_store_mut().claw_in_flight_session_id = None;
                 self.view_state.turn = clarity_core::ui::TurnState::Idle;
-                let _ = self.ui_tx.send(UiEvent::Error {
+                let _ = self.context.ui_tx.send(UiEvent::Error {
                     session_id,
                     message: "Not a Claw session".into(),
                 });

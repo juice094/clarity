@@ -1,17 +1,7 @@
-//! Cron Store
+//! Cron Store (compatibility re-export).
 //!
-//! cron-scheduled task list, creation modal
+//! The canonical definition now lives in `clarity_apps::dashboard` as part of
+//! the P1c migration. This module remains as a temporary shim so existing
+//! imports keep compiling.
 
-use std::time::Instant;
-
-/// Holds cron UI state.
-pub struct CronStore {
-    pub tasks: Vec<clarity_core::background::cron::CronTask>,
-    #[allow(dead_code)]
-    pub last_refresh: Instant,
-    pub create_name: String,
-    pub create_desc: String,
-    pub create_prompt: String,
-    pub create_expr: String,
-    pub create_priority: u8,
-}
+pub use clarity_apps::dashboard::CronStore;

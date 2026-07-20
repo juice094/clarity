@@ -7,8 +7,10 @@
 //! true cancellation via CancellationToken.
 
 use crate::App;
-use crate::design_system::{self, Space};
 use crate::settings::GuiSettings;
+use clarity_ui::design_system::{Space, TextStyle, gap, text};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::modal::{Modal, modal_scrim};
 
 /// State machine for the onboarding flow.
 #[derive(Debug, Clone)]
@@ -61,15 +63,15 @@ pub fn should_show_onboarding() -> bool {
 
 /// Render the onboarding overlay (full-screen modal).
 pub fn render_onboarding(app: &mut App, ctx: &egui::Context) {
-    let state = app.onboarding_store.onboarding_state.clone();
+    let state = app.context.onboarding_store.onboarding_state.clone();
     match state {
         OnboardingState::Hidden => (),
         OnboardingState::ChooseProvider => {
             // Sprint 31: auto-trigger download on first encounter
-            if !app.onboarding_store.downloading_auto {
-                app.onboarding_store.downloading_auto = true;
+            if !app.context.onboarding_store.downloading_auto {
+                app.context.onboarding_store.downloading_auto = true;
                 start_model_download(app);
-                app.onboarding_store.onboarding_state = OnboardingState::Downloading {
+                app.context.onboarding_store.onboarding_state = OnboardingState::Downloading {
                     bytes_downloaded: 0,
                     total_bytes: None,
                 };
@@ -89,76 +91,66 @@ pub fn render_onboarding(app: &mut App, ctx: &egui::Context) {
 }
 
 fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
-    let screen = ctx.screen_rect();
+    modal_scrim(ctx);
+    let mut close_requested = false;
 
-    // Dim background
-    ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Background,
-        egui::Id::new("onboarding_bg"),
-    ))
-    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(180));
-
-    egui::Window::new("Welcome to Clarity")
-        .collapsible(false)
-        .resizable(false)
-        .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
+    Modal::new("onboarding_welcome")
+        .width(420.0)
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading("Welcome to Clarity");
-                design_system::gap(ui, Space::S1);
-                ui.label(
-                    egui::RichText::new("Local-first AI agent runtime")
-                        .color(app.ui_store.theme.text_dim)
-                        .size(app.ui_store.theme.text_base),
+                text(ui, "Welcome to Clarity", TextStyle::Heading);
+                gap(ui, Space::S1);
+                text(ui, "Local-first AI agent runtime", TextStyle::Small);
+                gap(ui, Space::S5);
+                text(
+                    ui,
+                    "Get started by choosing how you'd like to run Clarity:",
+                    TextStyle::Body,
                 );
-                design_system::gap(ui, Space::S5);
-                ui.label("Get started by choosing how you'd like to run Clarity:");
-                design_system::gap(ui, Space::S3);
+                gap(ui, Space::S3);
 
                 if ui
-                    .add_sized(
-                        [280.0, 36.0],
-                        egui::Button::new("Enter API Key (Cloud Provider)"),
-                    )
+                    .add_sized([280.0, 36.0], Button::new("Enter API Key (Cloud Provider)"))
                     .clicked()
                 {
-                    app.view_state.main = clarity_core::ui::AppView::Settings;
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    app.navigate(clarity_core::ui::AppView::Settings.into());
+                    close_requested = true;
                 }
 
-                design_system::gap(ui, Space::S1);
+                gap(ui, Space::S1);
 
                 if ui
                     .add_sized(
                         [280.0, 36.0],
-                        egui::Button::new("Download Local Model (~1 GB)"),
+                        Button::new("Download Local Model (~1 GB)").primary(),
                     )
                     .clicked()
                 {
                     start_model_download(app);
                 }
 
-                design_system::gap(ui, Space::S1);
+                gap(ui, Space::S1);
 
                 if ui
-                    .add_sized([280.0, 36.0], egui::Button::new("Skip for Now"))
+                    .add_sized([280.0, 36.0], Button::new("Skip for Now").ghost())
                     .clicked()
                 {
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    close_requested = true;
                 }
 
-                design_system::gap(ui, Space::S3);
-                ui.label(
-                    egui::RichText::new(
-                        "Note: Local models use the Qwen2 architecture. \
-                         Download other architectures manually via Settings.",
-                    )
-                    .color(app.ui_store.theme.text_dim)
-                    .size(app.ui_store.theme.text_sm),
+                gap(ui, Space::S3);
+                text(
+                    ui,
+                    "Note: Local models use the Qwen2 architecture. \
+                     Download other architectures manually via Settings.",
+                    TextStyle::Small,
                 );
             });
         });
+
+    if close_requested {
+        app.context.onboarding_store.onboarding_state = OnboardingState::Hidden;
+    }
 }
 
 fn render_downloading(
@@ -167,16 +159,9 @@ fn render_downloading(
     bytes_downloaded: u64,
     total_bytes: Option<u64>,
 ) {
-    let screen = ctx.screen_rect();
-    ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Background,
-        egui::Id::new("onboarding_bg"),
-    ))
-    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(180));
-
     // Poll for progress updates from the download task
     let mut channel_disconnected = false;
-    if let Some(ref mut rx) = app.onboarding_store.onboarding_progress_rx {
+    if let Some(ref mut rx) = app.context.onboarding_store.onboarding_progress_rx {
         let rx: &mut std::sync::mpsc::Receiver<
             clarity_core::model_download::ModelDownloadProgress,
         > = rx;
@@ -190,7 +175,7 @@ fn render_downloading(
                     bytes_downloaded,
                     total_bytes,
                 }) => {
-                    app.onboarding_store.onboarding_state = OnboardingState::Downloading {
+                    app.context.onboarding_store.onboarding_state = OnboardingState::Downloading {
                         bytes_downloaded,
                         total_bytes,
                     };
@@ -198,16 +183,17 @@ fn render_downloading(
                 Ok(ModelDownloadProgress::Complete) => {
                     let dest = clarity_core::model_download::default_model_dir()
                         .join(clarity_core::model_download::PRECONFIGURED_MODELS[0].filename);
-                    app.onboarding_store.onboarding_state =
+                    app.context.onboarding_store.onboarding_state =
                         OnboardingState::DownloadComplete { model_path: dest };
                     break;
                 }
                 Ok(ModelDownloadProgress::Cancelled) => {
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    app.context.onboarding_store.onboarding_state = OnboardingState::Hidden;
                     break;
                 }
                 Ok(ModelDownloadProgress::Failed(err)) => {
-                    app.onboarding_store.onboarding_state = OnboardingState::DownloadFailed(err);
+                    app.context.onboarding_store.onboarding_state =
+                        OnboardingState::DownloadFailed(err);
                     break;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
@@ -222,23 +208,23 @@ fn render_downloading(
     // Fallback: if channel disconnected without explicit Complete/Failed, treat as interrupted.
     if channel_disconnected
         && matches!(
-            app.onboarding_store.onboarding_state,
+            app.context.onboarding_store.onboarding_state,
             OnboardingState::Downloading { .. }
         )
     {
-        app.onboarding_store.onboarding_state =
+        app.context.onboarding_store.onboarding_state =
             OnboardingState::DownloadFailed("Download interrupted".into());
     }
 
-    egui::Window::new("Downloading Model")
-        .collapsible(false)
-        .resizable(false)
-        .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
+    modal_scrim(ctx);
+    let mut cancel = false;
+
+    Modal::new("onboarding_downloading")
+        .width(420.0)
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading("Preparing Local Model");
-                design_system::gap(ui, Space::S1);
+                text(ui, "Preparing Local Model", TextStyle::Heading);
+                gap(ui, Space::S1);
 
                 let (fraction, label) = if let Some(total) = total_bytes {
                     let pct = if total > 0 {
@@ -257,84 +243,98 @@ fn render_downloading(
                     (0.0, format!("{:.1} MB downloaded (unknown total)", mb))
                 };
 
-                ui.label(&label);
-                design_system::gap(ui, Space::S1);
+                text(ui, label.as_str(), TextStyle::Body);
+                gap(ui, Space::S1);
+                // ponytail: ProgressBar is not yet wrapped in clarity-ui.
                 ui.add(
                     egui::ProgressBar::new(fraction.min(1.0))
                         .show_percentage()
                         .desired_width(280.0),
                 );
-                design_system::gap(ui, Space::S3);
+                gap(ui, Space::S3);
 
                 if ui
-                    .add_sized([140.0, 28.0], egui::Button::new("Cancel and Skip"))
+                    .add_sized([140.0, 28.0], Button::new("Cancel and Skip").ghost())
                     .clicked()
                 {
-                    // Sprint 31: true cancellation
-                    if let Some(ref token) = app.onboarding_store.cancel_token {
-                        token.cancel();
-                    }
-                    app.onboarding_store.cancel_token = None;
-                    app.onboarding_store.onboarding_progress_rx = None;
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    cancel = true;
                 }
             });
         });
+
+    if cancel {
+        // Sprint 31: true cancellation
+        if let Some(ref token) = app.context.onboarding_store.cancel_token {
+            token.cancel();
+        }
+        app.context.onboarding_store.cancel_token = None;
+        app.context.onboarding_store.onboarding_progress_rx = None;
+        app.context.onboarding_store.onboarding_state = OnboardingState::Hidden;
+    }
 }
 
 fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
-    let screen = ctx.screen_rect();
-    ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Background,
-        egui::Id::new("onboarding_bg"),
-    ))
-    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(180));
+    modal_scrim(ctx);
+    let mut try_again = false;
+    let mut use_api_key = false;
+    let mut skip = false;
 
-    egui::Window::new("Download Failed")
-        .collapsible(false)
-        .resizable(false)
-        .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
+    Modal::new("onboarding_download_failed")
+        .width(420.0)
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading("Download Failed");
-                design_system::gap(ui, Space::S1);
-                ui.label(egui::RichText::new(err).color(egui::Color32::LIGHT_RED));
-                design_system::gap(ui, Space::S3);
+                text(ui, "Download Failed", TextStyle::Heading);
+                gap(ui, Space::S1);
+                clarity_ui::design_system::text_with_color(
+                    ui,
+                    err,
+                    clarity_ui::design_system::TextStyle::Body,
+                    app.context.ui_store.theme.danger,
+                );
+                gap(ui, Space::S3);
 
                 if ui
-                    .add_sized([140.0, 28.0], egui::Button::new("Try Again"))
+                    .add_sized([140.0, 28.0], Button::new("Try Again").primary())
                     .clicked()
                 {
-                    start_model_download(app);
+                    try_again = true;
                 }
-                design_system::gap(ui, Space::S1);
+                gap(ui, Space::S1);
                 if ui
-                    .add_sized([140.0, 28.0], egui::Button::new("Enter API Key Instead"))
+                    .add_sized([140.0, 28.0], Button::new("Enter API Key Instead"))
                     .clicked()
                 {
-                    app.view_state.main = clarity_core::ui::AppView::Settings;
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    use_api_key = true;
                 }
-                design_system::gap(ui, Space::S1);
+                gap(ui, Space::S1);
                 if ui
-                    .add_sized([140.0, 28.0], egui::Button::new("Skip"))
+                    .add_sized([140.0, 28.0], Button::new("Skip").ghost())
                     .clicked()
                 {
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    skip = true;
                 }
             });
         });
+
+    if try_again {
+        start_model_download(app);
+    } else if use_api_key {
+        app.navigate(clarity_core::ui::AppView::Settings.into());
+        app.context.onboarding_store.onboarding_state = OnboardingState::Hidden;
+    } else if skip {
+        app.context.onboarding_store.onboarding_state = OnboardingState::Hidden;
+    }
 }
 
 fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
     // Auto-configure settings to local provider
-    app.settings_store.settings_edit.provider = "local".to_string();
-    app.settings_store.settings_edit.model = model_path
+    let settings_store = app.settings_store_mut();
+    settings_store.settings_edit.provider = "local".to_string();
+    settings_store.settings_edit.model = model_path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "local".to_string());
-    app.settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
+    settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
 
     // S3.2: use centralized commit + reload helpers instead of inline mirror.
     if let Err(e) = app.commit_settings() {
@@ -343,8 +343,8 @@ fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
     }
     app.trigger_llm_reload();
 
-    app.onboarding_store.onboarding_state = crate::onboarding::OnboardingState::Hidden;
-    app.onboarding_store.cancel_token = None;
+    app.context.onboarding_store.onboarding_state = crate::onboarding::OnboardingState::Hidden;
+    app.context.onboarding_store.cancel_token = None;
 }
 
 fn start_model_download(app: &mut App) {
@@ -357,17 +357,17 @@ fn start_model_download(app: &mut App) {
     let dest = default_model_dir();
 
     let cancel_token = CancellationToken::new();
-    app.onboarding_store.cancel_token = Some(cancel_token.clone());
+    app.context.onboarding_store.cancel_token = Some(cancel_token.clone());
 
     let (tx, rx) = std::sync::mpsc::channel::<ModelDownloadProgress>();
-    app.onboarding_store.onboarding_progress_rx = Some(rx);
-    app.onboarding_store.onboarding_state = OnboardingState::Downloading {
+    app.context.onboarding_store.onboarding_progress_rx = Some(rx);
+    app.context.onboarding_store.onboarding_state = OnboardingState::Downloading {
         bytes_downloaded: 0,
         total_bytes: None,
     };
 
     let model_clone = *model;
-    let handle = app.runtime.handle().clone();
+    let handle = app.context.runtime.handle().clone();
     handle.clone().spawn(async move {
         let handle2 = handle.clone();
         // Bridge tokio mpsc -> std mpsc because App uses std::sync::mpsc for UI events
@@ -395,19 +395,4 @@ fn start_model_download(app: &mut App) {
             tracing::error!("Model download failed: {}", e);
         }
     });
-}
-
-// ── Panel trait implementation ──
-
-pub struct OnboardingPanel;
-
-impl crate::design_system::Panel for OnboardingPanel {
-    fn title(&self, _app: &crate::App) -> &str {
-        "Onboarding"
-    }
-
-    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        render_onboarding(app, &ctx);
-    }
 }

@@ -10,6 +10,7 @@ pub fn push_toast(ui_store: &mut UiStore, message: impl Into<String>, level: Toa
         message: message.into(),
         level,
         created_at: Instant::now(),
+        dismissed_at: None,
     });
     // Keep max 5 toasts
     if ui_store.toasts.len() > 5 {

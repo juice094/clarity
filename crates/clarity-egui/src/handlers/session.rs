@@ -103,6 +103,10 @@ mod tests {
             updated_at: now_millis(),
             last_saved_at: now_millis(),
             turn_heights: Vec::new(),
+            estimate_buffer: Vec::new(),
+            line_offset_buffer: Vec::new(),
+            estimate_key: None,
+            cached_total_height: None,
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,
@@ -114,6 +118,7 @@ mod tests {
             sessions,
             active_session_id: active.to_string(),
             drafts: HashMap::new(),
+            turn_cache: HashMap::new(),
         }
     }
 

@@ -4,6 +4,7 @@
         clippy::unwrap_used,
         clippy::expect_used,
         clippy::panic,
+        clippy::items_after_test_module,
         missing_docs,
         unsafe_code
     )
@@ -18,14 +19,17 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1–§6.
 
+use clarity_chrome::Chrome;
 use eframe::egui;
-use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
 
+mod app_context;
 mod app_state;
+pub(crate) mod apps;
+mod chrome;
 pub(crate) mod claw;
 use crate::claw::normalize_gateway_url;
 mod components;
@@ -52,9 +56,10 @@ mod ui;
 mod widgets;
 mod window_manager;
 
-use app_state::AppState;
-
-use crate::stores::FocusTarget;
+use crate::app_context::AppContext;
+use crate::stores::{ChatStore, FocusTarget, SessionStore, SettingsStore, UiStore};
+use clarity_ui::widgets::button::Button;
+use clarity_ui::widgets::text_input::TextInput;
 use ui::types::*;
 
 // ============================================================================
@@ -65,103 +70,188 @@ use ui::types::*;
 
 /// Holds app state.
 pub(crate) struct App {
-    // === Core Runtime ===
-    pub(crate) state: Arc<AppState>,
-    pub(crate) runtime: tokio::runtime::Runtime,
-    pub(crate) ui_tx: Sender<UiEvent>,
+    /// Shared runtime services and domain stores.
+    pub(crate) context: AppContext,
+    /// UI event receiver; only the root `App` drains this channel.
     pub(crate) ui_rx: Receiver<UiEvent>,
-    // === Domain Stores (Zustand-style slices) ===
-    pub(crate) session_store: stores::SessionStore,
-    pub(crate) chat_store: stores::ChatStore,
-    pub(crate) settings_store: stores::SettingsStore,
-    pub(crate) task_store: stores::TaskStore,
-    pub(crate) cron_store: stores::CronStore,
-    pub(crate) ui_store: stores::UiStore,
-    pub(crate) subagent_store: stores::SubAgentStore,
-    pub(crate) mcp_store: stores::McpStore,
-    pub(crate) onboarding_store: stores::OnboardingStore,
-    pub(crate) team_store: stores::TeamStore,
-    pub(crate) project_store: stores::ProjectStore,
-    pub(crate) snapshot_store: stores::SnapshotStore,
-    /// Gateway process manager (auto-start + manual control).
-    #[allow(dead_code)]
-    pub(crate) gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
-    /// File-system watcher for live skill reloading.
-    #[allow(dead_code)]
-    pub(crate) skill_watcher: Option<clarity_core::skills::SkillWatcher>,
-    /// System tray manager (minimize-to-tray + context menu).
-    pub(crate) tray_manager: Option<crate::services::tray::TrayManager>,
+    /// Pretext UI unified view state (replaces boolean flag hell).
+    pub(crate) view_state: clarity_core::ui::ViewState,
+    /// Main view router (Chat / Settings / Dashboard history).
+    pub(crate) main_router: clarity_core::ui::Router<clarity_core::ui::AppView>,
+    /// Modal router (blocking dialogs).
+    pub(crate) modal_router: clarity_core::ui::Router<clarity_core::ui::ModalType>,
+    /// Right rail panel router (IDE-style side panel).
+    pub(crate) right_rail_router: clarity_core::ui::Router<clarity_core::ui::RightRailPanel>,
+    /// Keyboard shortcuts reference modal (Ctrl+/).
+    pub(crate) shortcuts_help_open: bool,
+    /// Pretext UI command palette (Ctrl+Shift+P).
+    pub(crate) command_palette: crate::widgets::command_palette::CommandPalette,
+    /// Pretext text measurement backend backed by egui fonts.
+    pub(crate) pretext_metrics: crate::pretext::EguiFontMetrics,
+    /// Panel transition animation state.
+    pub(crate) panel_animation: crate::animation::PanelAnimationState,
+    /// Main view transition animation.
+    pub(crate) main_stage_transition: Option<crate::animation::MainStageTransition>,
+    /// Previous main view, used to detect route changes.
+    pub(crate) prev_main_view: clarity_core::ui::AppView,
+    /// Sub-applications indexed by main view: 0=Chat, 1=Settings, 2=Dashboard.
+    ///
+    /// P1d: `ClarityAppEnum` unifies dispatch in `chrome::render_main_stage`.
+    pub(crate) apps: [clarity_apps::ClarityAppEnum; 3],
+    /// Generic chrome shell that orchestrates titlebar, rails, main stage, overlays and modals.
+    pub(crate) chrome: Option<Chrome<App, crate::chrome::AppChromeRenderer>>,
     /// When true, the next close request should be honoured (Quit from tray menu).
     pub(crate) tray_quit_requested: bool,
     /// Last tray status to avoid redundant icon updates every frame.
     pub(crate) last_tray_status: Option<crate::services::tray::TrayIconStatus>,
     /// Last frame's screen width for responsive breakpoint detection.
     last_frame_width: Option<f32>,
-    /// Keyboard shortcuts reference modal (Ctrl+/).
-    pub(crate) shortcuts_help_open: bool,
-    /// Pretext UI command palette (Ctrl+Shift+P).
-    pub(crate) command_palette: crate::widgets::command_palette::CommandPalette,
-    /// Pretext UI unified view state (replaces boolean flag hell).
-    pub(crate) view_state: clarity_core::ui::ViewState,
-    /// Pretext text measurement backend backed by egui fonts.
-    pub(crate) pretext_metrics: crate::pretext::EguiFontMetrics,
-    /// Live Claw device list polled from Gateway (replaces hardcoded mock data).
-    pub(crate) device_state: crate::claw::DeviceState,
-    /// Active WebSocket connection to the selected Claw Gateway.
-    pub(crate) claw_ws: Option<crate::claw::ClawClientHandle>,
-    /// Track which device the current WebSocket is connected to.
-    pub(crate) claw_ws_device_id: String,
-    /// Cached Clarity device identity for OpenClaw device-paired auth.
-    pub(crate) claw_device_identity: Option<clarity_claw::DeviceIdentity>,
-    /// Cached paired-device token for the OpenClaw Gateway.
-    pub(crate) claw_device_token: Option<clarity_claw::PairedToken>,
-    /// Temporary WebSocket client used only for in-app pairing.
-    pub(crate) claw_pairing_client: Option<clarity_claw::ClawClient>,
-    /// Current state of the in-app pairing flow.
-    pub(crate) claw_pairing_state: PairingState,
-    /// OKF knowledge bundle browser state.
-    pub(crate) knowledge_store: crate::stores::KnowledgeStore,
-    /// Console output ring-buffer for the right-rail Console panel.
-    pub(crate) console_store: crate::stores::ConsoleStore,
-    /// Local file browser state for the right-rail Files panel.
-    pub(crate) files_store: crate::stores::FilesStore,
-    /// Export format and share options for the right-rail Share panel.
-    pub(crate) share_store: crate::stores::ShareStore,
-    /// Built-in and remote template library for the right-rail Templates panel.
-    pub(crate) template_store: crate::stores::TemplateStore,
-    /// Panel transition animation state.
-    pub(crate) panel_animation: crate::animation::PanelAnimationState,
 }
 
 mod animation;
 mod app_logic;
 mod onboarding;
 
-/// State of an in-app OpenClaw device-pairing flow.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) enum PairingState {
-    /// No pairing in progress.
-    #[default]
-    Idle,
-    /// Sending the pairing request.
-    Requesting,
-    /// Waiting for the user to approve the request in the Gateway UI.
-    Waiting {
-        /// Gateway URL being paired with.
-        gateway_url: String,
-        /// When the wait started.
-        since: std::time::Instant,
-    },
-    /// Pairing approved and token saved.
-    Approved {
-        /// Gateway URL that was paired.
-        gateway_url: String,
-        /// Device token returned by the Gateway.
-        token: String,
-    },
-    /// Pairing failed or timed out.
-    Error(String),
+impl App {
+    // ── P1d accessors for the unified `apps` array ──
+    // Index 0 is Chat, 1 is Settings, 2 is Dashboard. These helpers centralise
+    // the invariant so the rest of the crate does not repeat array indices.
+
+    pub(crate) fn chat_app(&self) -> &clarity_apps::ChatApp {
+        match &self.apps[0] {
+            clarity_apps::ClarityAppEnum::Chat(app) => app,
+            _ => unreachable!("apps[0] is Chat"),
+        }
+    }
+
+    pub(crate) fn chat_app_mut(&mut self) -> &mut clarity_apps::ChatApp {
+        match &mut self.apps[0] {
+            clarity_apps::ClarityAppEnum::Chat(app) => app,
+            _ => unreachable!("apps[0] is Chat"),
+        }
+    }
+
+    pub(crate) fn chat_store(&self) -> &clarity_apps::chat::ChatStore {
+        &self.chat_app().store
+    }
+
+    pub(crate) fn chat_store_mut(&mut self) -> &mut clarity_apps::chat::ChatStore {
+        &mut self.chat_app_mut().store
+    }
+
+    pub(crate) fn settings_app(&self) -> &clarity_apps::SettingsApp {
+        match &self.apps[1] {
+            clarity_apps::ClarityAppEnum::Settings(app) => app,
+            _ => unreachable!("apps[1] is Settings"),
+        }
+    }
+
+    pub(crate) fn settings_app_mut(&mut self) -> &mut clarity_apps::SettingsApp {
+        match &mut self.apps[1] {
+            clarity_apps::ClarityAppEnum::Settings(app) => app,
+            _ => unreachable!("apps[1] is Settings"),
+        }
+    }
+
+    pub(crate) fn settings_store(&self) -> &clarity_apps::SettingsStore {
+        &self.settings_app().store
+    }
+
+    pub(crate) fn settings_store_mut(&mut self) -> &mut clarity_apps::SettingsStore {
+        &mut self.settings_app_mut().store
+    }
+
+    pub(crate) fn dashboard_app(&self) -> &clarity_apps::DashboardApp {
+        match &self.apps[2] {
+            clarity_apps::ClarityAppEnum::Dashboard(app) => app,
+            _ => unreachable!("apps[2] is Dashboard"),
+        }
+    }
+
+    pub(crate) fn dashboard_app_mut(&mut self) -> &mut clarity_apps::DashboardApp {
+        match &mut self.apps[2] {
+            clarity_apps::ClarityAppEnum::Dashboard(app) => app,
+            _ => unreachable!("apps[2] is Dashboard"),
+        }
+    }
+
+    pub(crate) fn task_store(&self) -> &clarity_apps::TaskStore {
+        &self.dashboard_app().task_store
+    }
+
+    pub(crate) fn task_store_mut(&mut self) -> &mut clarity_apps::TaskStore {
+        &mut self.dashboard_app_mut().task_store
+    }
+
+    pub(crate) fn cron_store_mut(&mut self) -> &mut clarity_apps::CronStore {
+        &mut self.dashboard_app_mut().cron_store
+    }
+
+    pub(crate) fn subagent_store(&self) -> &clarity_apps::SubAgentStore {
+        &self.dashboard_app().subagent_store
+    }
+
+    pub(crate) fn subagent_store_mut(&mut self) -> &mut clarity_apps::SubAgentStore {
+        &mut self.dashboard_app_mut().subagent_store
+    }
+
+    pub(crate) fn team_store_mut(&mut self) -> &mut clarity_apps::TeamStore {
+        &mut self.dashboard_app_mut().team_store
+    }
+
+    // ── P1d split-borrow helpers ──
+    // `chat_store_mut()` / `settings_store_mut()` borrow the whole `App` for the
+    // lifetime of the returned reference, which collides with any simultaneous
+    // borrow of `app.context`. These helpers return references from disjoint
+    // fields (`context` vs `apps`) so event handlers can pass both stores at
+    // once. They are intentionally scoped at call sites.
+
+    /// Mutable session store + mutable chat store (disjoint fields).
+    pub(crate) fn chat_session_both_mut(&mut self) -> (&mut SessionStore, &mut ChatStore) {
+        let session_store = &mut self.context.session_store;
+        let chat_store = match &mut self.apps[0] {
+            clarity_apps::ClarityAppEnum::Chat(app) => &mut app.store,
+            _ => unreachable!("apps[0] is Chat"),
+        };
+        (session_store, chat_store)
+    }
+
+    /// Immutable session store + mutable chat store (disjoint fields).
+    pub(crate) fn chat_session_mut(&mut self) -> (&SessionStore, &mut ChatStore) {
+        let session_store = &self.context.session_store;
+        let chat_store = match &mut self.apps[0] {
+            clarity_apps::ClarityAppEnum::Chat(app) => &mut app.store,
+            _ => unreachable!("apps[0] is Chat"),
+        };
+        (session_store, chat_store)
+    }
+
+    /// Mutable chat store + mutable view state (disjoint fields).
+    pub(crate) fn chat_and_view_state_mut(
+        &mut self,
+    ) -> (&mut ChatStore, &mut clarity_core::ui::ViewState) {
+        let chat_store = match &mut self.apps[0] {
+            clarity_apps::ClarityAppEnum::Chat(app) => &mut app.store,
+            _ => unreachable!("apps[0] is Chat"),
+        };
+        let view_state = &mut self.view_state;
+        (chat_store, view_state)
+    }
+
+    /// Mutable settings store + mutable UI store (disjoint fields).
+    pub(crate) fn settings_and_ui_mut(&mut self) -> (&mut SettingsStore, &mut UiStore) {
+        let settings_store = match &mut self.apps[1] {
+            clarity_apps::ClarityAppEnum::Settings(app) => &mut app.store,
+            _ => unreachable!("apps[1] is Settings"),
+        };
+        let ui_store = &mut self.context.ui_store;
+        (settings_store, ui_store)
+    }
 }
+
+/// Re-export the shell-level pairing state so the rest of the egui crate can
+/// keep using the unqualified `PairingState` name.
+pub(crate) use clarity_shell::PairingState;
 
 /// Return true if the URL's host is localhost/127.0.0.1.
 pub(crate) fn is_localhost_host(url: &str) -> bool {
@@ -176,25 +266,352 @@ pub(crate) fn is_localhost_host(url: &str) -> bool {
         .unwrap_or(false)
 }
 
+impl clarity_shell::AppState for App {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn theme(&self) -> &clarity_ui::theme::Theme {
+        &self.context.ui_store.theme
+    }
+    fn theme_mut(&mut self) -> &mut clarity_ui::theme::Theme {
+        &mut self.context.ui_store.theme
+    }
+    fn t(&self, key: &'static str) -> &'static str {
+        App::t(self, key)
+    }
+
+    fn session_message_count(&self) -> usize {
+        self.context
+            .session_store
+            .active_session()
+            .map(|s| s.messages.len())
+            .unwrap_or(0)
+    }
+
+    fn session_tool_call_count(&self) -> usize {
+        self.chat_store().tool_calls.len()
+    }
+
+    fn session_token_count(&self) -> Option<u32> {
+        self.chat_store().last_usage.map(|(_, _, t)| t)
+    }
+
+    fn agent_status_label(&self) -> &'static str {
+        match self.chat_store().agent_status {
+            AgentStatus::Online => "Online",
+            AgentStatus::Busy => "Busy",
+            AgentStatus::Offline => "Offline",
+            AgentStatus::Unconfigured => "Unconfigured",
+        }
+    }
+
+    fn agent_status_color(&self) -> egui::Color32 {
+        let theme = self.theme();
+        match self.chat_store().agent_status {
+            AgentStatus::Online => theme.status_online,
+            AgentStatus::Busy => theme.status_busy,
+            AgentStatus::Offline => theme.status_offline,
+            AgentStatus::Unconfigured => theme.text_dim,
+        }
+    }
+
+    fn gateway_status_label(&self) -> &'static str {
+        match self.chat_store().gateway_status {
+            GatewayStatus::Online => "Online",
+            GatewayStatus::Offline => "Offline",
+            GatewayStatus::Checking => "Checking",
+        }
+    }
+
+    fn gateway_status_color(&self) -> egui::Color32 {
+        let theme = self.theme();
+        match self.chat_store().gateway_status {
+            GatewayStatus::Online => theme.status_online,
+            GatewayStatus::Offline => theme.status_offline,
+            GatewayStatus::Checking => theme.status_busy,
+        }
+    }
+
+    fn active_provider(&self) -> &str {
+        &self.settings_store().settings_edit.provider
+    }
+
+    fn active_model(&self) -> &str {
+        &self.settings_store().settings_edit.model
+    }
+
+    fn fps(&self) -> f64 {
+        self.context.ui_store.fps
+    }
+
+    fn chat_renderer(&mut self) -> Option<&mut dyn clarity_shell::ChatRenderer> {
+        Some(self)
+    }
+
+    // ── Settings surface host hooks (P1c) ──
+
+    fn navigate(&mut self, route: clarity_core::ui::Route) {
+        App::navigate(self, route);
+    }
+
+    fn push_toast(&mut self, message: String, level: clarity_shell::ToastLevel) {
+        let level = match level {
+            clarity_shell::ToastLevel::Info => ToastLevel::Info,
+            clarity_shell::ToastLevel::Warn => ToastLevel::Warn,
+            clarity_shell::ToastLevel::Error => ToastLevel::Error,
+        };
+        App::push_toast(self, message, level);
+    }
+
+    fn open_modal(&mut self, modal: clarity_core::ui::ModalType) {
+        App::open_modal(self, modal);
+    }
+
+    fn set_theme(&mut self, theme: clarity_ui::theme::Theme) {
+        App::set_theme_with_transition(self, theme);
+    }
+
+    fn set_font_scale(&mut self, scale: f32) {
+        App::set_font_scale(self, scale);
+    }
+
+    fn increase_font_scale(&mut self) {
+        App::increase_font_scale(self);
+    }
+
+    fn decrease_font_scale(&mut self) {
+        App::decrease_font_scale(self);
+    }
+
+    fn persist_layout_settings(&mut self) {
+        App::persist_layout_settings(self);
+    }
+
+    fn auto_save_settings(&mut self) {
+        App::auto_save_settings(self);
+    }
+
+    fn content_max_width(&self) -> f32 {
+        self.context.ui_store.content_max_width
+    }
+
+    fn set_content_max_width(&mut self, width: f32) {
+        self.context.ui_store.content_max_width = width;
+    }
+
+    fn debug_layout_overlay(&self) -> bool {
+        self.view_state.debug_layout_overlay
+    }
+
+    fn set_debug_layout_overlay(&mut self, value: bool) {
+        self.view_state.debug_layout_overlay = value;
+    }
+
+    fn locale(&self) -> clarity_ui::i18n::Locale {
+        self.context.ui_store.locale
+    }
+
+    fn set_locale(&mut self, locale: clarity_ui::i18n::Locale) {
+        self.context.ui_store.locale = locale;
+    }
+
+    fn set_pretext_probe_open(&mut self, open: bool) {
+        self.context.ui_store.pretext_probe_open = open;
+    }
+
+    fn pretext_estimate_enabled(&self) -> bool {
+        self.context.ui_store.pretext_estimate_enabled
+    }
+
+    fn set_pretext_estimate_enabled(&mut self, enabled: bool) {
+        self.context.ui_store.pretext_estimate_enabled = enabled;
+    }
+
+    fn claw_pairing_state(&self) -> clarity_shell::PairingState {
+        self.context.claw_pairing_state.clone()
+    }
+
+    fn start_openclaw_pairing(&mut self, index: usize) {
+        App::start_openclaw_pairing(self, index);
+    }
+
+    fn cancel_openclaw_pairing(&mut self) {
+        App::cancel_openclaw_pairing(self);
+    }
+
+    fn active_bot(&self) -> Option<clarity_shell::BotInfo> {
+        self.context
+            .ui_store
+            .bot_instances
+            .iter()
+            .find(|b| b.id == self.context.ui_store.active_bot_id)
+            .map(|b| clarity_shell::BotInfo {
+                id: b.id.clone(),
+                name: b.name.clone(),
+                device_id: b.device_id.clone(),
+                version: b.version.clone(),
+                last_backup: b.last_backup.clone(),
+                status: match b.status {
+                    crate::stores::ui::BotStatus::Online => clarity_shell::BotStatus::Online,
+                    crate::stores::ui::BotStatus::Offline => clarity_shell::BotStatus::Offline,
+                    crate::stores::ui::BotStatus::Syncing => clarity_shell::BotStatus::Syncing,
+                },
+            })
+    }
+
+    fn spawn_provider_test(
+        &self,
+        provider_id: String,
+        base_url: String,
+        api_format: String,
+        api_key: String,
+        model: String,
+    ) {
+        let cfg = clarity_llm::runtime::RuntimeProviderConfig {
+            provider_id: provider_id.clone(),
+            base_url,
+            api_format,
+            api_key,
+            model,
+        };
+        let tx = self.context.ui_tx.clone();
+        let pid = provider_id;
+        self.context.runtime.spawn(async move {
+            let result = clarity_llm::runtime::test_connection(&cfg).await;
+            let (success, error) = match result {
+                Ok(()) => (true, None),
+                Err(e) => (false, Some(e)),
+            };
+            let _ = tx.send(UiEvent::ProviderTestResult {
+                provider_id: pid,
+                success,
+                error,
+            });
+        });
+    }
+
+    fn spawn_provider_refresh(
+        &self,
+        provider_id: String,
+        base_url: String,
+        api_format: String,
+        api_key: String,
+        model: String,
+    ) {
+        let cfg = clarity_llm::runtime::RuntimeProviderConfig {
+            provider_id: provider_id.clone(),
+            base_url,
+            api_format,
+            api_key,
+            model,
+        };
+        let tx = self.context.ui_tx.clone();
+        let pid = provider_id;
+        self.context.runtime.spawn(async move {
+            let models = clarity_llm::runtime::list_models(&cfg)
+                .await
+                .unwrap_or_default();
+            let _ = tx.send(UiEvent::ProviderModelList {
+                provider_id: pid,
+                models,
+            });
+        });
+    }
+}
+
 impl App {
+    // ── Navigation API (typed Route + layer routers) ──
+
+    /// Current main view route.
+    pub(crate) fn current_main(&self) -> &clarity_core::ui::AppView {
+        self.main_router
+            .current()
+            .unwrap_or(&clarity_core::ui::AppView::Chat)
+    }
+
+    /// Current modal route, if any.
+    pub(crate) fn current_modal(&self) -> Option<&clarity_core::ui::ModalType> {
+        self.modal_router.current()
+    }
+
+    /// Current right rail panel route, if any.
+    pub(crate) fn current_right_rail(&self) -> Option<&clarity_core::ui::RightRailPanel> {
+        self.right_rail_router.current()
+    }
+
+    /// True when the right rail is currently visible.
+    pub(crate) fn is_right_rail_visible(&self) -> bool {
+        self.current_right_rail()
+            .map(|p| *p != clarity_core::ui::RightRailPanel::None)
+            .unwrap_or(false)
+    }
+
+    /// Navigate to a typed route. Dispatches to the correct layer router.
+    pub(crate) fn navigate(&mut self, route: clarity_core::ui::Route) {
+        use clarity_core::ui::Route;
+        match route {
+            Route::Main(view) => self.main_router.navigate(view),
+            Route::Modal(modal) => self.modal_router.navigate(modal),
+            Route::RightRail(panel) => self.right_rail_router.navigate(panel),
+        }
+    }
+
+    /// Global back navigation: close modal first, then right rail, then pop
+    /// main view history. Returns the route that was popped, if any.
+    pub(crate) fn go_back(&mut self) -> Option<clarity_core::ui::Route> {
+        if let Some(modal) = self.modal_router.pop() {
+            return Some(clarity_core::ui::Route::Modal(modal));
+        }
+        if let Some(panel) = self.right_rail_router.pop() {
+            return Some(clarity_core::ui::Route::RightRail(panel));
+        }
+        self.main_router
+            .go_back()
+            .map(clarity_core::ui::Route::Main)
+    }
+
+    /// Open a modal dialog.
+    pub(crate) fn open_modal(&mut self, modal: clarity_core::ui::ModalType) {
+        self.modal_router.navigate(modal);
+        self.view_state.focus = clarity_core::ui::FocusScope::Modal(modal);
+    }
+
+    /// Close the current modal and restore app-level focus.
+    pub(crate) fn close_modal(&mut self) {
+        self.modal_router.pop();
+        self.view_state.focus = clarity_core::ui::FocusScope::App;
+    }
+
+    /// Collapse the right rail entirely.
+    ///
+    /// Also clears the dock so the post-render sync in `render_right_ide_panel`
+    /// cannot resurrect the just-collapsed panel on the next animation frame.
+    pub(crate) fn collapse_right_rail(&mut self) {
+        self.right_rail_router.clear();
+        self.context.ui_store.right_rail_dock = egui_dock::DockState::new(vec![]);
+    }
+
     // ── Per-frame service methods (extracted from update() in Phase 2) ──
 
     /// Advance the frame counter and compute instantaneous FPS.
     fn tick_frame_counter(&mut self, ctx: &egui::Context) {
         let now = ctx.input(|i| i.time);
-        self.ui_store.frame_count += 1;
-        if now - self.ui_store.last_fps_time >= 1.0 {
-            self.ui_store.fps =
-                self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
-            self.ui_store.frame_count = 0;
-            self.ui_store.last_fps_time = now;
+        self.context.ui_store.frame_count += 1;
+        if now - self.context.ui_store.last_fps_time >= 1.0 {
+            self.context.ui_store.fps = self.context.ui_store.frame_count as f64
+                / (now - self.context.ui_store.last_fps_time);
+            self.context.ui_store.frame_count = 0;
+            self.context.ui_store.last_fps_time = now;
         }
     }
 
     /// Mirror agent runtime state into the UI status indicator.
     fn sync_agent_status(&mut self) {
         use clarity_core::agent::AgentState;
-        self.chat_store.agent_status = match self.state.agent.state() {
+        self.chat_store_mut().agent_status = match self.context.state.agent.state() {
             AgentState::Unconfigured => AgentStatus::Unconfigured,
             AgentState::Idle => {
                 if self.is_loading() {
@@ -210,11 +627,12 @@ impl App {
 
     /// Sync the system-tray icon colour with the current runtime state.
     fn sync_tray_status(&mut self) {
-        if let Some(ref mut tray) = self.tray_manager {
-            let new_status = if !self.ui_store.pending_approvals.is_empty() {
+        let agent_status = self.chat_store().agent_status;
+        if let Some(ref mut tray) = self.context.tray_manager {
+            let new_status = if !self.context.ui_store.pending_approvals.is_empty() {
                 crate::services::tray::TrayIconStatus::Message
             } else {
-                match self.chat_store.agent_status {
+                match agent_status {
                     AgentStatus::Online | AgentStatus::Unconfigured => {
                         crate::services::tray::TrayIconStatus::Idle
                     }
@@ -241,27 +659,29 @@ impl App {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
-                self.chat_store.attachments.push(Attachment { path, name });
+                self.chat_store_mut()
+                    .attachments
+                    .push(Attachment { path, name });
             }
         }
     }
 
     /// Periodic poll: tasks, parallel-batch status, Gateway health.
     fn poll_periodic_checks(&mut self) {
-        let task_visible = self.view_state.right_rail_panel
-            == clarity_core::ui::RightRailPanel::Task
-            && self.view_state.right_rail_visible;
-        if task_visible && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3) {
+        let task_visible = self.current_right_rail()
+            == Some(&clarity_core::ui::RightRailPanel::Task)
+            && self.is_right_rail_visible();
+        if task_visible && self.task_store().last_task_refresh.elapsed() > Duration::from_secs(3) {
             self.refresh_tasks();
         }
         if task_visible
-            && !self.subagent_store.parallel_batches.is_empty()
-            && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
+            && !self.subagent_store().parallel_batches.is_empty()
+            && self.subagent_store().last_parallel_poll.elapsed() > Duration::from_secs(2)
         {
             self.poll_parallel_batches();
         }
-        if self.subagent_store.last_gateway_health_poll.elapsed() > Duration::from_secs(5) {
-            self.subagent_store.last_gateway_health_poll = Instant::now();
+        if self.subagent_store().last_gateway_health_poll.elapsed() > Duration::from_secs(5) {
+            self.subagent_store_mut().last_gateway_health_poll = Instant::now();
             self.poll_gateway_health();
         }
     }
@@ -269,104 +689,35 @@ impl App {
     /// Apply responsive layout, theme, and approval modal state.
     fn apply_frame_state(&mut self, ctx: &egui::Context) {
         let _metrics = crate::layout::update_and_measure(self, ctx);
-        ctx.style_mut(|style| {
-            self.ui_store.theme.apply(style);
+        ctx.style_mut_of(ctx.theme(), |style| {
+            self.context.ui_store.theme.apply(style);
         });
-        crate::design_system::install_theme(ctx, self.ui_store.theme.clone());
+        crate::design_system::install_theme(ctx, self.context.ui_store.theme.clone());
         // Mirror pending approvals into the modal state machine.
-        if !self.ui_store.pending_approvals.is_empty() && !self.ui_store.kimi_conversation_style {
-            if self.view_state.modal.is_none()
-                || self.view_state.modal == Some(clarity_core::ui::ModalType::Approval)
+        if !self.context.ui_store.pending_approvals.is_empty()
+            && !self.context.ui_store.kimi_conversation_style
+        {
+            if self.current_modal().is_none()
+                || self.current_modal() == Some(&clarity_core::ui::ModalType::Approval)
             {
-                self.view_state
-                    .open_modal(clarity_core::ui::ModalType::Approval);
+                self.open_modal(clarity_core::ui::ModalType::Approval);
             }
-        } else if self.view_state.modal == Some(clarity_core::ui::ModalType::Approval) {
-            self.view_state.close_modal();
+        } else if self.current_modal() == Some(&clarity_core::ui::ModalType::Approval) {
+            self.close_modal();
         }
-    }
 
-    /// Render the keyboard shortcuts reference modal.
-    fn render_shortcuts_help(&mut self, ctx: &egui::Context) {
-        if !self.shortcuts_help_open {
-            return;
-        }
-        let theme = self.ui_store.theme.clone();
-        let mut open = self.shortcuts_help_open;
-        egui::Window::new("Keyboard Shortcuts")
-            .id(egui::Id::new("shortcuts_help"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .default_width(520.0)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(480.0)
-                    .show(ui, |ui| {
-                        let actions: &[(&str, &[crate::shortcuts::ShortcutAction])] = &[
-                            (
-                                "General",
-                                &[
-                                    crate::shortcuts::ShortcutAction::NewSession,
-                                    crate::shortcuts::ShortcutAction::SendMessage,
-                                    crate::shortcuts::ShortcutAction::StopGeneration,
-                                    crate::shortcuts::ShortcutAction::CloseModal,
-                                    crate::shortcuts::ShortcutAction::ShowShortcuts,
-                                ],
-                            ),
-                            (
-                                "Panels",
-                                &[
-                                    crate::shortcuts::ShortcutAction::ToggleCommandPalette,
-                                    crate::shortcuts::ShortcutAction::FocusInput,
-                                    crate::shortcuts::ShortcutAction::ToggleConsole,
-                                    crate::shortcuts::ShortcutAction::ToggleFiles,
-                                    crate::shortcuts::ShortcutAction::ToggleShare,
-                                    crate::shortcuts::ShortcutAction::ToggleSkillPanel,
-                                    crate::shortcuts::ShortcutAction::ToggleTeamPanel,
-                                    crate::shortcuts::ShortcutAction::ToggleDashboardPanel,
-                                ],
-                            ),
-                            (
-                                "View",
-                                &[
-                                    crate::shortcuts::ShortcutAction::IncreaseFontScale,
-                                    crate::shortcuts::ShortcutAction::DecreaseFontScale,
-                                    crate::shortcuts::ShortcutAction::ToggleLayoutDebug,
-                                ],
-                            ),
-                        ];
-                        for (group, items) in actions {
-                            crate::design_system::gap(ui, crate::design_system::Space::S1);
-                            ui.label(
-                                egui::RichText::new(*group)
-                                    .size(theme.text_sm)
-                                    .color(theme.text_muted)
-                                    .strong(),
-                            );
-                            for action in items.iter() {
-                                ui.horizontal(|ui| {
-                                    ui.add_sized(
-                                        [140.0, theme.text_base],
-                                        egui::Label::new(
-                                            egui::RichText::new(action.keybinding())
-                                                .size(theme.text_sm)
-                                                .monospace()
-                                                .color(theme.accent),
-                                        ),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(action.description())
-                                            .size(theme.text_sm)
-                                            .color(theme.text),
-                                    );
-                                });
-                            }
-                        }
-                    });
+        // Detect main-stage route changes and start a slide transition.
+        let current_main = *self.current_main();
+        if current_main != self.prev_main_view {
+            self.main_stage_transition = Some(crate::animation::MainStageTransition {
+                from: self.prev_main_view,
+                started: Instant::now(),
+                duration: std::time::Duration::from_millis(250),
+                direction: 1.0,
             });
-        self.shortcuts_help_open = open;
+            self.prev_main_view = current_main;
+            ctx.request_repaint();
+        }
     }
 
     /// Render a custom titlebar with window drag and control buttons.
@@ -389,45 +740,17 @@ impl App {
     /// Render a panel with panic isolation (error boundary).
     /// Mimics React ErrorBoundary: a child panel panic does not crash the entire app.
     /// Render a full-screen scrim that blocks background interaction when a
-    /// modal is open. Clicks are absorbed by the scrim; Tab without modifiers
-    /// requests focus on the first focusable element inside the modal to keep
-    /// keyboard navigation from leaking into background panels.
-    fn render_modal_scrim(&self, ctx: &egui::Context) {
-        let theme = self.ui_store.theme.clone();
-        let screen = ctx.screen_rect();
-        let scrim_id = egui::Id::new("modal_scrim");
-
-        // Absorb Tab / Shift+Tab so they cannot cycle focus into background
-        // panels. The modal itself handles Tab via its own widget hierarchy.
-        let tab_pressed = ctx.input(|i| i.key_pressed(egui::Key::Tab));
-        if tab_pressed {
-            // Let the modal's natural focus order handle it — just mark the
-            // scrim as having consumed the event so egui's default focus
-            // navigation doesn't move outside the modal area.
-            ctx.memory_mut(|m| {
-                m.request_focus(scrim_id);
-            });
-        }
-
-        // Close-on-Escape is already handled by the ShortcutAction::CloseModal
-        // dispatch path; the scrim does not duplicate that logic.
-
-        egui::Area::new(scrim_id)
-            .fixed_pos(screen.min)
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                // Absorb all pointer events — clicks on the scrim are ignored.
-                ui.allocate_rect(screen, egui::Sense::click_and_drag());
-                ui.painter()
-                    .rect_filled(screen, egui::CornerRadius::ZERO, theme.overlay);
-            });
+    /// modal is open. Delegates to the protocol-compliant helper in
+    /// `clarity_ui::widgets::modal`.
+    fn render_modal_scrim(&self, ctx: &egui::Context) -> egui::Response {
+        clarity_ui::widgets::modal::modal_scrim(ctx)
     }
 
-    fn render_safe<F>(&mut self, ctx: &egui::Context, name: &str, mut render: F)
+    fn render_safe<F>(&mut self, ui: &mut egui::Ui, name: &str, mut render: F)
     where
-        F: FnMut(&mut Self, &egui::Context),
+        F: FnMut(&mut Self, &mut egui::Ui),
     {
-        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(self, ctx)))
+        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(self, ui)))
         {
             let payload = if let Some(s) = e.downcast_ref::<&str>() {
                 s.to_string()
@@ -438,13 +761,15 @@ impl App {
             };
             let msg = format!("PANIC in panel '{}': {}", name, payload);
             tracing::error!("{}", msg);
-            self.push_toast(format!("UI error in {} panel", name), ToastLevel::Error);
+            self.context
+                .push_toast(format!("UI error in {} panel", name), ToastLevel::Error);
         }
     }
 
     /// Find a Claw session by its session_key.
     fn claw_session_id_by_key(&self, session_key: &str) -> Option<String> {
-        self.session_store
+        self.context
+            .session_store
             .sessions
             .iter()
             .find(|s| {
@@ -461,7 +786,8 @@ impl App {
 
     /// Find all Claw sessions belonging to a role.
     fn claw_session_ids_by_role(&self, role: &str) -> Vec<String> {
-        self.session_store
+        self.context
+            .session_store
             .sessions
             .iter()
             .filter(|s| {
@@ -480,7 +806,7 @@ impl App {
     /// Subscribe to and fetch history for the given Claw session_key over an
     /// already-connected Gateway WebSocket.
     fn subscribe_claw_session(&self, session_key: &str) {
-        let Some(ref ws) = self.claw_ws else {
+        let Some(ref ws) = self.context.claw_ws else {
             return;
         };
         // OpenClaw/KimiClaw Gateways do not support the Gateway-native
@@ -493,107 +819,6 @@ impl App {
         ws.subscribe_session(session_key);
         ws.subscribe_messages(session_key);
         ws.get_history(session_key);
-    }
-
-    /// Orchestrates the full layout shell.
-    ///
-    /// S6 (Pretext Phase A): the shell is now organised as a single-page
-    /// three-column layout:
-    ///   [left icon rail + expanded list] [main stage] [right utility rail]
-    /// The titlebar, input bar, overlays and modals are rendered on top.
-    fn render_layout_shell(&mut self, ctx: &egui::Context) {
-        // Draw the unified background first so that titlebar/left-rail panels are
-        // visually on top of it. This prevents the base painter from accidentally
-        // overpainting the left sidebar content when panels and painter share the
-        // same layer.
-        self.render_safe(ctx, "main_frame", |app, ctx| {
-            app.render_main_stage_border(ctx);
-        });
-
-        // ── Base chrome (always rendered) ──
-        self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
-        self.render_safe(ctx, "left_rail", |app, ctx| app.render_left_rail(ctx));
-
-        // Right rail is declared early so the bottom input bar and central
-        // stage are sized within the remaining width and cannot overlap it.
-        self.render_safe(ctx, "right_rail", |app, ctx| app.render_right_rail(ctx));
-
-        // Status bar sits at the very bottom (declared first so it consumes the
-        // bottom-most slot). Shows git branch, agent status, and current model.
-        self.render_safe(ctx, "status_bar", |app, ctx| app.render_status_bar(ctx));
-
-        // Input bar must be declared before the central/main stage so egui
-        // reserves the correct bottom area.
-        self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
-
-        // ── Main stage (mutually exclusive) ──
-        self.render_safe(ctx, "main_stage", |app, ctx| app.render_main_stage(ctx));
-
-        // ── Overlay panels ──
-        self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
-        self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
-        self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
-
-        // ── Modals (top-most, blocking) ──
-        // Dispatch exclusively through `view_state.modal` (P1.5 migration).
-        if let Some(modal) = self.view_state.modal {
-            // Render a scrim overlay that blocks background interaction and
-            // traps keyboard focus inside the modal. Clicks on the scrim are
-            // absorbed; Tab/Shift+Tab cycle within the modal boundary.
-            self.render_modal_scrim(ctx);
-
-            use clarity_core::ui::ModalType;
-            let name = match modal {
-                ModalType::CronCreate => "cron_create",
-                ModalType::Approval => "approval",
-                ModalType::Snapshot => "snapshot",
-                ModalType::TaskCreate => "task_create",
-                ModalType::TaskView => "task_view",
-                ModalType::SubAgentView => "subagent_view",
-                ModalType::TeamCreate => "team_create",
-                ModalType::KimiCodeLogin => "kimi_login",
-                ModalType::ManageWebLinks => "manage_web_links",
-                ModalType::ManageWorkTemplates => "manage_work_templates",
-                ModalType::Skill | ModalType::Mcp | ModalType::Login | ModalType::AddProvider => {
-                    // Skill/Mcp are overlay panels; Login/AddProvider not yet wired.
-                    ""
-                }
-            };
-            if !name.is_empty() {
-                self.render_safe(ctx, name, |app, ctx| match modal {
-                    ModalType::CronCreate => app.render_cron_create_modal(ctx),
-                    ModalType::Approval => app.render_approval_modal(ctx),
-                    ModalType::Snapshot => app.render_snapshot_modal(ctx),
-                    ModalType::TaskCreate => app.render_task_create_modal(ctx),
-                    ModalType::TaskView => app.render_task_view_modal(ctx),
-                    ModalType::SubAgentView => app.render_subagent_view_modal(ctx),
-                    ModalType::TeamCreate => app.render_team_create_modal(ctx),
-                    ModalType::KimiCodeLogin => {
-                        crate::panels::modals::login::render_oauth_login_modal(
-                            app,
-                            ctx,
-                            &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
-                        );
-                    }
-                    ModalType::ManageWebLinks => {
-                        crate::panels::modals::manage_web_links::render_manage_web_links_modal(
-                            app, ctx,
-                        );
-                    }
-                    ModalType::ManageWorkTemplates => {
-                        crate::panels::modals::manage_work_templates::render_manage_work_templates_modal(app, ctx);
-                    }
-                    _ => {}
-                });
-            }
-        }
-
-        self.render_safe(ctx, "onboarding", |app, ctx| {
-            onboarding::render_onboarding(app, ctx);
-        });
-        self.render_safe(ctx, "resize", |app, ctx| {
-            app.handle_window_resize(ctx);
-        });
     }
 
     /// Returns true when an agent turn is actively loading/generating.
@@ -609,26 +834,39 @@ impl App {
     ///
     /// During collapse animation, the nav tree renders at the animated width
     /// so content doesn't skip while the layout adjusts.
-    fn render_left_rail(&mut self, ctx: &egui::Context) {
-        let effective_w = self.effective_left_rail_width();
+    fn render_left_rail(&mut self, ui: &mut egui::Ui) {
+        let effective_w = self.effective_left_rail_width(ui.ctx());
         // Only render when there is visible width (either expanded or animating).
         if effective_w > 0.0 {
-            crate::panels::navigation_tree::render_left_navigation_tree(self, ctx, effective_w);
+            crate::panels::navigation_tree::render_left_navigation_tree(self, ui, effective_w);
         }
     }
 
     /// Return the effective left rail width, animated during expand/collapse.
-    fn effective_left_rail_width(&self) -> f32 {
-        let theme = &self.ui_store.theme;
-        if self.panel_animation.left_rail_width.done {
-            if self.view_state.left_rail_expanded {
-                theme.size_sidebar
-            } else {
-                theme.size_sidebar_collapsed
-            }
-        } else {
-            self.panel_animation.left_rail_width.current()
-        }
+    fn effective_left_rail_width(&self, ctx: &egui::Context) -> f32 {
+        let theme = &self.context.ui_store.theme;
+        let collapsed = theme.size_sidebar_collapsed;
+        let expanded = theme.size_sidebar;
+        let factor = theme.animate_bool_normal(
+            ctx,
+            egui::Id::new("left_rail_width"),
+            self.view_state.left_rail_expanded,
+        );
+        collapsed + (expanded - collapsed) * factor
+    }
+
+    /// Return the effective right rail width, animated during open/close.
+    fn effective_right_rail_width(&self, ctx: &egui::Context) -> f32 {
+        let theme = &self.context.ui_store.theme;
+        let is_visible = self.is_right_rail_visible();
+        let factor = theme.animate_bool_normal(ctx, egui::Id::new("right_rail_width"), is_visible);
+        let user_w = self
+            .context
+            .ui_store
+            .right_rail_width
+            .unwrap_or(theme.size_panel_right)
+            .clamp(180.0, 400.0);
+        user_w * factor
     }
 
     /// Render the unified outer border around the chat stage + right rail + input bar.
@@ -639,18 +877,11 @@ impl App {
     /// pixels from the window edges and from the left sidebar for a cleaner,
     /// Kimi-style floating-stage look.
     fn render_main_stage_border(&self, ctx: &egui::Context) {
-        let theme = self.ui_store.theme.clone();
-        let left_w = self.effective_left_rail_width();
-        let right_w =
-            self.ui_store
-                .right_rail_width
-                .unwrap_or(if self.view_state.right_rail_visible {
-                    theme.size_panel_right
-                } else {
-                    0.0
-                });
+        let theme = self.context.ui_store.theme.clone();
+        let left_w = self.effective_left_rail_width(ctx);
+        let right_w = self.effective_right_rail_width(ctx);
 
-        let screen = ctx.screen_rect();
+        let screen = ctx.input(|i| i.viewport_rect());
         let titlebar_h = theme.size_titlebar;
         let inset = theme.space_4;
 
@@ -672,10 +903,22 @@ impl App {
         );
 
         let bg_painter = ctx.layer_painter(egui::LayerId::background());
-        let radius = theme.radius_sm as u8;
+        let radius = theme.radius_lg as u8;
         let corner_radius = egui::CornerRadius::same(radius);
 
         bg_painter.rect_filled(base_rect, egui::CornerRadius::ZERO, theme.bg);
+
+        // Layer 1.5 — soft shadow behind the floating main-stage surface.
+        // Painted before the surface so it sits just below it. The shadow is
+        // intentionally subtle to avoid the flat "egui panel" look without
+        // requiring expensive per-frame blur.
+        let shadow_offset = theme.space_8;
+        let shadow_rect = surface_rect
+            .expand(theme.space_4)
+            .translate(egui::vec2(0.0, shadow_offset));
+        let shadow_color = theme.shadow_panel.color.linear_multiply(0.4);
+        bg_painter.rect_filled(shadow_rect, corner_radius, shadow_color);
+
         bg_painter.rect_filled(surface_rect, corner_radius, theme.bg);
 
         // Right-rail surface: paint the rail with the same rounded corners as
@@ -705,148 +948,30 @@ impl App {
         );
     }
 
-    /// Render the main stage (mutually exclusive central view).
-    /// Render a minimal status bar at the bottom of the window.
-    ///
-    /// Shows git branch (left), agent status + model name (right). Uses
-    /// `size_statusbar` from the theme so it respects font scaling.
-    fn render_status_bar(&mut self, ctx: &egui::Context) {
-        let theme = self.ui_store.theme.clone();
-        let left_w = self.effective_left_rail_width();
-        let right_w =
-            self.ui_store
-                .right_rail_width
-                .unwrap_or(if self.view_state.right_rail_visible {
-                    theme.size_panel_right
-                } else {
-                    0.0
-                });
-
-        egui::TopBottomPanel::bottom("status_bar")
-            .exact_height(theme.size_statusbar)
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme.bg_accent)
-                    .stroke(egui::Stroke::new(1.0, theme.border))
-                    .inner_margin(egui::Margin::symmetric(
-                        theme.space_8 as i8,
-                        (theme.space_4 / 2.0) as i8,
-                    )),
-            )
-            .show(ctx, |ui| {
-                // Inset horizontally to match the main stage bounds.
-                let content_w = ui.available_width() - left_w - right_w;
-                let content_max_rect = egui::Rect::from_min_size(
-                    egui::pos2(ui.min_rect().min.x + left_w, ui.min_rect().min.y),
-                    egui::vec2(content_w, theme.size_statusbar),
-                );
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new()
-                        .max_rect(content_max_rect)
-                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
-                    |ui| {
-                        ui.set_clip_rect(ui.max_rect());
-                        // Left: git branch / shell prompt.
-                        let prompt = &self.ui_store.shell_prompt;
-                        if !prompt.is_empty() {
-                            ui.label(
-                                egui::RichText::new(format!("⎇ {}", prompt))
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            );
-                        }
-
-                        // Elastic spacer — pushes everything after it to the right.
-                        ui.add_space(ui.available_width() - 160.0);
-
-                        // Right: model name + agent status.
-                        ui.spacing_mut().item_spacing.x = theme.space_8;
-                        let model = &self.settings_store.settings_edit.model;
-                        if !model.is_empty() && model != "auto" {
-                            ui.label(
-                                egui::RichText::new(model.as_str())
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            );
-                        }
-                        // Agent status dot + label.
-                        let (dot_color, label) = match self.chat_store.agent_status {
-                            crate::ui::types::AgentStatus::Online
-                            | crate::ui::types::AgentStatus::Unconfigured => {
-                                (theme.status_online, "Ready")
-                            }
-                            crate::ui::types::AgentStatus::Busy => (theme.status_busy, "Busy"),
-                            crate::ui::types::AgentStatus::Offline => {
-                                (theme.status_offline, "Offline")
-                            }
-                        };
-                        let dot_radius = theme.space_4 / 2.0;
-                        let (dot_rect, _) = ui.allocate_exact_size(
-                            egui::vec2(dot_radius * 2.0, dot_radius * 2.0),
-                            egui::Sense::hover(),
-                        );
-                        ui.painter()
-                            .circle_filled(dot_rect.center(), dot_radius, dot_color);
-                        ui.label(
-                            egui::RichText::new(label)
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
-                    },
-                );
-            });
-    }
-
-    fn render_main_stage(&mut self, ctx: &egui::Context) {
-        // Views that do not render their own CentralPanel would otherwise expose
-        // the raw window background (black on decorated-less Windows windows).
-        // Fill the stage with `theme.bg` first; Chat already does this itself,
-        // so skip it to avoid double CentralPanel.
-        let self_renders_central = matches!(self.view_state.main, clarity_core::ui::AppView::Chat);
-        if !self_renders_central {
-            // The unified background painter already fills the main stage; only
-            // guarantee a transparent central panel exists for child widgets.
-            egui::CentralPanel::default()
-                .frame(
-                    egui::Frame::new()
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .inner_margin(egui::Margin::ZERO)
-                        .outer_margin(egui::Margin::ZERO),
-                )
-                .show(ctx, |_ui| {});
-        }
-
-        match self.view_state.main {
-            clarity_core::ui::AppView::Chat => self.render_chat_area(ctx),
-            clarity_core::ui::AppView::Settings => self.render_settings_panel(ctx),
-            clarity_core::ui::AppView::Dashboard => self.render_dashboard_panel(ctx),
-        }
-    }
-
     /// Render the IDE-style right rail panel.
     ///
     /// S6 Phase D: the right rail is now a single functional panel selected by
     /// the Bot bar. The old stacked-card content lives in `panels::right_rail`
     /// and will be migrated into the new IDE panels over the next iterations.
-    fn render_right_rail(&mut self, ctx: &egui::Context) {
+    fn render_right_rail(&mut self, ui: &mut egui::Ui) {
         // Allow rendering during close animation: the rail is still
         // visible (decreasing width) while the animation runs. Only
-        // skip when fully collapsed with no animation in progress.
-        let panel_is_none =
-            self.view_state.right_rail_panel == clarity_core::ui::RightRailPanel::None;
-        let anim_done = self.panel_animation.right_panel_width.done;
-        if !self.view_state.right_rail_visible && panel_is_none && anim_done {
+        // skip when fully collapsed.
+        let is_visible = self.is_right_rail_visible();
+        let factor = self.context.ui_store.theme.animate_bool_normal(
+            ui.ctx(),
+            egui::Id::new("right_rail_width"),
+            is_visible,
+        );
+        if !is_visible && factor <= 0.0 {
             return;
         }
-        crate::panels::right_ide_panel::render_right_ide_panel(self, ctx);
+        crate::panels::right_ide_panel::render_right_ide_panel(self, ui);
     }
 
     /// Handle system tray events: show/hide window and menu actions.
     fn handle_tray_events(&mut self, ctx: &egui::Context) {
-        let Some(tray) = self.tray_manager.as_ref() else {
+        let Some(tray) = self.context.tray_manager.as_ref() else {
             return;
         };
 
@@ -869,18 +994,20 @@ impl App {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                 }
                 TrayAction::CopySessionLink => {
-                    if let Some(session) = self.session_store.active_session() {
+                    if let Some(session) = self.context.session_store.active_session() {
                         let link = format!("clarity://session/{}", session.id);
                         ctx.copy_text(link);
-                        self.push_toast("Session link copied".to_string(), ToastLevel::Info);
+                        self.context
+                            .push_toast("Session link copied".to_string(), ToastLevel::Info);
                     }
                 }
                 TrayAction::Pause => {
                     self.stop();
-                    self.push_toast("Agent paused".to_string(), ToastLevel::Info);
+                    self.context
+                        .push_toast("Agent paused".to_string(), ToastLevel::Info);
                 }
                 TrayAction::Settings => {
-                    self.view_state.main = clarity_core::ui::AppView::Settings;
+                    self.navigate(clarity_core::ui::AppView::Settings.into());
                 }
                 TrayAction::Quit => {
                     self.tray_quit_requested = true;
@@ -890,143 +1017,9 @@ impl App {
         }
     }
 
-    /// Render the minimal custom titlebar.
-    ///
-    /// S6 Phase D: the titlebar is stripped down to a single sidebar toggle on
-    /// the left and the window control buttons on the right. The previous
-    /// brand, session tabs, persona switcher, model indicator, and status
-    /// capsules have been removed from the chrome; they will resurface in the
-    /// Bot bar, the right rail, or the bottom composer.
-    fn render_titlebar(&mut self, ctx: &egui::Context) {
-        let theme = self.ui_store.theme.clone();
-
-        egui::TopBottomPanel::top("titlebar")
-            .exact_height(theme.size_titlebar)
-            .resizable(false)
-            .show_separator_line(false)
-            .frame(
-                egui::Frame::new()
-                    .fill(theme.bg)
-                    .stroke(egui::Stroke::NONE)
-                    .inner_margin(egui::Margin::symmetric(8, 0)),
-            )
-            .show(ctx, |ui| {
-                let titlebar_rect = ui.max_rect();
-
-                // Register the entire titlebar as a drag region first; buttons
-                // rendered afterwards automatically override this hitbox.
-                let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                let drag_resp = ui.interact(
-                    titlebar_rect,
-                    ui.id().with("titlebar_drag"),
-                    egui::Sense::click_and_drag(),
-                );
-                if drag_resp.drag_started_by(egui::PointerButton::Primary) {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                }
-                if drag_resp.double_clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                }
-
-                ui.horizontal(|ui| {
-                    // Sidebar toggle.
-                    let sidebar_tooltip = if self.view_state.left_rail_expanded {
-                        "Collapse sidebar"
-                    } else {
-                        "Expand sidebar"
-                    };
-                    if crate::widgets::icon_button_toolbar(
-                        ui,
-                        crate::theme::ICON_LIST,
-                        theme.text_base,
-                        &theme,
-                    )
-                    .on_hover_text(sidebar_tooltip)
-                    .clicked()
-                    {
-                        let expanding = !self.view_state.left_rail_expanded;
-                        self.view_state.left_rail_expanded = expanding;
-                        // Start the width animation for smooth expand/collapse.
-                        let from = if expanding {
-                            theme.size_sidebar_collapsed
-                        } else {
-                            theme.size_sidebar
-                        };
-                        let to = if expanding {
-                            theme.size_sidebar
-                        } else {
-                            theme.size_sidebar_collapsed
-                        };
-                        self.panel_animation.left_rail_width =
-                            crate::animation::FloatAnimation::start(
-                                from,
-                                to,
-                                theme.duration_normal,
-                            );
-                    }
-
-                    // Right-aligned window controls.
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-
-                        // Close.
-                        let close = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_X,
-                            &theme,
-                            theme.danger.linear_multiply(0.25),
-                            egui::Color32::WHITE,
-                            theme.text,
-                        )
-                        .on_hover_text("Close window");
-                        if close.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                        }
-
-                        // Maximize / restore.
-                        let max_icon = if is_maximized {
-                            crate::theme::ICON_COPY
-                        } else {
-                            crate::theme::ICON_SQUARE
-                        };
-                        let max = crate::widgets::window_control_button(
-                            ui,
-                            max_icon,
-                            &theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text,
-                        )
-                        .on_hover_text(if is_maximized {
-                            "Restore window"
-                        } else {
-                            "Maximize window"
-                        });
-                        if max.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                        }
-
-                        // Minimize.
-                        let min = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_MINUS,
-                            &theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text,
-                        )
-                        .on_hover_text("Minimize to taskbar");
-                        if min.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                    });
-                });
-            });
-    }
-
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
-        let screen_rect = ctx.screen_rect();
-        let edge = self.ui_store.theme.window_edge_zone;
+        let screen_rect = ctx.input(|i| i.viewport_rect());
+        let edge = self.context.ui_store.theme.window_edge_zone;
 
         // Skip resize when maximized; it may not work properly and conflicts with restore logic.
         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
@@ -1036,7 +1029,7 @@ impl App {
 
         if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
             // Do not trigger edge resize inside the titlebar area; it conflicts with drag-to-move.
-            if pos.y < screen_rect.min.y + self.ui_store.theme.size_titlebar + edge {
+            if pos.y < screen_rect.min.y + self.context.ui_store.theme.size_titlebar + edge {
                 return;
             }
 
@@ -1111,14 +1104,8 @@ impl App {
         use clarity_core::ui::ids;
         match cmd_id {
             ids::CLOSE_MODAL => {
-                if self.view_state.modal.is_some() {
-                    self.view_state.close_modal();
-                } else if self.view_state.main == clarity_core::ui::AppView::Settings {
-                    self.view_state.main = clarity_core::ui::AppView::Chat;
-                } else if self.view_state.right_rail_visible {
-                    self.view_state.right_rail_visible = false;
-                    self.view_state.right_rail_panel = clarity_core::ui::RightRailPanel::None;
-                }
+                // Global back: close modal first, then right rail, then pop main history.
+                let _ = self.go_back();
                 true
             }
             ids::NEW_SESSION => {
@@ -1132,31 +1119,29 @@ impl App {
                 true
             }
             ids::SEND_MESSAGE => {
-                if !self.chat_store.input.trim().is_empty() && !self.is_loading() {
-                    self.chat_store.stick_to_bottom = true;
+                if !self.chat_store().input.trim().is_empty() && !self.is_loading() {
+                    self.chat_store_mut().stick_to_bottom = true;
                     self.send();
                 }
                 true
             }
             ids::TOGGLE_SKILL_PANEL => {
-                if matches!(
-                    self.view_state.modal,
-                    Some(clarity_core::ui::ModalType::Skill)
-                ) {
-                    self.view_state.close_modal();
+                if self.current_modal() == Some(&clarity_core::ui::ModalType::Skill) {
+                    self.close_modal();
                 } else {
-                    self.view_state
-                        .open_modal(clarity_core::ui::ModalType::Skill);
+                    self.open_modal(clarity_core::ui::ModalType::Skill);
                 }
                 true
             }
             ids::TOGGLE_TEAM_PANEL => {
-                self.view_state
-                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Team);
+                self.toggle_right_rail_tab(
+                    clarity_core::ui::RightRailPanel::Team,
+                    clarity_core::ui::RightRailContext::Session,
+                );
                 true
             }
             ids::FOCUS_INPUT => {
-                self.ui_store.focus_target = Some(FocusTarget::ChatInput);
+                self.context.ui_store.focus_target = Some(FocusTarget::ChatInput);
                 true
             }
             ids::TOGGLE_COMMAND_PALETTE => {
@@ -1166,12 +1151,12 @@ impl App {
                 true
             }
             ids::TOGGLE_DASHBOARD => {
-                self.view_state.main =
-                    if self.view_state.main == clarity_core::ui::AppView::Dashboard {
-                        clarity_core::ui::AppView::Chat
-                    } else {
-                        clarity_core::ui::AppView::Dashboard
-                    };
+                let target = if self.current_main() == &clarity_core::ui::AppView::Dashboard {
+                    clarity_core::ui::AppView::Chat
+                } else {
+                    clarity_core::ui::AppView::Dashboard
+                };
+                self.navigate(target.into());
                 true
             }
             ids::TOGGLE_LAYOUT_DEBUG => {
@@ -1180,25 +1165,11 @@ impl App {
                 true
             }
             ids::TOGGLE_SIDEBAR => {
-                let expanding = !self.view_state.left_rail_expanded;
-                self.view_state.left_rail_expanded = expanding;
-                let theme = &self.ui_store.theme;
-                let from = if expanding {
-                    theme.size_sidebar_collapsed
-                } else {
-                    theme.size_sidebar
-                };
-                let to = if expanding {
-                    theme.size_sidebar
-                } else {
-                    theme.size_sidebar_collapsed
-                };
-                self.panel_animation.left_rail_width =
-                    crate::animation::FloatAnimation::start(from, to, theme.duration_normal);
+                self.view_state.left_rail_expanded = !self.view_state.left_rail_expanded;
                 true
             }
             ids::OPEN_SETTINGS => {
-                self.view_state.main = clarity_core::ui::AppView::Settings;
+                self.navigate(clarity_core::ui::AppView::Settings.into());
                 true
             }
             ids::NAVIGATE_DOWN => {
@@ -1210,13 +1181,13 @@ impl App {
                 true
             }
             ids::NAVIGATE_TOP => {
-                self.ui_store.line_cursor_selected = Some(0);
+                self.context.ui_store.line_cursor_selected = Some(0);
                 true
             }
             ids::NAVIGATE_BOTTOM => {
-                let total = self.ui_store.line_cursor_total_lines;
+                let total = self.context.ui_store.line_cursor_total_lines;
                 if total > 0 {
-                    self.ui_store.line_cursor_selected = Some(total.saturating_sub(1));
+                    self.context.ui_store.line_cursor_selected = Some(total.saturating_sub(1));
                 }
                 true
             }
@@ -1233,17 +1204,17 @@ impl App {
                 true
             }
             ids::TOGGLE_CONSOLE => {
-                self.view_state
-                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
-                self.view_state
-                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Console);
+                self.toggle_right_rail_tab(
+                    clarity_core::ui::RightRailPanel::Console,
+                    clarity_core::ui::RightRailContext::Session,
+                );
                 true
             }
             ids::TOGGLE_FILES => {
-                self.view_state
-                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
-                self.view_state
-                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Files);
+                self.toggle_right_rail_tab(
+                    clarity_core::ui::RightRailPanel::Files,
+                    clarity_core::ui::RightRailContext::Session,
+                );
                 true
             }
             ids::SHOW_SHORTCUTS => {
@@ -1251,10 +1222,14 @@ impl App {
                 true
             }
             ids::TOGGLE_SHARE => {
-                self.view_state
-                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
-                self.view_state
-                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Share);
+                self.toggle_right_rail_tab(
+                    clarity_core::ui::RightRailPanel::Share,
+                    clarity_core::ui::RightRailContext::Session,
+                );
+                true
+            }
+            ids::SCROLL_TO_BOTTOM => {
+                self.chat_store_mut().stick_to_bottom = true;
                 true
             }
             other => {
@@ -1266,24 +1241,25 @@ impl App {
 
     /// S7 Phase 2D: navigate line cursor by `delta` lines (-1 = up, +1 = down).
     fn navigate_line(&mut self, delta: isize) {
-        let total = self.ui_store.line_cursor_total_lines;
+        let total = self.context.ui_store.line_cursor_total_lines;
         if total == 0 {
             return;
         }
-        let current = self.ui_store.line_cursor_selected.unwrap_or(0);
+        let current = self.context.ui_store.line_cursor_selected.unwrap_or(0);
         let new_idx = if delta > 0 {
             (current + delta as usize).min(total.saturating_sub(1))
         } else {
             current.saturating_sub((-delta) as usize)
         };
-        self.ui_store.line_cursor_selected = Some(new_idx);
+        self.context.ui_store.line_cursor_selected = Some(new_idx);
     }
 
     /// S7 Phase 2D: return the text of the currently selected line (if any).
     fn selected_line_text(&self) -> Option<String> {
-        let global_idx = self.ui_store.line_cursor_selected?;
-        let active_id = self.session_store.active_session_id.clone();
+        let global_idx = self.context.ui_store.line_cursor_selected?;
+        let active_id = self.context.session_store.active_session_id.clone();
         let session = self
+            .context
             .session_store
             .sessions
             .iter()
@@ -1300,151 +1276,120 @@ impl App {
         None
     }
 
-    fn render_settings_panel(&mut self, ctx: &egui::Context) {
-        crate::panels::settings::render_settings_panel(self, ctx);
-    }
-
-    fn render_chat_area(&mut self, ctx: &egui::Context) {
-        if self.chat_store.find_open {
-            self.update_find_matches();
-        }
-        panels::chat::render_chat_area(self, ctx);
-    }
-
     /// Search the active session's messages for `find_query` and populate
     /// `find_matches` with the indices of matching messages.
-    fn update_find_matches(&mut self) {
+    pub(crate) fn update_find_matches(&mut self) {
         // Skip recomputation when the query hasn't changed — avoids an O(n)
         // scan over all messages every frame while the find bar is open.
-        if self.chat_store.find_query == self.chat_store.find_last_query {
+        if self.chat_store().find_query == self.chat_store().find_last_query {
             return;
         }
-        self.chat_store.find_last_query = self.chat_store.find_query.clone();
-        self.chat_store.find_matches.clear();
-        if self.chat_store.find_query.is_empty() {
-            self.chat_store.find_current = 0;
-            return;
-        }
-        let query_lower = self.chat_store.find_query.to_lowercase();
-        if let Some(session) = self.session_store.active_session() {
-            for (i, msg) in session.messages.iter().enumerate() {
-                if msg.content.to_lowercase().contains(&query_lower) {
-                    self.chat_store.find_matches.push(i);
-                }
-            }
-        }
-        if self.chat_store.find_current >= self.chat_store.find_matches.len() {
-            self.chat_store.find_current = self.chat_store.find_matches.len().saturating_sub(1);
+        let query = self.chat_store().find_query.clone();
+        let query_lower = query.to_lowercase();
+        let matches: Vec<usize> = if query.is_empty() {
+            Vec::new()
+        } else {
+            self.context
+                .session_store
+                .active_session()
+                .map(|session| {
+                    session
+                        .messages
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, msg)| msg.content.to_lowercase().contains(&query_lower))
+                        .map(|(i, _)| i)
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let chat_store = self.chat_store_mut();
+        chat_store.find_last_query = query;
+        chat_store.find_matches = matches;
+        let match_count = chat_store.find_matches.len();
+        if chat_store.find_current >= match_count {
+            chat_store.find_current = match_count.saturating_sub(1);
         }
     }
 
     /// Render the find-in-session bar above the chat message list.
     fn render_find_bar(&mut self, ui: &mut egui::Ui) {
-        let theme = self.ui_store.theme.clone();
-        let total = self.chat_store.find_matches.len();
+        let theme = self.context.ui_store.theme.clone();
+        let total = self.chat_store().find_matches.len();
         let current = if total > 0 {
-            self.chat_store.find_current + 1
+            self.chat_store().find_current + 1
         } else {
             0
         };
 
-        egui::Frame::new()
-            .fill(theme.bg_accent)
-            .stroke(egui::Stroke::new(1.0, theme.border))
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-            .inner_margin(egui::Margin::symmetric(
-                theme.space_8 as i8,
-                theme.space_4 as i8,
-            ))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    // Search input.
-                    let text_edit = ui.add(
-                        egui::TextEdit::singleline(&mut self.chat_store.find_query)
-                            .hint_text("Find in session…")
-                            .font(theme.font(theme.text_sm))
-                            .desired_width(ui.available_width() - 120.0)
-                            .frame(false),
-                    );
-                    if text_edit.changed() {
-                        self.chat_store.find_current = 0;
-                    }
-                    if text_edit.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                        && total > 0
-                    {
-                        self.chat_store.find_current = (self.chat_store.find_current + 1) % total;
-                    }
+        crate::design_system::surface_panel(ui, |ui| {
+            ui.horizontal(|ui| {
+                // Search input.
+                let text_edit = ui.add(
+                    TextInput::singleline(&mut self.chat_store_mut().find_query)
+                        .transparent()
+                        .hint_text("Find in session…")
+                        .width(ui.available_width() - 120.0),
+                );
+                if text_edit.changed() {
+                    self.chat_store_mut().find_current = 0;
+                }
+                if text_edit.lost_focus()
+                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && total > 0
+                {
+                    let next = (self.chat_store().find_current + 1) % total;
+                    self.chat_store_mut().find_current = next;
+                }
 
-                    // Match counter: "2 of 5"
-                    let count_text = if self.chat_store.find_query.is_empty() {
-                        String::new()
-                    } else {
-                        format!("{} of {}", current, total)
-                    };
-                    if !count_text.is_empty() {
-                        ui.label(
-                            egui::RichText::new(count_text)
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
-                    }
-
-                    // Prev / Next buttons.
-                    if ui
-                        .add_enabled(
-                            total > 0,
-                            egui::Button::new(
-                                egui::RichText::new("▲")
-                                    .size(theme.text_xs)
-                                    .color(theme.text),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(egui::CornerRadius::same(4)),
-                        )
-                        .clicked()
-                    {
-                        self.chat_store.find_current = if self.chat_store.find_current > 0 {
-                            self.chat_store.find_current - 1
-                        } else {
-                            total.saturating_sub(1)
-                        };
-                    }
-                    if ui
-                        .add_enabled(
-                            total > 0,
-                            egui::Button::new(
-                                egui::RichText::new("▼")
-                                    .size(theme.text_xs)
-                                    .color(theme.text),
-                            )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(egui::CornerRadius::same(4)),
-                        )
-                        .clicked()
-                    {
-                        self.chat_store.find_current =
-                            (self.chat_store.find_current + 1) % total.max(1);
-                    }
-
-                    // Close.
-                    if crate::widgets::icon_button_toolbar(
+                // Match counter: "2 of 5"
+                let count_text = if self.chat_store().find_query.is_empty() {
+                    String::new()
+                } else {
+                    format!("{} of {}", current, total)
+                };
+                if !count_text.is_empty() {
+                    crate::design_system::text(
                         ui,
-                        crate::theme::ICON_X,
-                        theme.text_sm,
-                        &theme,
-                    )
-                    .on_hover_text("Close find")
-                    .clicked()
-                    {
-                        self.chat_store.find_open = false;
-                    }
-                });
-            });
-    }
+                        count_text,
+                        crate::design_system::TextStyle::Small,
+                    );
+                }
 
-    fn render_input_panel(&mut self, ctx: &egui::Context) {
-        panels::chat::render_input_panel(self, ctx);
+                // Prev / Next buttons.
+                if ui
+                    .add_enabled(total > 0, Button::new("▲").ghost().small())
+                    .clicked()
+                {
+                    let current = self.chat_store().find_current;
+                    self.chat_store_mut().find_current = if current > 0 {
+                        current - 1
+                    } else {
+                        total.saturating_sub(1)
+                    };
+                }
+                if ui
+                    .add_enabled(total > 0, Button::new("▼").ghost().small())
+                    .clicked()
+                {
+                    let current = self.chat_store().find_current;
+                    self.chat_store_mut().find_current = (current + 1) % total.max(1);
+                }
+
+                // Close.
+                if crate::widgets::icon_button_toolbar(
+                    ui,
+                    crate::theme::ICON_X,
+                    theme.text_sm,
+                    &theme,
+                )
+                .on_hover_text("Close find")
+                .clicked()
+                {
+                    self.chat_store_mut().find_open = false;
+                }
+            });
+        });
     }
 
     fn render_mcp_panel(&mut self, ctx: &egui::Context) {
@@ -1465,10 +1410,6 @@ impl App {
 
     fn render_team_create_modal(&mut self, ctx: &egui::Context) {
         panels::team_create::render_team_create_modal(self, ctx);
-    }
-
-    fn render_dashboard_panel(&mut self, ctx: &egui::Context) {
-        panels::dashboard::render_dashboard_panel(self, ctx);
     }
 
     fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
@@ -1494,36 +1435,39 @@ impl App {
     /// Start an in-app OpenClaw pairing flow for the connection at `conn_idx`.
     pub(crate) fn start_openclaw_pairing(&mut self, conn_idx: usize) {
         let Some(conn) = self
-            .settings_store
+            .settings_store()
             .settings_edit
             .openclaw_connections
             .get(conn_idx)
+            .cloned()
         else {
-            self.claw_pairing_state = PairingState::Error("Connection not found".to_string());
+            self.context.claw_pairing_state =
+                PairingState::Error("Connection not found".to_string());
             return;
         };
 
         if conn.token.as_deref().unwrap_or("").is_empty() {
-            self.claw_pairing_state =
+            self.context.claw_pairing_state =
                 PairingState::Error("Gateway token is required to request pairing".to_string());
             return;
         }
 
         let identity = self
+            .context
             .claw_device_identity
             .clone()
             .or_else(|| clarity_claw::DeviceIdentity::load_or_generate().ok());
         let Some(identity) = identity else {
-            self.claw_pairing_state =
+            self.context.claw_pairing_state =
                 PairingState::Error("Failed to load or generate device identity".to_string());
             return;
         };
-        self.claw_device_identity = Some(identity.clone());
+        self.context.claw_device_identity = Some(identity.clone());
 
         let ws_url = crate::claw::to_ws_url(&conn.gateway_url);
 
         let token = crate::settings::GuiSettings::resolve_api_key(&conn.token).unwrap_or_default();
-        self.claw_pairing_state = PairingState::Requesting;
+        self.context.claw_pairing_state = PairingState::Requesting;
         let client = clarity_claw::ClawClient::connect(&ws_url, &token);
         let scopes = vec![
             "operator.admin".into(),
@@ -1543,12 +1487,12 @@ impl App {
             &scopes,
         );
 
-        self.claw_pairing_client = Some(client);
-        self.claw_pairing_state = PairingState::Waiting {
+        self.context.claw_pairing_client = Some(client);
+        self.context.claw_pairing_state = PairingState::Waiting {
             gateway_url: ws_url,
             since: std::time::Instant::now(),
         };
-        self.push_toast(
+        self.context.push_toast(
             "Pairing request sent. Approve it in the Gateway UI.".to_string(),
             ToastLevel::Info,
         );
@@ -1556,20 +1500,20 @@ impl App {
 
     /// Cancel an in-progress pairing flow.
     pub(crate) fn cancel_openclaw_pairing(&mut self) {
-        self.claw_pairing_client = None;
-        self.claw_pairing_state = PairingState::Idle;
+        self.context.claw_pairing_client = None;
+        self.context.claw_pairing_state = PairingState::Idle;
     }
 
     /// Finish a successful pairing: save the device token to the matching
     /// settings connection and optionally persist a global paired token.
     fn finish_openclaw_pairing(&mut self, device_id: &str, token: &str, scopes: &[String]) {
-        let gateway_url = match &self.claw_pairing_state {
+        let gateway_url = match &self.context.claw_pairing_state {
             PairingState::Waiting { gateway_url, .. } => gateway_url.clone(),
             _ => String::new(),
         };
 
         let mut saved = false;
-        for conn in &mut self.settings_store.settings_edit.openclaw_connections {
+        for conn in &mut self.settings_store_mut().settings_edit.openclaw_connections {
             let conn_ws = if conn.gateway_url.starts_with("ws://")
                 || conn.gateway_url.starts_with("wss://")
             {
@@ -1599,12 +1543,12 @@ impl App {
         if let Err(e) = clarity_claw::save_paired_token(&paired) {
             tracing::warn!("Failed to save paired token: {}", e);
         } else {
-            self.claw_device_token = Some(paired);
+            self.context.claw_device_token = Some(paired);
         }
 
         if saved {
             self.auto_save_settings();
-            self.push_toast(
+            self.context.push_toast(
                 format!(
                     "Device {} paired successfully (scopes: {})",
                     &device_id[..device_id.len().min(8)],
@@ -1613,22 +1557,23 @@ impl App {
                 crate::ui::types::ToastLevel::Info,
             );
         } else {
-            self.push_toast(
+            self.context.push_toast(
                 "Pairing approved, but no matching settings connection was found.".to_string(),
                 crate::ui::types::ToastLevel::Warn,
             );
         }
 
-        self.claw_pairing_state = PairingState::Approved {
+        self.context.claw_pairing_state = PairingState::Approved {
             gateway_url,
             token: token.into(),
         };
-        self.claw_pairing_client = None;
+        self.context.claw_pairing_client = None;
     }
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         // ── Intercept system close (Alt+F4 / taskbar close) → hide to tray ──
         if ctx.input(|i| i.viewport().close_requested()) {
             if self.tray_quit_requested {
@@ -1640,13 +1585,13 @@ impl eframe::App for App {
         }
 
         // ── Poll system tray events ──
-        self.handle_tray_events(ctx);
+        self.handle_tray_events(&ctx);
 
-        self.tick_frame_counter(ctx);
+        self.tick_frame_counter(&ctx);
 
         // Sync live Claw device list and manage Claw WebSocket lifecycle
         // (~2 Hz — device snapshot, reconnect, response draining, pairing).
-        if self.ui_store.frame_count % 30 == 0 {
+        if self.context.ui_store.frame_count % 30 == 0 {
             self.manage_claw_connection();
             self.drain_claw_ws_responses();
             self.drain_pairing_responses();
@@ -1654,101 +1599,111 @@ impl eframe::App for App {
         }
 
         // Persist window position every ~5 s so it survives crashes.
-        if self.ui_store.frame_count % 300 == 0 {
+        if self.context.ui_store.frame_count % 300 == 0 {
             if let Some(rect) = ctx.input(|i| i.viewport().outer_rect) {
                 let pos = rect.min;
-                let dirty = self.settings_store.settings_edit.window_x != Some(pos.x)
-                    || self.settings_store.settings_edit.window_y != Some(pos.y);
+                let settings_store = self.settings_store();
+                let dirty = settings_store.settings_edit.window_x != Some(pos.x)
+                    || settings_store.settings_edit.window_y != Some(pos.y);
                 if dirty {
-                    self.settings_store.settings_edit.window_x = Some(pos.x);
-                    self.settings_store.settings_edit.window_y = Some(pos.y);
+                    let settings_store = self.settings_store_mut();
+                    settings_store.settings_edit.window_x = Some(pos.x);
+                    settings_store.settings_edit.window_y = Some(pos.y);
                     let _ = self.commit_settings();
                 }
             }
         }
 
         // Refresh shell prompt (~1 Hz) to track cwd / git branch changes.
-        if self.ui_store.frame_count % 60 == 0 {
-            self.refresh_shell_prompt();
+        if self.context.ui_store.frame_count % 60 == 0 {
+            self.context.refresh_shell_prompt();
         }
 
         self.process_events();
 
         // Detect session switches and reset chat-local transient state so the
         // new session's message list / input / scroll are rendered fresh.
-        let active_id = self.session_store.active_session_id.clone();
-        if self.ui_store.last_active_session_id != active_id {
-            self.ui_store.last_active_session_id = active_id;
-            self.ui_store.last_scroll_offset = 0.0;
-            self.chat_store.stick_to_bottom = true;
-            self.chat_store.editing_message_idx = None;
-            self.chat_store.edit_buffer.clear();
+        let active_id = self.context.session_store.active_session_id.clone();
+        if self.context.ui_store.last_active_session_id != active_id {
+            self.context.ui_store.last_active_session_id = active_id;
+            self.context.ui_store.last_scroll_offset = 0.0;
+            let chat_store = self.chat_store_mut();
+            // Start new sessions at the top of the message list so the wheel is
+            // not locked to the bottom on launch; stick-to-bottom is enabled
+            // only when the user sends a message or streaming begins.
+            chat_store.stick_to_bottom = false;
+            chat_store.editing_message_idx = None;
+            chat_store.edit_buffer.clear();
             // Close find bar and clear query so stale matches from the
             // previous session don't persist into the new one.
-            self.chat_store.find_open = false;
-            self.chat_store.find_query.clear();
-            self.chat_store.find_matches.clear();
-            self.chat_store.find_current = 0;
-            self.ui_store.focus_target = Some(FocusTarget::ChatInput);
+            chat_store.find_open = false;
+            chat_store.find_query.clear();
+            chat_store.find_matches.clear();
+            chat_store.find_current = 0;
+            self.context.ui_store.focus_target = Some(FocusTarget::ChatInput);
             // Stateful providers (e.g. deepseek-device) must not carry
             // conversation context across clarity sessions.
-            if let Some(ref llm) = self.state.agent.llm() {
+            if let Some(ref llm) = self.context.state.agent.llm() {
                 llm.reset_conversation_context();
             }
             ctx.request_repaint();
         }
-        if self.ui_store.request_repaint {
-            self.ui_store.request_repaint = false;
+        if self.context.ui_store.request_repaint {
+            self.context.ui_store.request_repaint = false;
             ctx.request_repaint();
         }
 
         // Sync the layout debug overlay toggle from ViewState to egui memory.
-        crate::ui::debug_overlay::sync_enabled(ctx, self.view_state.debug_layout_overlay);
+        crate::ui::debug_overlay::sync_enabled(&ctx, self.view_state.debug_layout_overlay);
 
         // Poll MCP config for external changes (hot-reload).
-        self.check_mcp_config_reload();
+        self.context.check_mcp_config_reload();
 
         // Drain batch-grant auto-approval notifications and show toasts.
         for msg in self
+            .context
             .state
             .mode_aware_approval_runtime
             .drain_auto_approval_notifications()
         {
-            self.push_toast(msg, ToastLevel::Info);
+            self.context.push_toast(msg, ToastLevel::Info);
         }
 
         if self.is_loading() {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
 
-        self.handle_file_drops(ctx);
+        self.handle_file_drops(&ctx);
 
         // ── Find-in-session (Ctrl+F) — lightweight toggle, not routed through
         //    the ShortcutAction system to keep the dispatch path simple. ──
         if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl)
             && !shortcuts::is_modal_open(self)
         {
-            self.chat_store.find_open = !self.chat_store.find_open;
-            if self.chat_store.find_open {
-                self.chat_store.find_query.clear();
-                self.chat_store.find_matches.clear();
-                self.chat_store.find_current = 0;
-                self.ui_store.focus_target = Some(FocusTarget::ChatInput);
+            let find_open = !self.chat_store().find_open;
+            let chat_store = self.chat_store_mut();
+            chat_store.find_open = find_open;
+            if find_open {
+                chat_store.find_query.clear();
+                chat_store.find_matches.clear();
+                chat_store.find_current = 0;
+                self.context.ui_store.focus_target = Some(FocusTarget::ChatInput);
             }
         }
         // Close find bar on Escape (before CloseModal for layering reasons).
-        if self.chat_store.find_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.chat_store.find_open = false;
+        if self.chat_store().find_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.chat_store_mut().find_open = false;
         }
 
         // ── Global keyboard shortcuts (P0.5.C.1: unified dispatch) ──
         // All shortcut actions and CommandPalette entries route through
         // App::dispatch_command(&str) using ids from clarity_core::ui::ids.
-        for action in shortcuts::collect_actions(ctx, self) {
+        for action in shortcuts::collect_actions(&ctx, self) {
             if action == shortcuts::ShortcutAction::CopyLine {
                 if let Some(text) = self.selected_line_text() {
                     ctx.copy_text(text);
-                    self.push_toast("Copied to clipboard", ToastLevel::Info);
+                    self.context
+                        .push_toast("Copied to clipboard", ToastLevel::Info);
                 }
             } else {
                 self.dispatch_command(action.command_id());
@@ -1759,30 +1714,34 @@ impl eframe::App for App {
 
         // ── Auto-save: persist active session every 30 frames (~0.5 s) when
         //    modified. Guards against data loss on crash between explicit saves.
-        if self.ui_store.frame_count % 30 == 0 {
+        if self.context.ui_store.frame_count % 30 == 0 {
             let needs_save = self
+                .context
                 .session_store
                 .active_session()
                 .map(|s| s.updated_at > s.last_saved_at)
                 .unwrap_or(false);
             if needs_save {
-                self.save_current_session();
+                self.context.save_current_session();
             }
         }
 
         // ── Stuck-turn guard: if a turn has been in_flight for > 5 min
         //    without a Done or Error event, force-reset so the user isn't
         //    permanently blocked. ──
-        if let Some(since) = self.chat_store.in_flight_since {
+        if let Some(since) = self.chat_store().in_flight_since {
             if since.elapsed() > std::time::Duration::from_secs(300) {
                 tracing::warn!("Turn stuck in_flight for > 5 min — force-resetting");
-                if let Some(session) = self.session_store.active_session_mut() {
+                if let Some(session) = self.context.session_store.active_session_mut() {
                     session.in_flight = false;
                 }
-                self.chat_store.in_flight_since = None;
+                {
+                    let chat_store = self.chat_store_mut();
+                    chat_store.in_flight_since = None;
+                    chat_store.agent_status = AgentStatus::Online;
+                }
                 self.view_state.turn = clarity_core::ui::TurnState::Idle;
-                self.chat_store.agent_status = AgentStatus::Online;
-                self.push_toast(
+                self.context.push_toast(
                     "Agent turn timed out — you can retry your last message.",
                     ToastLevel::Warn,
                 );
@@ -1791,41 +1750,44 @@ impl eframe::App for App {
 
         self.sync_agent_status();
         self.sync_tray_status();
-        self.apply_frame_state(ctx);
+        self.apply_frame_state(&ctx);
 
         // ── Layout shell: chrome + main view + overlays + modals ──
-        self.render_layout_shell(ctx);
+        if let Some(mut chrome) = self.chrome.take() {
+            chrome.render(self, ui, &ctx);
+            self.chrome = Some(chrome);
+        }
 
         // Pretext PoC: measurement probe window
-        if self.ui_store.pretext_probe_open {
-            crate::widgets::pretext_probe::render_pretext_probe(self, ctx);
+        if self.context.ui_store.pretext_probe_open {
+            crate::widgets::pretext_probe::render_pretext_probe(self, &ctx);
         }
 
         // Keyboard shortcuts reference (Ctrl+/)
-        self.render_shortcuts_help(ctx);
+        self.render_shortcuts_help(&ctx);
 
         // Command Palette (top-most layer)
         if self.command_palette.open {
             let commands = clarity_core::ui::commands::built_in::all();
-            let theme = self.ui_store.theme.clone();
+            let theme = self.context.ui_store.theme.clone();
             // P0.5.C.2: palette returns the activated command id (if any),
             // which we forward to the unified dispatcher.
-            if let Some(cmd_id) = self.command_palette.show(ctx, &theme, &commands) {
+            if let Some(cmd_id) = self.command_palette.show(&ctx, &theme, &commands) {
                 self.dispatch_command(&cmd_id);
             }
         }
 
         // ── Theme-switch fade transition (250 ms) ──
-        if let Some(start) = self.ui_store.theme_transition_start {
+        if let Some(start) = self.context.ui_store.theme_transition_start {
             let elapsed = start.elapsed().as_secs_f32();
             let duration = 0.25;
             if elapsed >= duration {
-                self.ui_store.theme_transition_start = None;
+                self.context.ui_store.theme_transition_start = None;
             } else {
                 // Ease-out: alpha goes from opaque to transparent.
                 let t = elapsed / duration;
                 let alpha = 1.0 - crate::animation::ease_out_cubic(t);
-                let screen = ctx.screen_rect();
+                let screen = ctx.input(|i| i.viewport_rect());
                 let fg = ctx.layer_painter(egui::LayerId::new(
                     egui::Order::Foreground,
                     egui::Id::new("theme_transition_overlay"),
@@ -1840,8 +1802,8 @@ impl eframe::App for App {
         }
     }
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.save_current_session();
+    fn on_exit(&mut self) {
+        self.context.save_current_session();
     }
 }
 

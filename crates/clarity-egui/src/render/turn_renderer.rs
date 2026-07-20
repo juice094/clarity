@@ -1,7 +1,7 @@
 //! Turn-level rendering — CLI style for AgentTurn.
 
 use crate::components::agent_turn::{AgentTurn, ToolCallRow};
-use crate::design_system::{self, Space};
+use crate::design_system::{self, Space, TextStyle};
 use crate::theme::Theme;
 use crate::ui::types::ToolCallStatus;
 
@@ -24,30 +24,16 @@ pub fn render_agent_turn(
     // This lets us inspect tool call results AFTER rendering and apply
     // dynamic color logic (error tint, activity indicator) without a
     // second pass.
-    let mut prepared = egui::Frame::new()
+    let mut prepared = clarity_ui::design_system::Elevation::Base
+        .frame(theme)
         .fill(egui::Color32::TRANSPARENT)
         .stroke(egui::Stroke::NONE)
         .inner_margin(egui::Margin::symmetric(0, theme.space_4 as i8 + 2))
         .begin(ui);
 
-    // ── Header: avatar + "Agent" + meta ──
-    prepared.content_ui.horizontal(|ui| {
-        crate::components::chat::avatar::avatar(ui, "A", theme);
-        ui.add_space(8.0);
-        ui.label(
-            egui::RichText::new("Agent")
-                .size(theme.text_xs)
-                .color(theme.text_dim),
-        );
-        if turn.header.tool_count > 0 {
-            ui.label(
-                egui::RichText::new(format!("· {} tools", turn.header.tool_count))
-                    .size(theme.text_xs)
-                    .color(theme.text_dim),
-            );
-        }
-    });
-    design_system::gap(&mut prepared.content_ui, Space::S1);
+    // P6h: Kimi-style agent messages have no heavy header. The avatar/model
+    // label is removed; tool status is still surfaced via the collapsible
+    // tool group below.
 
     // ── Thinking (collapsed by default) ──
     if let Some(ref thinking) = turn.thinking {
@@ -111,7 +97,7 @@ pub fn render_agent_turn(
                             .color(theme.chat_text),
                     );
                 } else {
-                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+                    crate::ui::markdown::render_markdown(ui, &msg.content, theme.chat_text);
                 }
             });
         design_system::gap(&mut prepared.content_ui, Space::S2);
@@ -165,18 +151,14 @@ fn render_tool_call_row_cli(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme) 
                 .rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
         }
 
-        ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
-        ui.label(
-            egui::RichText::new(&tc.name)
-                .size(theme.text_sm)
-                .strong()
-                .color(theme.text_muted),
+        clarity_ui::design_system::icon(ui, icon, theme.text_sm);
+        clarity_ui::design_system::text_with_color(
+            ui,
+            &tc.name,
+            clarity_ui::design_system::TextStyle::Small.strong(),
+            theme.text_muted,
         );
-        ui.label(
-            egui::RichText::new(&tc.result_preview)
-                .size(theme.text_sm)
-                .color(theme.text_dim),
-        );
+        design_system::text(ui, &tc.result_preview, TextStyle::Small);
     });
     design_system::gap(ui, Space::S0);
 }

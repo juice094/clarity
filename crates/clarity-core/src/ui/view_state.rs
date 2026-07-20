@@ -398,6 +398,25 @@ pub enum NewSessionMode {
     Work,
 }
 
+/// Runtime agent mode for the active conversation.
+///
+/// Unlike `SessionContext`, this is a UI-level mode switch. It controls
+/// which tools/persona are active without changing the session's underlying
+/// binding (project, workspace, or Claw device).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMode {
+    /// General-purpose chat.
+    #[default]
+    Chat,
+    /// Coding assistant mode.
+    Code,
+    /// Project / work mode.
+    Work,
+    /// Remote Claw device mode.
+    Claw,
+}
+
 /// IDE-style right rail panel for the Pretext layout.
 ///
 /// S6 Phase D: the right rail is now an IDE-style compressed panel that shows
@@ -526,30 +545,30 @@ impl FocusScope {
     }
 }
 
-/// Unified view state — single source of truth shared by GUI and TUI.
+/// Non-navigation UI state shared by GUI and TUI.
+///
+/// Navigation (main view, modal, right-rail panel) has moved to the typed
+/// `Route` stack in the application shell. This struct retains layout,
+/// focus, turn, expansion, and rail-context state.
 ///
 /// ## Composition rules
 ///
-/// - `main` switching preserves `left` / `right` panel state (unless responsive
-///   guard triggers collapse).
-/// - When `modal` is set, `main` / `left` / `right` render but do not receive
-///   input events; `focus` is overridden to `FocusScope::Modal(...)`.
 /// - `turn` is independent of view state; an agent turn can run in any view.
 /// - `expansions` is independent per panel; collapsing one does not affect others.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ViewState {
-    /// Current main view.
-    #[serde(default)]
-    pub main: AppView,
     /// Left-side panel overlay (None = hidden).
+    ///
+    /// Legacy field kept for serialization compatibility. Navigation is now
+    /// handled by the typed `Route` stack in the application shell.
     #[serde(default)]
     pub left: Option<SidePanel>,
     /// Right-side panel overlay (None = hidden).
+    ///
+    /// Legacy field kept for serialization compatibility. Navigation is now
+    /// handled by the typed `Route` stack in the application shell.
     #[serde(default)]
     pub right: Option<SidePanel>,
-    /// Currently open modal (None = no modal).
-    #[serde(default)]
-    pub modal: Option<ModalType>,
     /// Agent turn lifecycle state.
     #[serde(default)]
     pub turn: TurnState,
@@ -566,23 +585,19 @@ pub struct ViewState {
     #[serde(default)]
     pub left_rail_expanded: bool,
     /// New-session mode selected by the Work/Chat toggle in the left nav tree.
+    ///
+    /// Deprecated: the toggle is being removed. Kept for serde compatibility.
     #[serde(default)]
     pub new_session_mode: NewSessionMode,
-    /// Pretext right rail section (S6).
+    /// Runtime agent mode for the active conversation (S6 redesign).
     #[serde(default)]
-    pub right_rail: RightRailSection,
-    /// Whether the right utility rail is visible (S6).
-    #[serde(default)]
-    pub right_rail_visible: bool,
+    pub agent_mode: AgentMode,
     /// Current right rail drawer context (S6 Phase C).
     #[serde(default)]
     pub right_rail_context: RightRailContext,
     /// Display order of stacked cards inside the right rail drawer (S6 Phase C).
     #[serde(default)]
     pub right_rail_card_order: Vec<RightRailCard>,
-    /// IDE-style right rail panel (S6 Phase D).
-    #[serde(default)]
-    pub right_rail_panel: RightRailPanel,
     /// Whether the UI is in layout edit mode (unlocks drag reordering, S6 Phase C).
     #[serde(default)]
     pub layout_edit_mode: bool,
@@ -595,11 +610,6 @@ impl ViewState {
     /// Create a new `ViewState`.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Switch main view, preserving side panels.
-    pub fn switch_main(&mut self, view: AppView) {
-        self.main = view;
     }
 
     /// Toggle left panel (mutually exclusive: only one left panel at a time).
@@ -618,19 +628,6 @@ impl ViewState {
         } else {
             Some(panel)
         };
-    }
-
-    /// Open a modal. The modal takes input focus until closed.
-    pub fn open_modal(&mut self, modal: ModalType) {
-        self.modal = Some(modal);
-        self.focus = FocusScope::Modal(modal);
-    }
-
-    /// Close the current modal and restore focus to the previously-focused panel.
-    pub fn close_modal(&mut self) {
-        self.modal = None;
-        // Focus defaults to App; caller should restore specific panel focus if needed.
-        self.focus = FocusScope::App;
     }
 
     /// Returns true if any side panel is open.
@@ -667,53 +664,18 @@ impl ViewState {
         }
     }
 
-    /// Toggle a right rail section. Tapping the active section collapses the rail.
-    pub fn toggle_right_rail(&mut self, section: RightRailSection) {
-        if self.right_rail == section && section != RightRailSection::None {
-            self.right_rail = RightRailSection::None;
-            self.right_rail_visible = false;
-        } else {
-            self.right_rail = section;
-            self.right_rail_visible = true;
-        }
-    }
-
     /// Collapse the left expanded list while keeping the icon rail visible.
     pub fn collapse_left_rail(&mut self) {
         self.left_rail_expanded = false;
     }
 
-    /// Collapse the right utility rail.
-    pub fn collapse_right_rail(&mut self) {
-        self.right_rail_visible = false;
-    }
-
-    /// Open a specific IDE-style right rail panel.
-    ///
-    /// If `panel` is `RightRailPanel::None`, the rail is collapsed.
-    pub fn set_right_rail_panel(&mut self, panel: RightRailPanel) {
-        self.right_rail_panel = panel;
-        self.right_rail_visible = panel != RightRailPanel::None;
-    }
-
-    /// Toggle an IDE-style right rail panel. Tapping the active panel collapses the rail.
-    pub fn toggle_right_rail_panel(&mut self, panel: RightRailPanel) {
-        if self.right_rail_panel == panel && panel != RightRailPanel::None {
-            self.right_rail_panel = RightRailPanel::None;
-            self.right_rail_visible = false;
-        } else {
-            self.right_rail_panel = panel;
-            self.right_rail_visible = true;
-        }
-    }
-
     /// Switch the right rail drawer context.
     ///
     /// Selecting the same context again keeps it active (icon stays highlighted)
-    /// and does not collapse the rail.
+    /// and does not collapse the rail. Visibility is owned by the application
+    /// router; this method only updates the context metadata.
     pub fn set_right_rail_context(&mut self, ctx: RightRailContext) {
         self.right_rail_context = ctx;
-        self.right_rail_visible = true;
     }
 
     /// Toggle layout edit mode (unlocks drag-reorder of plugins and cards).
@@ -737,31 +699,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn view_state_default_is_chat_idle() {
+    fn view_state_default_is_idle() {
         let vs = ViewState::new();
-        assert_eq!(vs.main, AppView::Chat);
         assert_eq!(vs.turn, TurnState::Idle);
         assert_eq!(vs.focus, FocusScope::App);
         assert!(vs.left.is_none());
         assert!(vs.right.is_none());
-        assert!(vs.modal.is_none());
         assert!(!vs.is_turn_active());
         assert!(!vs.has_panels());
         assert_eq!(vs.right_rail_context, RightRailContext::Session);
         assert!(vs.right_rail_card_order.is_empty());
         assert!(!vs.layout_edit_mode);
         assert!(!vs.debug_layout_overlay);
-    }
-
-    #[test]
-    fn switch_main_preserves_side_panels() {
-        let mut vs = ViewState::new();
-        vs.toggle_left(SidePanel::Sidebar);
-        vs.toggle_right(SidePanel::Workspace);
-        vs.switch_main(AppView::Dashboard);
-        assert_eq!(vs.main, AppView::Dashboard);
-        assert_eq!(vs.left, Some(SidePanel::Sidebar));
-        assert_eq!(vs.right, Some(SidePanel::Workspace));
     }
 
     #[test]
@@ -779,27 +728,9 @@ mod tests {
     }
 
     #[test]
-    fn open_modal_sets_focus_to_modal() {
-        let mut vs = ViewState::new();
-        vs.focus = FocusScope::Panel(PanelKind::ChatStream);
-        vs.open_modal(ModalType::Approval);
-        assert_eq!(vs.modal, Some(ModalType::Approval));
-        assert_eq!(vs.focus, FocusScope::Modal(ModalType::Approval));
-    }
-
-    #[test]
-    fn close_modal_clears_focus_to_app() {
-        let mut vs = ViewState::new();
-        vs.open_modal(ModalType::Approval);
-        vs.close_modal();
-        assert!(vs.modal.is_none());
-        assert_eq!(vs.focus, FocusScope::App);
-    }
-
-    #[test]
     fn modal_focus_overrides_panel_focus_attempts() {
         let mut vs = ViewState::new();
-        vs.open_modal(ModalType::TaskCreate);
+        vs.focus = FocusScope::Modal(ModalType::TaskCreate);
         // Attempting to focus a panel while modal is open is a no-op.
         vs.focus_panel(PanelKind::ChatStream);
         assert_eq!(vs.focus, FocusScope::Modal(ModalType::TaskCreate));
@@ -875,15 +806,13 @@ mod tests {
     }
 
     #[test]
-    fn set_right_rail_context_opens_rail() {
+    fn set_right_rail_context_updates_context() {
         let mut vs = ViewState::new();
-        assert!(!vs.right_rail_visible);
         vs.set_right_rail_context(RightRailContext::Project);
         assert_eq!(vs.right_rail_context, RightRailContext::Project);
-        assert!(vs.right_rail_visible);
-        // Re-selecting the same context keeps the rail open.
+        // Re-selecting the same context keeps the context active.
         vs.set_right_rail_context(RightRailContext::Project);
-        assert!(vs.right_rail_visible);
+        assert_eq!(vs.right_rail_context, RightRailContext::Project);
     }
 
     #[test]
@@ -916,46 +845,20 @@ mod tests {
     }
 
     #[test]
-    fn toggle_right_rail_expands_and_collapses() {
-        let mut vs = ViewState::new();
-        assert_eq!(vs.right_rail, RightRailSection::None);
-        assert!(!vs.right_rail_visible);
-
-        vs.toggle_right_rail(RightRailSection::Tools);
-        assert_eq!(vs.right_rail, RightRailSection::Tools);
-        assert!(vs.right_rail_visible);
-
-        vs.toggle_right_rail(RightRailSection::Tools);
-        assert_eq!(vs.right_rail, RightRailSection::None);
-        assert!(!vs.right_rail_visible);
-
-        vs.toggle_right_rail(RightRailSection::Memory);
-        assert_eq!(vs.right_rail, RightRailSection::Memory);
-        assert!(vs.right_rail_visible);
-    }
-
-    #[test]
-    fn collapse_helpers_sync_visibility_flags() {
+    fn collapse_left_rail_keeps_section() {
         let mut vs = ViewState::new();
         vs.toggle_left_rail(LeftRailSection::Workspace);
-        vs.toggle_right_rail(RightRailSection::Status);
 
         vs.collapse_left_rail();
         assert!(!vs.left_rail_expanded);
         assert_eq!(vs.left_rail, LeftRailSection::Workspace);
-
-        vs.collapse_right_rail();
-        assert!(!vs.right_rail_visible);
-        assert_eq!(vs.right_rail, RightRailSection::Status);
     }
 
     #[test]
-    fn rail_sections_roundtrip_through_json() {
+    fn rail_state_roundtrips_through_json() {
         let mut vs = ViewState::new();
         vs.left_rail = LeftRailSection::Sessions;
         vs.left_rail_expanded = true;
-        vs.right_rail = RightRailSection::Subagents;
-        vs.right_rail_visible = true;
         vs.right_rail_context = RightRailContext::Claw;
         vs.right_rail_card_order = vec![RightRailCard::Context, RightRailCard::Progress];
         vs.layout_edit_mode = true;
@@ -964,8 +867,6 @@ mod tests {
         let restored: ViewState = serde_json::from_str(&json).unwrap();
         assert_eq!(vs.left_rail, restored.left_rail);
         assert_eq!(vs.left_rail_expanded, restored.left_rail_expanded);
-        assert_eq!(vs.right_rail, restored.right_rail);
-        assert_eq!(vs.right_rail_visible, restored.right_rail_visible);
         assert_eq!(vs.right_rail_context, restored.right_rail_context);
         assert_eq!(vs.right_rail_card_order, restored.right_rail_card_order);
         assert_eq!(vs.layout_edit_mode, restored.layout_edit_mode);
@@ -1033,7 +934,6 @@ mod tests {
     #[test]
     fn view_state_roundtrips_through_json() {
         let mut vs = ViewState::new();
-        vs.main = AppView::Settings;
         vs.left = Some(SidePanel::Sidebar);
         vs.right = Some(SidePanel::Workspace);
         vs.turn = TurnState::Compacting;
@@ -1358,23 +1258,12 @@ mod tests {
     }
 
     /// ViewState operations must maintain structural invariants:
-    /// - at most one modal
     /// - at most one left panel
     /// - at most one right panel
     /// - turn is always exactly one variant
     #[test]
     fn view_state_structural_invariants() {
         let mut vs = ViewState::new();
-
-        // Invariant: modal is Option — open overwrites, never stacks.
-        vs.open_modal(ModalType::Approval);
-        assert_eq!(vs.modal, Some(ModalType::Approval));
-        vs.open_modal(ModalType::Skill);
-        assert_eq!(
-            vs.modal,
-            Some(ModalType::Skill),
-            "Modal must be single-valued; opening a second overwrites"
-        );
 
         // Invariant: right panel is Option — toggle replaces.
         vs.toggle_right(SidePanel::Task);
@@ -1414,14 +1303,14 @@ mod tests {
         vs.focus_panel(PanelKind::ChatStream);
         assert_eq!(vs.focus, FocusScope::Panel(PanelKind::ChatStream));
 
-        vs.open_modal(ModalType::Approval);
+        vs.focus = FocusScope::Modal(ModalType::Approval);
         assert!(matches!(vs.focus, FocusScope::Modal(_)));
 
         // Attempting to focus a panel while modal is open must not change focus.
         vs.focus_panel(PanelKind::RightWorkspace);
         assert_eq!(vs.focus, FocusScope::Modal(ModalType::Approval));
 
-        vs.close_modal();
+        vs.focus = FocusScope::App;
         assert_eq!(vs.focus, FocusScope::App);
     }
 
@@ -1446,53 +1335,5 @@ mod tests {
         vs.toggle_left(SidePanel::Workspace); // toggles off
         assert!(vs.left.is_none());
         assert_eq!(vs.right, Some(SidePanel::Task));
-    }
-
-    #[test]
-    fn right_rail_panel_default_is_none() {
-        let vs = ViewState::new();
-        assert_eq!(vs.right_rail_panel, RightRailPanel::None);
-        assert!(!vs.right_rail_visible);
-    }
-
-    #[test]
-    fn set_right_rail_panel_opens_rail() {
-        let mut vs = ViewState::new();
-        vs.set_right_rail_panel(RightRailPanel::Console);
-        assert_eq!(vs.right_rail_panel, RightRailPanel::Console);
-        assert!(vs.right_rail_visible);
-
-        vs.set_right_rail_panel(RightRailPanel::None);
-        assert!(!vs.right_rail_visible);
-    }
-
-    #[test]
-    fn toggle_right_rail_panel_is_mutually_exclusive() {
-        let mut vs = ViewState::new();
-        vs.toggle_right_rail_panel(RightRailPanel::Files);
-        assert_eq!(vs.right_rail_panel, RightRailPanel::Files);
-        assert!(vs.right_rail_visible);
-
-        // Toggling the same panel collapses the rail.
-        vs.toggle_right_rail_panel(RightRailPanel::Files);
-        assert_eq!(vs.right_rail_panel, RightRailPanel::None);
-        assert!(!vs.right_rail_visible);
-
-        // Toggling a different panel opens it.
-        vs.toggle_right_rail_panel(RightRailPanel::KnowledgeBase);
-        assert_eq!(vs.right_rail_panel, RightRailPanel::KnowledgeBase);
-        assert!(vs.right_rail_visible);
-    }
-
-    #[test]
-    fn right_rail_panel_roundtrips_through_json() {
-        let mut vs = ViewState::new();
-        vs.right_rail_panel = RightRailPanel::ClawSettings;
-        vs.right_rail_visible = true;
-
-        let json = serde_json::to_string(&vs).unwrap();
-        let restored: ViewState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.right_rail_panel, RightRailPanel::ClawSettings);
-        assert!(restored.right_rail_visible);
     }
 }

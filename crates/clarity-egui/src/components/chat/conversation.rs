@@ -24,19 +24,23 @@ pub enum CardStyle {
 impl CardStyle {
     fn frame(self, theme: &Theme) -> egui::Frame {
         match self {
-            CardStyle::Approval => egui::Frame::new()
+            CardStyle::Approval => clarity_ui::design_system::Elevation::Elevated
+                .frame(theme)
                 .fill(theme.bg_accent)
                 .stroke(egui::Stroke::new(0.5, theme.border))
                 .corner_radius(egui::CornerRadius::same(20))
                 .shadow(theme.shadow_card),
-            CardStyle::ListItem => egui::Frame::new()
+            CardStyle::ListItem => clarity_ui::design_system::Elevation::Base
+                .frame(theme)
                 .fill(egui::Color32::TRANSPARENT)
                 .stroke(egui::Stroke::new(0.5, theme.border))
                 .corner_radius(egui::CornerRadius::same(16)),
-            CardStyle::Nested => egui::Frame::new()
+            CardStyle::Nested => clarity_ui::design_system::Elevation::Surface
+                .frame(theme)
                 .fill(theme.surface)
                 .corner_radius(egui::CornerRadius::same(12)),
-            CardStyle::Error => egui::Frame::new()
+            CardStyle::Error => clarity_ui::design_system::Elevation::Elevated
+                .frame(theme)
                 .fill(theme.error_bubble)
                 .corner_radius(egui::CornerRadius::same(10)),
         }
@@ -465,14 +469,16 @@ pub fn approval_dock(
             );
             if let Some(ref badge) = request.badge {
                 ui.add_space(4.0);
-                let badge_frame = egui::Frame::new()
+                let badge_frame = clarity_ui::design_system::Elevation::Elevated
+                    .frame(theme)
                     .fill(theme.warn.linear_multiply(0.15))
                     .corner_radius(egui::CornerRadius::same(21));
                 badge_frame.show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new(badge)
-                            .size(theme.text_xs)
-                            .color(theme.warn),
+                    clarity_ui::design_system::text_with_color(
+                        ui,
+                        badge,
+                        clarity_ui::design_system::TextStyle::Small,
+                        theme.warn,
                     );
                 });
             }
@@ -494,27 +500,11 @@ pub fn approval_dock(
         crate::design_system::gap(ui, crate::design_system::Space::S1);
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let allow_btn = egui::Button::new(
-                egui::RichText::new("Allow")
-                    .size(theme.text_sm)
-                    .strong()
-                    .color(theme.bg),
-            )
-            .fill(theme.text)
-            .corner_radius(egui::CornerRadius::same(10));
-            if ui.add(allow_btn).clicked() {
+            if ui.add(theme.primary_button("Allow")).clicked() {
                 allowed = Some(request.id.clone());
             }
             ui.add_space(8.0);
-            let deny_btn = egui::Button::new(
-                egui::RichText::new("Deny")
-                    .size(theme.text_sm)
-                    .strong()
-                    .color(theme.text),
-            )
-            .fill(theme.surface)
-            .corner_radius(egui::CornerRadius::same(10));
-            if ui.add(deny_btn).clicked() {
+            if ui.add(theme.secondary_button("Deny")).clicked() {
                 denied = Some(request.id.clone());
             }
         });

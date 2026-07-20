@@ -5,6 +5,7 @@
 //! menu of context sources; selecting one opens a secondary chooser.
 //! Selected items render as accent-colored chips in the input area.
 
+use crate::design_system::{self, TextStyle};
 use crate::theme::Theme;
 use crate::ui::types::{ContextItem, ContextSource};
 use std::path::{Path, PathBuf};
@@ -36,6 +37,8 @@ pub fn render_context_picker(
 ) -> Option<ContextItem> {
     let mut result = None;
 
+    // ponytail: keep raw popup Frame because radius_sm and space_8 padding differ
+    // from design_system::overlay/surface_panel presets.
     egui::Frame::popup(ui.style())
         .fill(theme.surface)
         .stroke(egui::Stroke::new(1.0, theme.border))
@@ -51,12 +54,10 @@ pub fn render_context_picker(
                     if ui
                         .add_sized(
                             [60.0, 20.0],
-                            egui::Button::new(
-                                egui::RichText::new("\u{2190} Back")
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            )
-                            .fill(theme.surface),
+                            clarity_ui::widgets::Button::new("\u{2190} Back")
+                                .small()
+                                .fill(theme.surface)
+                                .text_color(theme.text_dim),
                         )
                         .clicked()
                     {
@@ -64,22 +65,24 @@ pub fn render_context_picker(
                         state.filter.clear();
                     }
                     crate::design_system::gap(ui, crate::design_system::Space::S0);
-                    ui.label(
-                        egui::RichText::new(if mode == "file" {
+                    design_system::text(
+                        ui,
+                        if mode == "file" {
                             "Select a file"
                         } else {
                             "Select a folder"
-                        })
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
+                        },
+                        TextStyle::Small,
                     );
                 });
                 crate::design_system::gap(ui, crate::design_system::Space::S0);
 
                 // Filter input for narrowing by filename.
+                // ponytail: keep raw TextEdit because TextInput does not expose a
+                // monospace font option and this filter is intentionally code-like.
                 let filter_hint = "Filter files…";
                 ui.add(
-                    egui::TextEdit::singleline(&mut state.filter)
+                    clarity_ui::widgets::TextInput::singleline(&mut state.filter)
                         .hint_text(filter_hint)
                         .font(theme.font_mono(theme.text_xs)),
                 );
@@ -131,17 +134,15 @@ pub fn render_context_picker(
                             );
                         });
                 } else {
-                    ui.label(
-                        egui::RichText::new("Directory not accessible")
-                            .size(theme.text_xs)
-                            .color(theme.text_dim),
-                    );
+                    design_system::text(ui, "Directory not accessible", TextStyle::Small);
                 }
             } else {
                 // ── Source list view ──
+                // ponytail: keep raw TextEdit because TextInput does not expose a
+                // monospace font option and this filter is intentionally code-like.
                 let hint = "Filter…";
                 ui.add(
-                    egui::TextEdit::singleline(&mut state.filter)
+                    clarity_ui::widgets::TextInput::singleline(&mut state.filter)
                         .hint_text(hint)
                         .font(theme.font_mono(theme.text_sm)),
                 );
@@ -156,30 +157,28 @@ pub fn render_context_picker(
                         continue;
                     }
 
-                    let row = egui::Frame::new()
+                    let row = clarity_ui::design_system::Elevation::Elevated
+                        .frame(theme)
                         .fill(theme.surface)
                         .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 4))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(icon)
-                                        .font(theme.font_icon(theme.text_sm))
-                                        .color(theme.accent),
+                                clarity_ui::design_system::icon_with_color(
+                                    ui,
+                                    icon,
+                                    theme.text_sm,
+                                    theme.accent,
                                 );
-                                ui.label(
-                                    egui::RichText::new(label)
-                                        .size(theme.text_sm)
-                                        .color(theme.text),
+                                clarity_ui::design_system::text(
+                                    ui,
+                                    label,
+                                    clarity_ui::design_system::TextStyle::Body,
                                 );
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        ui.label(
-                                            egui::RichText::new(desc)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_dim),
-                                        );
+                                        design_system::text(ui, desc, TextStyle::Small);
                                     },
                                 );
                             });

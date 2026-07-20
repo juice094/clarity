@@ -11,7 +11,7 @@ const URL_INPUT_H: f32 = 24.0;
 
 /// Render the Claw WebBridge panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // URL input bar.
     ui.horizontal(|ui| {
@@ -22,12 +22,12 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         );
         let url_resp = ui.add_sized(
             egui::vec2(ui.available_width() - theme.space_4, URL_INPUT_H),
-            egui::TextEdit::singleline(&mut app.chat_store.input)
+            clarity_ui::widgets::TextInput::singleline(&mut app.chat_store_mut().input)
                 .hint_text("https://example.com or /path/to/file")
-                .font(egui::TextStyle::Monospace),
+                .font(theme.font_mono(theme.text_base)),
         );
         if url_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            let url = app.chat_store.input.trim().to_string();
+            let url = app.chat_store().input.trim().to_string();
             if !url.is_empty() {
                 app.push_toast(
                     format!("Loading: {}", url),
@@ -49,9 +49,9 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             ui.set_min_width(ui.available_width());
 
             // Show the active project file content if available.
-            let has_content = app.ui_store.active_project.is_some();
+            let has_content = app.context.ui_store.active_project.is_some();
             if has_content {
-                let path = app.ui_store.active_project.as_deref().unwrap_or("");
+                let path = app.context.ui_store.active_project.as_deref().unwrap_or("");
                 ui.label(
                     egui::RichText::new(format!("{} {}", crate::theme::ICON_FILE_CODE, path))
                         .size(theme.text_xs)
@@ -64,21 +64,14 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     "// Content of {}\n//\n// WebBridge fetches and displays web pages,\n// source code, and documentation from the\n// selected Claw device via the Gateway.\n//\n// Features planned:\n// - Syntax highlighting (Tree-sitter)\n// - HTML/Markdown rendering\n// - Web page proxy view\n// - Line numbers",
                     path
                 );
-                egui::Frame::new()
-                    .fill(theme.code_block_bg)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::symmetric(
-                        theme.space_12 as i8,
-                        theme.space_8 as i8 + 2,
-                    ))
-                    .show(ui, |ui| {
-                        ui.label(
-                            egui::RichText::new(&preview_text)
-                                .size(theme.text_sm)
-                                .color(theme.text)
-                                .code(),
-                        );
-                    });
+                crate::design_system::code_frame(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new(&preview_text)
+                            .size(theme.text_sm)
+                            .color(theme.text)
+                            .code(),
+                    );
+                });
             } else {
                 crate::design_system::gap(ui, crate::design_system::Space::S3);
                 ui.vertical_centered(|ui| {

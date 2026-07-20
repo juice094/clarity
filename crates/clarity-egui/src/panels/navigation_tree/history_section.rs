@@ -4,7 +4,9 @@
 //! via `egui::ScrollArea::show_rows` for performance with large session counts.
 
 use crate::App;
+use crate::design_system::{self, TextStyle};
 use crate::ui::types::SessionContext;
+use clarity_ui::widgets::text_input::TextInput;
 
 /// Estimated row height for virtualized rendering.
 ///
@@ -15,12 +17,13 @@ const EST_ROW_HEIGHT: f32 = 32.0;
 
 /// Render the collapsible history/sessions section.
 pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
     let mut expanded = app.view_state.expansions.nav_history;
 
     // Collect session metadata outside the closure so it can be indexed
     // for virtualized rendering.
     let sessions: Vec<_> = app
+        .context
         .session_store
         .sessions
         .iter()
@@ -28,17 +31,17 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
             !s.archived
                 && s.project_id.is_none()
                 && !matches!(s.context, SessionContext::Claw { .. })
-                && (app.ui_store.history_search.is_empty()
+                && (app.context.ui_store.history_search.is_empty()
                     || s.title
                         .to_lowercase()
-                        .contains(&app.ui_store.history_search.to_lowercase()))
+                        .contains(&app.context.ui_store.history_search.to_lowercase()))
         })
         .map(|s| SessionRow {
             id: s.id.clone(),
             title: truncate_title(&s.title),
             category: s.category.clone(),
             context: s.context.clone(),
-            is_active: s.id == app.session_store.active_session_id,
+            is_active: s.id == app.context.session_store.active_session_id,
             diff_stats: s.diff_stats.clone(),
         })
         .collect();
@@ -52,39 +55,31 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
         &theme,
         |ui| {
             // ── Search input ──
-            if app.session_store.sessions.len() > 5 {
+            if app.context.session_store.sessions.len() > 5 {
                 let search_hint = app.t("Search sessions…");
-                let mut query = app.ui_store.history_search.clone();
+                let mut query = app.context.ui_store.history_search.clone();
                 let resp = ui.add(
-                    egui::TextEdit::singleline(&mut query)
+                    TextInput::singleline(&mut query)
                         .hint_text(search_hint)
-                        .font(theme.font(theme.text_xs))
-                        .margin(egui::vec2(4.0, 2.0)),
+                        .width(ui.available_width()),
                 );
                 if resp.changed() {
-                    app.ui_store.history_search = query;
+                    app.context.ui_store.history_search = query;
                 }
-                crate::design_system::gap(ui, crate::design_system::Space::S0);
+                design_system::gap(ui, design_system::Space::S0);
             }
 
             if sessions.is_empty() {
-                let msg = if app.ui_store.history_search.is_empty() {
+                let msg = if app.context.ui_store.history_search.is_empty() {
                     app.t("No sessions").to_string()
                 } else {
                     app.t("No matching sessions").to_string()
                 };
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(msg)
-                            .size(theme.text_xs)
-                            .color(theme.text_muted),
-                    )
-                    .selectable(false),
-                );
+                design_system::text(ui, msg, TextStyle::Small);
                 return;
             }
 
-            let active_session_id = app.session_store.active_session_id.clone();
+            let active_session_id = app.context.session_store.active_session_id.clone();
             let mut clicked_id: Option<String> = None;
             let mut close_ids: Vec<String> = Vec::new();
             let count = sessions.len();
@@ -114,11 +109,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                             is_active,
                             |ui| {
                                 if let Some(ref badge) = diff_badge {
-                                    ui.label(
-                                        egui::RichText::new(badge)
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
-                                    );
+                                    design_system::text(ui, badge, TextStyle::Small);
                                 }
                                 // Close (archive) button — visible on hover.
                                 let close_btn = crate::widgets::icon_button(

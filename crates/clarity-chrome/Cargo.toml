@@ -1,0 +1,19 @@
+[package]
+name = "clarity-chrome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Clarity chrome shell: app tabs, sidebar, global shortcuts, tray"
+
+[dependencies]
+egui = { workspace = true }
+
+clarity-core = { path = "../clarity-core" }
+clarity-ui = { path = "../clarity-ui" }
+clarity-shell = { path = "../clarity-shell" }
+
+[lints]
+workspace = true

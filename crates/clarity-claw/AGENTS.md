@@ -37,6 +37,14 @@ cargo test -p clarity-claw --bin clarity-claw --features tray
 - `src/gateway_client.rs` — Gateway WebSocket 原生客户端
 - `src/discovery.rs` — 本地/远程 Gateway 发现
 - `src/device.rs` — Ed25519 设备身份与配对 token
+- `src/acp_bridge.rs` — Kimi ACP 云桥：将云端消息转发到本地 Clarity Gateway 或 OpenClaw Gateway
+- `src/openclaw_gateway/` — Kimi Desktop OpenClaw Gateway JSON-RPC 客户端
+  - `client.rs` — 带自动重连的 WebSocket 客户端与握手
+  - `chat.rs` — `chat.send` / `chat.history` / `chat.abort`
+  - `session.rs` — 会话管理
+  - `device.rs` — 设备配对 API
+  - `kimi_file.rs` — Kimi 文件下载
+  - `protocol.rs` / `types.rs` — 帧协议与数据类型
 - `src/mesh_client.rs` / `src/mesh/` — 角色上下文离线同步（`mesh` feature）
 - `src/tray/mod.rs` — 系统托盘事件循环（`tray` feature）
 - `src/main.rs` — 托盘二进制入口

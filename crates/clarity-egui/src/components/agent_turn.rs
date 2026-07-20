@@ -12,6 +12,8 @@ use crate::ui::types::{ContentBlock, Message, ToolCallStatus};
 /// An aggregated rendering unit for a single agent ReAct turn.
 #[derive(Clone)]
 pub struct AgentTurn {
+    /// Reserved — will be wired to the turn header renderer.
+    #[allow(dead_code)]
     pub header: TurnHeader,
     pub thinking: Option<ThinkingBlock>,
     pub tool_calls: Vec<ToolCallRow>,
@@ -32,6 +34,8 @@ pub struct TurnHeader {
     /// Reserved — will be wired to token-usage events.
     #[allow(dead_code)]
     pub token_count: usize,
+    /// Reserved — will be displayed in the turn header.
+    #[allow(dead_code)]
     pub tool_count: usize,
 }
 

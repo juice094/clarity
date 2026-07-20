@@ -6,14 +6,15 @@
 //! as disabled UI elements with "Coming soon" tooltips.
 
 use crate::App;
+use crate::design_system::TextStyle;
 use std::path::Path;
 
 /// Render the files panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // --- path bar ---
-    let root = app.files_store.workspace_root.clone();
+    let root = app.context.files_store.workspace_root.clone();
     let root_label = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -38,30 +39,23 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .clicked()
             {
                 // Force a fresh read of the directory listing.
-                app.files_store.expanded_dirs.clear();
+                app.context.files_store.expanded_dirs.clear();
             }
         });
 
         // GitHub URL badge — extension point.
-        if let Some(ref repo_url) = app.files_store.repo_url.clone() {
+        if let Some(ref repo_url) = app.context.files_store.repo_url.clone() {
             crate::design_system::gap(ui, crate::design_system::Space::S1);
-            let badge = egui::Frame::new()
-                .fill(theme.accent_subtle)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::symmetric(
-                    theme.space_8 as i8,
-                    theme.space_4 as i8,
-                ))
-                .show(ui, |ui| {
-                    let short = repo_url
-                        .trim_start_matches("https://github.com/")
-                        .trim_end_matches(".git");
-                    ui.label(
-                        egui::RichText::new(short)
-                            .size(theme.text_xs)
-                            .color(theme.accent),
-                    );
-                });
+            let short = repo_url
+                .trim_start_matches("https://github.com/")
+                .trim_end_matches(".git");
+            let badge = crate::design_system::chip_frame(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(short)
+                        .size(theme.text_xs)
+                        .color(theme.accent),
+                );
+            });
             if badge.response.clicked() {
                 let _ = webbrowser::open(repo_url);
             }
@@ -69,7 +63,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     });
 
     // --- git status bar (extension point) ---
-    if let Some(ref git) = app.files_store.git_status {
+    if let Some(ref git) = app.context.files_store.git_status {
         crate::design_system::gap(ui, crate::design_system::Space::S0);
         ui.horizontal(|ui| {
             ui.label(
@@ -92,10 +86,10 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 );
             }
             if !git.untracked.is_empty() {
-                ui.label(
-                    egui::RichText::new(format!("U:{}", git.untracked.len()))
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
+                crate::design_system::text(
+                    ui,
+                    format!("U:{}", git.untracked.len()),
+                    TextStyle::Small,
                 );
             }
         });
@@ -105,13 +99,14 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     // --- dir tree ---
     let selected = app
+        .context
         .files_store
         .selected_path
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
 
-    let root_path = app.files_store.workspace_root.clone();
-    let mut secondary_click = app.files_store.selected_path.clone();
+    let root_path = app.context.files_store.workspace_root.clone();
+    let mut secondary_click = app.context.files_store.selected_path.clone();
 
     crate::ui::file_browser::render_file_tree(
         ui,
@@ -120,18 +115,18 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         0,
         selected.as_deref(),
         &mut |path: &Path| {
-            app.files_store.touch_recent(path.to_path_buf());
+            app.context.files_store.touch_recent(path.to_path_buf());
             let file_name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.to_string_lossy().into_owned());
             let content = std::fs::read_to_string(path).unwrap_or_default();
-            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+            app.context.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
                 name: file_name,
                 content,
                 path: path.to_string_lossy().into_owned(),
             });
-            app.files_store.selected_path = Some(path.to_path_buf());
+            app.context.files_store.selected_path = Some(path.to_path_buf());
         },
         &mut |path: &Path| {
             // Right-click: set as secondary click target for context menu.
@@ -142,7 +137,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
     );
 
     // --- recent files ---
-    if !app.files_store.recent_files.is_empty() {
+    if !app.context.files_store.recent_files.is_empty() {
         crate::design_system::gap(ui, crate::design_system::Space::S2);
         ui.label(
             egui::RichText::new(app.t("Recent"))
@@ -153,6 +148,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         crate::design_system::gap(ui, crate::design_system::Space::S0);
 
         let recent: Vec<_> = app
+            .context
             .files_store
             .recent_files
             .iter()
@@ -164,7 +160,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.to_string_lossy().into_owned());
-            let is_selected = app.files_store.selected_path.as_ref() == Some(&path);
+            let is_selected = app.context.files_store.selected_path.as_ref() == Some(&path);
             let row_resp = crate::widgets::interactive_row(ui, is_selected, &theme, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -175,9 +171,9 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 });
             });
             if row_resp.response.clicked() {
-                app.files_store.selected_path = Some(path.clone());
+                app.context.files_store.selected_path = Some(path.clone());
                 let content = std::fs::read_to_string(&path).unwrap_or_default();
-                app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                app.context.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
                     name,
                     content,
                     path: path.to_string_lossy().into_owned(),
@@ -211,30 +207,30 @@ fn render_context_menu(
         |ui| {
             if ui.button(app.t("Preview").to_string()).clicked() {
                 let content = std::fs::read_to_string(&path_buf).unwrap_or_default();
-                app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                app.context.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
                     name: name.to_string(),
                     content,
                     path: path_buf.to_string_lossy().into_owned(),
                 });
-                ui.close_menu();
+                ui.close();
             }
             if ui.button(app.t("Open in Editor").to_string()).clicked() {
                 let file_url = format!("file:///{}", path_buf.to_string_lossy().replace('\\', "/"));
                 let _ = webbrowser::open(&file_url);
-                ui.close_menu();
+                ui.close();
             }
             if ui.button(app.t("Add to Chat").to_string()).clicked() {
-                app.chat_store
+                app.chat_store_mut()
                     .attachments
                     .push(crate::ui::types::Attachment {
                         path: path_buf.clone(),
                         name: name.to_string(),
                     });
-                ui.close_menu();
+                ui.close();
             }
             if ui.button(app.t("Copy Path").to_string()).clicked() {
                 ui.ctx().copy_text(path_buf.to_string_lossy().into_owned());
-                ui.close_menu();
+                ui.close();
             }
             ui.separator();
             ui.add_enabled_ui(false, |ui| {
@@ -242,7 +238,7 @@ fn render_context_menu(
                     .button(app.t("Create PR with changes").to_string())
                     .clicked()
                 {
-                    ui.close_menu();
+                    ui.close();
                 }
             })
             .response

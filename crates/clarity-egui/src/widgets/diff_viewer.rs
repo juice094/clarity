@@ -9,6 +9,7 @@
 
 use crate::theme::Theme;
 use clarity_core::diff::{DiffHunk, DiffLine};
+use clarity_ui::widgets::button::Button;
 
 // ── Configuration ────────────────────────────────────────────────────────
 
@@ -165,12 +166,7 @@ pub fn render_diff_view(
                     // context. Fold the gap.
                     let fold_text =
                         format!("⋮  {} unchanged lines  ⋮", lead_ctx + last_was_context);
-                    let fold_btn = ui.button(
-                        egui::RichText::new(&fold_text)
-                            .size(theme.text_xs)
-                            .color(theme.text_dim),
-                    );
-                    if fold_btn.clicked() {
+                    if ui.add(theme.ghost_button(&fold_text)).clicked() {
                         // Unfold: toggle collapse_unchanged or expand inline.
                         folded_until = None;
                     }
@@ -270,12 +266,7 @@ pub fn render_diff_view(
             // Collapse trailing context beyond threshold.
             if config.collapse_unchanged && last_was_context > config.collapse_threshold {
                 let fold_text = format!("⋮  {} unchanged lines  ⋮", last_was_context);
-                let fold_btn = ui.button(
-                    egui::RichText::new(&fold_text)
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
-                );
-                if fold_btn.clicked() {
+                if ui.add(theme.ghost_button(&fold_text)).clicked() {
                     folded_until = None;
                 }
                 last_was_context = 0;
@@ -292,29 +283,13 @@ pub fn render_diff_view(
             crate::design_system::gap(ui, crate::design_system::Space::S2);
             ui.horizontal(|ui| {
                 if ui
-                    .add_sized(
-                        [120.0, theme.size_input],
-                        egui::Button::new(
-                            egui::RichText::new("✓ Accept")
-                                .size(theme.text_sm)
-                                .color(theme.text_strong),
-                        )
-                        .fill(theme.ok),
-                    )
+                    .add_sized([120.0, theme.size_input], Button::new("✓ Accept").primary())
                     .clicked()
                 {
                     resp.accepted = true;
                 }
                 if ui
-                    .add_sized(
-                        [120.0, theme.size_input],
-                        egui::Button::new(
-                            egui::RichText::new("✗ Reject")
-                                .size(theme.text_sm)
-                                .color(theme.text_strong),
-                        )
-                        .fill(theme.danger),
-                    )
+                    .add_sized([120.0, theme.size_input], Button::new("✗ Reject").danger())
                     .clicked()
                 {
                     resp.rejected = true;
@@ -362,7 +337,8 @@ fn render_diff_line(
         ui.add_space(bar_w + 4.0);
     }
 
-    let line_rect = egui::Frame::new()
+    let line_rect = clarity_ui::design_system::Elevation::Base
+        .frame(theme)
         .fill(bg_color)
         .inner_margin(egui::Margin::symmetric(2, 0))
         .show(ui, |ui| {

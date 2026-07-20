@@ -24,6 +24,7 @@ cargo test -p clarity-egui --bin clarity-egui
 - `src/theme.rs` — 设计系统：颜色、字号、圆角
 - `src/claw.rs` — Claw 设备发现、Bot 实例聚合、Claw 消息发送入口
 - `src/panels/settings/claw_tab.rs` — Claw 设置面板（设备发现、配对 token、连接管理）
+- `src/panels/right_ide_panel/knowledge_panel.rs` — Knowledge Field 与 OKF bundle 浏览器：顶部 vault 路径/索引 + 搜索/激活区 + 下方概念列表
 
 ## 约定
 
@@ -34,6 +35,24 @@ cargo test -p clarity-egui --bin clarity-egui
 - `render_safe()` 提供 React 式 error boundary，按面板隔离崩溃
 - Windows 平台通过 `raw-window-handle` + `windows` crate 实现圆角窗口
 - **迁移期宽限**：Sprint S5 / Pretext 三栏外壳迁移完成前，`main.rs` 顶部保留 `#![allow(dead_code)]`；迁移结束后随 `render_layout_shell()` 落地一并移除
+
+## Knowledge Field 面板集成
+
+`clarity-egui` 已将 `clarity-knowledge::KnowledgeField` 注入 Agent / AppContext，并在右 rail Knowledge 面板顶部提供可视化入口：
+
+- Vault 路径输入框 + **Index vault** 按钮调用 `KnowledgeStore::index_vault()`，把外部 Markdown vault 批量索引到 `KnowledgeField`。
+- **Watch vault** / **Stop watching** 按钮调用 `KnowledgeStore::start_watching_vault()` / `stop_watching_vault()`。启动时会先在阻塞任务上全量索引一次作为 baseline，再开始监听后续变更，并通过 `UiEvent::KnowledgeVaultEvent` 增量更新知识场。
+- 搜索框实时输入，`KnowledgeStore::set_field_query()` 保存查询词。
+- **Search** 按钮调用 `KnowledgeStore::search_field()`，通过 `KnowledgeField` 混合检索返回 `FieldResult` 列表；直接命中优先，图传播邻居填充剩余位置。
+- **Top active** 按钮调用 `KnowledgeStore::refresh_top_activated(10)`，展示当前激活度最高的文件节点（已过滤 tag 等非文件节点）。
+- 结果列表支持点击选中，选中项在下方展示标题、路径、摘要片段和匹配标签。
+- 面板下半部分保留原有 OKF bundle 浏览器，与 Knowledge Field 互不干扰。
+
+相关改动文件：
+- `src/app_state.rs` — 创建 `Arc<KnowledgeField>` 并注入 Agent
+- `src/app_context.rs` — 通过 `knowledge_store` 承载共享 `KnowledgeField`
+- `src/stores/knowledge.rs` — 新增 `field` / `field_query` / `field_results` / `selected_field_path` 及检索/选择/Top active 方法
+- `src/panels/right_ide_panel/knowledge_panel.rs` — 新增 `render_field_section()` / `render_field_results()` / `render_field_detail()`
 
 ## Sprint 43 冻结声明（2026-05-10 起生效）
 

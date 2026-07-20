@@ -21,3 +21,4 @@ cargo test -p clarity-tools --lib
 - `src/web.rs` / `src/web_browser.rs` — `WebFetchTool`, `WebSearchTool`, `WebBrowserTool`
 - `src/diff.rs` — 文本 diff 与 patch 应用
 - `src/ask_user.rs` — `AskUserTool` 用户确认交互
+- `src/knowledge.rs` — `KnowledgeSearchTool`：查询 `KnowledgeField` 并返回激活排序的结果

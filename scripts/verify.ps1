@@ -181,7 +181,7 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
 # 实验性 / 不参与默认 CI 的 crate 列表
-$SkippedCrates = @("clarity-slint")
+$SkippedCrates = @()
 
 # 确定要验证的 crates
 if ($Target -eq "--all") {

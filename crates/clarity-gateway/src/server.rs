@@ -27,6 +27,7 @@ use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::thread::ThreadManager;
 use clarity_rollout::RolloutConfig;
+use clarity_subagents::SubagentManager;
 use clarity_thread_store::{InMemoryThreadStore, LocalThreadStore, ThreadStore};
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -76,6 +77,23 @@ pub struct AppState {
     pub event_wire: Arc<clarity_wire::Wire>,
     /// Global connection metrics for the gateway.
     pub metrics: Arc<clarity_contract::ConnectionMetrics>,
+    /// Subagent orchestration manager.
+    pub subagent_manager: Arc<tokio::sync::Mutex<SubagentManager>>,
+    /// OpenClaw-compatible endpoint state (admin token + approved devices).
+    pub openclaw_state: crate::openclaw_server::OpenClawServerState,
+    /// DeepSeek app session id -> Clarity thread id mapping.
+    pub deepseek_sessions: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    /// DeepSeek app bearer token -> user id mapping.
+    pub deepseek_tokens: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    /// Admin UI bearer token. When `Some`, admin endpoints require
+    /// `Authorization: Bearer <token>`. When `None`, admin endpoints are
+    /// open (legacy behavior preserved for tests and local development).
+    pub admin_token: Option<String>,
+    /// Single-permit semaphore that serializes Agent turns across all
+    /// Gateway and OpenClaw WebSocket connections. The shared Agent can only
+    /// run one turn at a time; queuing here prevents concurrent chat.send
+    /// requests from failing with "Agent is already running a turn".
+    pub agent_turn_sem: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -185,6 +203,21 @@ impl AppState {
         let event_wire = Arc::new(clarity_wire::Wire::new());
         let metrics = Arc::new(clarity_contract::ConnectionMetrics::default());
 
+        let subagent_manager = {
+            let mut manager = SubagentManager::new(
+                agent.registry().clone(),
+                clarity_home.join("subagents"),
+                clarity_home.join("subagents").join("context"),
+            );
+            if let Some(llm) = agent.llm() {
+                manager = manager.with_llm(llm);
+            }
+            if let Some(home) = dirs::home_dir() {
+                manager = manager.with_kimiclaw_agents(home.join(".kimi_openclaw"));
+            }
+            Arc::new(tokio::sync::Mutex::new(manager))
+        };
+
         Ok(Self {
             agent: agent.clone(),
             session_store,
@@ -196,11 +229,21 @@ impl AppState {
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
             chat_sem: Arc::new(Semaphore::new(32)),
             ws_sem: Arc::new(Semaphore::new(64)),
+            agent_turn_sem: Arc::new(Semaphore::new(1)),
             oauth_service,
             device_registry: crate::handlers::claw::DeviceRegistry::new(),
             role_context_store,
             event_wire,
             metrics,
+            subagent_manager,
+            openclaw_state: crate::openclaw_server::OpenClawServerState::load_or_create(
+                &clarity_home,
+            ),
+            deepseek_sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            deepseek_tokens: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            admin_token: std::env::var("CLARITY_ADMIN_TOKEN")
+                .ok()
+                .filter(|s| !s.is_empty()),
         })
     }
 }
@@ -384,6 +427,47 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "/v1/chat/completions",
             post(handlers::chat::chat_completions),
         )
+        // DeepSeek Chat app-compatible endpoints. These emulate the private
+        // chat.deepseek.com/api/v0/* protocol for a patched DeepSeek APK.
+        .route(
+            "/api/v0/ip_to_country_code",
+            get(handlers::deepseek::ip_to_country_code),
+        )
+        .route(
+            "/api/v0/check_client_update",
+            get(handlers::deepseek::check_client_update),
+        )
+        .route(
+            "/api/v0/client/settings",
+            get(handlers::deepseek::client_settings),
+        )
+        .route("/api/v0/users/login", post(handlers::deepseek::login))
+        .route(
+            "/api/v0/users/current",
+            get(handlers::deepseek::current_user),
+        )
+        .route(
+            "/api/v0/chat_session/create",
+            post(handlers::deepseek::create_session),
+        )
+        .route(
+            "/api/v0/chat_session/fetch_page",
+            get(handlers::deepseek::fetch_sessions),
+        )
+        .route(
+            "/api/v0/chat/create_pow_challenge",
+            post(handlers::deepseek::create_pow_challenge),
+        )
+        // DeepSeek native chat completion (singular, used by the Android app).
+        .route(
+            "/api/v0/chat/completion",
+            post(handlers::deepseek::chat_completion),
+        )
+        // OpenAI-compatible alias kept for backward compatibility.
+        .route(
+            "/api/v0/chat/completions",
+            post(handlers::chat::chat_completions),
+        )
         .route(
             "/v1/tasks",
             post(handlers::tasks::create_task).get(handlers::tasks::list_tasks),
@@ -422,6 +506,18 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         )
         .route("/api/search", post(handlers::memory::search_memory))
         .route(
+            "/api/v1/subagents/run",
+            post(handlers::subagents::run_subagent),
+        )
+        .route(
+            "/api/v1/subagents/run/parallel",
+            post(handlers::subagents::run_parallel_subagents),
+        )
+        .route(
+            "/api/v1/subagents/types",
+            get(handlers::subagents::list_subagent_types),
+        )
+        .route(
             "/api/v1/claw/devices",
             get(handlers::claw::list_devices).post(handlers::claw::register_device),
         )
@@ -455,7 +551,8 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/:id/chat",
             post(handlers::thread_chat::thread_chat),
         )
-        .route("/ws", get(crate::ws::ws_handler));
+        .route("/ws", get(crate::ws::ws_handler))
+        .route("/openclaw/ws", get(crate::openclaw_server::ws_handler));
 
     #[cfg(feature = "anthropic-api")]
     let router = router.route("/v1/messages", post(handlers::anthropic::messages));
@@ -468,10 +565,15 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
 
 /// Admin 认证中间件
 ///
-/// 如果 `CLARITY_ADMIN_TOKEN` 环境变量未设置，则允许无认证访问（降级兼容）。
-/// 如果已设置，则要求请求头携带 `Authorization: Bearer <token>`。
+/// 从 `AppState` 读取 `admin_token`。未设置时允许无认证访问（降级兼容）；
+/// 已设置时要求请求头携带 `Authorization: Bearer <token>`。
 async fn admin_auth(req: Request<Body>, next: Next) -> Response {
-    let expected = std::env::var("CLARITY_ADMIN_TOKEN").unwrap_or_default();
+    let expected = req
+        .extensions()
+        .get::<Arc<AppState>>()
+        .and_then(|state| state.admin_token.as_ref())
+        .cloned()
+        .unwrap_or_default();
     if expected.is_empty() {
         return next.run(req).await;
     }

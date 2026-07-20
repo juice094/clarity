@@ -8,19 +8,20 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::App;
+use crate::design_system::{self, TextStyle};
 use crate::stores::BotStatus;
 use crate::ui::types::SessionContext;
 
 /// Render the collapsible Claw session list.
 pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
-    let theme = app.ui_store.theme.clone();
+    let theme = app.context.ui_store.theme.clone();
 
     // Extract bool so the closure can also borrow `app`.
     let mut expanded = app.view_state.expansions.nav_claw;
 
     // Map (role, session_key) -> (session_id, title) for persisted sessions.
     let mut sessions_by_key: HashMap<(String, String), (String, String)> = HashMap::new();
-    for s in &app.session_store.sessions {
+    for s in &app.context.session_store.sessions {
         if let SessionContext::Claw {
             role, session_key, ..
         } = &s.context
@@ -32,7 +33,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
     }
 
     // Session-centric device snapshot.
-    let groups = app.device_state.snapshot_by_session();
+    let groups = app.context.device_state.snapshot_by_session();
 
     // Show every (role, session_key) that has either a persisted session or a
     // discovered device.
@@ -60,11 +61,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
         &theme,
         |ui| {
             if all_keys.is_empty() {
-                ui.label(
-                    egui::RichText::new(app.t("No devices"))
-                        .size(theme.text_xs)
-                        .color(theme.text_muted),
-                );
+                design_system::text(ui, app.t("No devices"), TextStyle::Small);
                 return;
             }
 
@@ -110,8 +107,8 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                         .get(&(role.clone(), session_key.clone()))
                         .cloned()
                         .unwrap_or_default();
-                    let is_active =
-                        !session_id.is_empty() && app.session_store.active_session_id == session_id;
+                    let is_active = !session_id.is_empty()
+                        && app.context.session_store.active_session_id == session_id;
                     let label_text = if title.is_empty() {
                         session_key.clone()
                     } else {
@@ -122,13 +119,21 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = theme.space_8;
                             crate::widgets::nav_status_dot(ui, &theme, dot_color);
-                            ui.label(egui::RichText::new(&label_text).size(theme.text_sm).color(
+                            clarity_ui::design_system::text(
+                                ui,
+                                &label_text,
                                 if is_active {
-                                    theme.text_strong
+                                    clarity_ui::design_system::TextStyle::Body
                                 } else {
-                                    theme.text
+                                    clarity_ui::design_system::TextStyle {
+                                        size: clarity_ui::design_system::TextSize::Body,
+                                        modifiers: clarity_ui::design_system::TextModifiers {
+                                            strong: true,
+                                            ..Default::default()
+                                        },
+                                    }
                                 },
-                            ));
+                            );
                         });
                     });
 
@@ -186,7 +191,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                         if expanded_devices {
                             for bot in &group.devices {
                                 let bot_id = bot.id.clone();
-                                let is_bot_active = app.ui_store.active_bot_id == bot_id;
+                                let is_bot_active = app.context.ui_store.active_bot_id == bot_id;
                                 let dot_color = match bot.status {
                                     BotStatus::Online => theme.status_online,
                                     BotStatus::Offline => theme.status_offline,

@@ -169,6 +169,16 @@ impl ToolRegistry {
         let _ = self.register(OkfReadTool::new());
     }
 
+    /// Register knowledge-field tools backed by the given field.
+    ///
+    /// This is separate from `register_common_tools` because a `KnowledgeField`
+    /// must be built and populated by the caller (usually at application
+    /// startup) before it can be used.
+    pub fn register_knowledge_tools(&self, field: Arc<clarity_knowledge::KnowledgeField>) {
+        use crate::tools::KnowledgeSearchTool;
+        let _ = self.register(KnowledgeSearchTool::new(field));
+    }
+
     /// Register a tool in the registry
     ///
     /// # Arguments

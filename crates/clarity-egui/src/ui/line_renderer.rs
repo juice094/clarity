@@ -9,7 +9,7 @@ use clarity_core::ui::render_line::{
     ApprovalOption, DiffKind, LineRole, RenderLine, Span, StatusKind, ToolStatus,
 };
 
-use crate::design_system;
+use crate::design_system::{self, TextStyle};
 use crate::theme::Theme;
 
 /// Render a batch of lines with virtual-scroll culling.
@@ -106,11 +106,7 @@ fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected:
         }
         RenderLine::ToolCallArg { key, value } => {
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(format!("{}: ", key))
-                        .font(theme.font_mono(theme.text_sm))
-                        .color(theme.text_muted),
-                );
+                design_system::text(ui, format!("{}: ", key), TextStyle::Mono);
                 ui.label(
                     egui::RichText::new(value.as_str())
                         .font(theme.font_mono(theme.text_sm))
@@ -276,17 +272,18 @@ fn render_text_line(
         // Role prefix icons / bullets.
         match role {
             LineRole::UnorderedListItem(_) => {
-                ui.label(egui::RichText::new("• ").size(size).color(color));
+                clarity_ui::design_system::text_with_size_color(ui, "• ", size, color);
             }
             LineRole::OrderedListItem { num, .. } => {
-                ui.label(
-                    egui::RichText::new(format!("{}. ", num))
-                        .size(size)
-                        .color(color),
+                clarity_ui::design_system::text_with_size_color(
+                    ui,
+                    format!("{}. ", num),
+                    size,
+                    color,
                 );
             }
             LineRole::Quote => {
-                ui.label(egui::RichText::new("| ").size(size).color(theme.text_dim));
+                clarity_ui::design_system::text_with_size_color(ui, "| ", size, theme.text_dim);
             }
             _ => {}
         }
@@ -326,11 +323,7 @@ fn render_code_line(
 
     ui.horizontal(|ui| {
         if let Some(n) = line_no {
-            ui.label(
-                egui::RichText::new(format!("{:4} ", n))
-                    .font(theme.font_mono(theme.text_sm))
-                    .color(theme.text_dim),
-            );
+            design_system::text(ui, format!("{:4} ", n), TextStyle::Mono);
         }
         ui.label(
             egui::RichText::new(content)
@@ -423,17 +416,14 @@ fn render_status_line(
     );
 
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(icon)
-                .font(theme.font_icon(theme.text_sm))
-                .color(fg),
-        );
-        ui.label(egui::RichText::new(content).size(theme.text_sm).color(fg));
+        clarity_ui::design_system::icon_with_color(ui, icon, theme.text_sm, fg);
+        clarity_ui::design_system::text_with_size_color(ui, content, theme.text_sm, fg);
         if let StatusKind::Progress { current, total } = kind {
-            ui.label(
-                egui::RichText::new(format!(" {}/{}", current, total))
-                    .size(theme.text_sm)
-                    .color(fg),
+            clarity_ui::design_system::text_with_size_color(
+                ui,
+                format!(" {}/{}", current, total),
+                theme.text_sm,
+                fg,
             );
         }
     });
