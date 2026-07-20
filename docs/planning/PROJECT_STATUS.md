@@ -294,13 +294,13 @@ tags: [status]
 
 ---
 
-## 1. 核心指标（2026-07-06 基线）
+## 1. 核心指标（2026-07-20 实测）
 
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace --lib --bins` | ✅ 零错误 |
-| **单元测试** | **2037 passed, 0 failed, 13 ignored**（`cargo test --workspace --lib`） | ✅ 全绿 |
-| **Binary 测试** | **339 passed, 0 failed, 2 ignored**（`cargo test --workspace --bins`） | ✅ 全绿 |
+| **单元测试** | **2092 passed, 0 failed, 13 ignored**（`cargo test --workspace --lib`） | ✅ 全绿 |
+| **Binary 测试** | **345 passed, 0 failed, 2 ignored**（`cargo test --workspace --bins`） | ✅ 全绿 |
 | **集成测试** | **37 passed, 0 failed**（`cargo test -p clarity-integration-tests --lib`） | ✅ 全绿 |
 | **Doc Tests** | **41 passed, 0 failed, 12 ignored**（`cargo test --workspace --doc`） | ✅ 全绿 |
 | **Rustdoc** | `cargo doc --workspace --no-deps` | ✅ 无警告 |
