@@ -16,6 +16,11 @@ tags: [research, modules, roadmap, architecture, worktree]
 > - 参考路线：`C:/Users/22414/dev/developer-roadmap`（roadmap.sh）
 > - 生成脚本：`scripts/arch_health.py`、`scripts/test_runner.py`
 > - 实机验证：2026-06-26
+>
+> **时效注（2026-07-20）**：本文事实层为 2026-06-26 快照，以下已过期：
+> - crate 基线「22 活跃 + 1 归档」已失效：现为 24 个 clarity crate + 6 个 syncthing crate + 1 集成测试 crate；`clarity-slint` 也已归档至 `.archive/`。
+> - 文中列出的 `clarity-openclaw` 已删除（并入 `clarity-claw`）；缺少后增的 `clarity-knowledge` / `clarity-ui` / `clarity-shell` / `clarity-apps` / `clarity-chrome` / `clarity-anthropic-proxy`。
+> - 最新 crate 拓扑以 `AGENTS.md` §3 与 `docs/ARCHITECTURE.md` 为准。方法论对照部分仍有效。
 
 ---
 

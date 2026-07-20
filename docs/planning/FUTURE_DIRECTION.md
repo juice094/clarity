@@ -16,6 +16,13 @@ tags: [strategy, planning]
 > **主权防御**：学习 Kimi 生态（娘家/导师），不入赘。模型/数据/协议/人格四层主权不可让渡。
 >
 > **文档性质**：长期技术指导，回答"向何处去"的方向性问题。每个 Phase 需经宿确认后进入执行。
+>
+> **时效注（2026-07-20）**：本文基线为 v0.3.0 时代，部分事实已过期，阅读时请注意：
+> - Phase A1（WebSocket MCP 传输）已完成（`clarity-mcp::enhanced::websocket`）；Phase A2 已完成。
+> - Phase D 的 syncthing 融合已以「workspace submodule + 可靠性基础设施（RetryConfig / Supervisor / NetMonitor / 版本向量等）」形态落地，与文中设想路径不同。
+> - 文中 Tauri 多窗口（Phase C5）已作废：`clarity-tauri` 已归档至 `.archive/`；多窗口/Hub-Worker（Phase C）仍未启动。
+> - 文中所有 `--exclude clarity-slint` 与 crate 数量基线已失效（slint 已归档，workspace 现为 24 clarity + 6 syncthing crate）。
+> - 差距矩阵中「WebSocket MCP 传输」一行已不再适用。
 
 ---
 

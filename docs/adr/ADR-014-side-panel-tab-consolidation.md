@@ -202,7 +202,7 @@ This ADR is satisfied when, after P1.5.4 completes:
 - `docs/architecture/pretext-ui-theory.md` §1 (information vs decoration)
 - `docs/adr/ADR-011-workspace-architecture.md` §Decision 4 (D-form-factor target)
 - `docs/adr/ADR-012-renderline-enum-design.md` (parent data-model thesis)
-- `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` §S3 P1.5.4
+- `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` §S3 P1.5.4
 - Commit `682b303c` (P1.5.1 SidePanel/ModalType definitions being revised)
 - `crates/clarity-egui/src/main.rs:805-854` (responsive collapse logic to simplify)
 - `crates/clarity-egui/src/panels/skill.rs:1-80` (modal-behavior evidence for Skill)

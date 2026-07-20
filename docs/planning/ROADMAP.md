@@ -1,14 +1,14 @@
 ---
 title: Clarity Roadmap
 category: Roadmap
-date: 2026-06-25
+date: 2026-07-20
 tags: [roadmap, planning]
 ---
 
 # Clarity Roadmap
 
 > 策略：本地优先 + 零依赖 + 开源  
-> 当前：v0.3.0（已完成）→ 目标：v0.3.1+（发行验证 + 集群语义扩展）
+> 当前：v0.4.0（已发布）→ 目标：v0.5.0（移动端产品化 + GUI 分层收尾 + 集群语义）
 
 ---
 
@@ -39,6 +39,7 @@ tags: [roadmap, planning]
 | 零依赖发行 | 单二进制 + 嵌入式模型（用户无需安装 Rust/Ollama/Python） | **P0** |
 | 三栏工作台 UI | ✅ 左侧导航树 / 顶部 Bot Bar + Context Ribbon / 右侧 IDE Rail (Console/Files/Share/Templates) | **P0** |
 | 集群语义验证 | Hub-Worker 调度器 + Wire 消息扩展 + 多窗口协作 | **P1** |
+| 本地知识交互面 | ✅ `clarity-knowledge` + Knowledge Field 全链路（混合检索 / 图谱激活 / vault 索引与监听 / egui 面板 / `knowledge_search` 工具） | **P1** |
 | Claw 持续化存储 | 跨会话 Agent 状态快照、子 Agent 上下文持久化 | **P1** |
 | 协议草案 | 开源 Agent 通信协议（供其他 Runtime 参考实现） | **P2** |
 | 企业/团队版 | Multi-user session 支持 | **P3** |
@@ -54,6 +55,7 @@ tags: [roadmap, planning]
 - ✅ Pretext 三栏布局 Phase A/B/C3 落地（左 icon rail + 中主舞台 + 右抽屉 rail；header 全宽 + 内容居中；默认窗口 1280×800）
 - ✅ 人机协作图片标注器 `assets/ui_annotator.html` + schema + 渲染脚本
 - ✅ 红绿蓝黄布局诊断覆盖层 `debug_overlay.rs`（快捷键 `Ctrl+Shift+L`）
+- ✅ 本地知识交互面：Knowledge Field 全链路交付（`clarity-knowledge` + 对话自动激活 + vault 索引/监听 + egui Knowledge 面板）
 - ⏸️ 嵌入式模型自动下载（首次启动引导）
 
 ### 风险对冲
@@ -100,6 +102,28 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | AppState 死字段清理 | ✅ | 移除 `initialized`、`active_connections`、外层 `RwLock`、重复 `approval_runtime` |
 | **Agent 空响应修复** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行（详见 `docs/planning/plans/2026-05-02-agent-empty-response-followup.md`） |
 
+### Phase 2.5：本地知识交互面（已完成 ✅，2026-07 深化中）
+
+目标：让 Clarity 直接消费本地文件系统作为知识库，为 AI 入口提供第一公民级知识查询与操作能力。
+
+> 原则：不依赖 Syncthing/Obsidian；先让 Clarity 自身成为可用知识入口，再评估外部兼容。
+
+#### Phase 2.5 工作项
+
+| 工作项 | 状态 | 说明 |
+|--------|------|------|
+| `clarity-knowledge` crate | ✅ 已完成 | `KnowledgeIndex` / `MarkdownExtractor` / `FileWatcher` / `KnowledgeGraph` / `HybridRetriever` / `KnowledgeField` |
+| Markdown + Wikilink + Frontmatter 解析 | ✅ 已完成 | `pulldown-cmark` + `serde_yaml` + regex，支持 heading/alias/embed/block-id |
+| 文件系统监听与增量索引 | ✅ 已完成 | `KnowledgeStore::start_watching_vault` + `KnowledgeField::apply_watcher_event`，vault 变更增量同步 |
+| 知识图谱查询 | ✅ 已完成 | `KnowledgeGraph` 节点激活 / 沿边传播 / 横向抑制 / 时间衰减 / 休眠 |
+| 混合检索（BM25 + 向量 + 图） | ✅ 已完成 | `HybridRetriever`；图传播激活作为第三路召回 |
+| 知识 Action 工具组 | ✅ 部分完成 | `knowledge_search` 工具已落地（`clarity-tools`）；`knowledge_create` / `knowledge_link` 未启动 |
+| egui 知识面板 | ✅ 已完成 | 右 rail Knowledge 面板：搜索查询、Top active 节点、详情、vault 索引/监听入口 |
+| 对话自动激活 | ✅ 已完成 | `clarity-core` 对话 turn 自动提取 wikilink / `.md` 链接注入知识场；`MemoryCompiler` 产物自动索引 |
+| 外部 vault 批量索引 | ✅ 已完成 | `KnowledgeField::index_directory` / `Agent::index_vault`（Obsidian vault 闭环） |
+| TUI / Gateway / Headless 接入 | ⏸️ 未启动 | 三入口统一消费 `clarity-knowledge` API |
+| 本地 embedding 向量召回 | 🔄 评估中 | fastembed + sqlite-vec PoC（见 PROJECT_STATUS §0 增量） |
+
 ### Phase 3：集群语义验证 + Claw 持续化（4-6 周）
 
 目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器；实现跨会话状态快照与多角色认知协同。
@@ -116,7 +140,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | Gateway HTTP API | ✅ 成熟 | Axum + session store + REST handlers |
 | Local LLM KV Cache | ✅ 已交付 | Sprint 28：`LocalGgufProvider` LCP-based 跨 turn KV 复用 + static prompt hash 失效机制 |
 | 跨会话状态快照 | 🔄 后端就绪 | `subagents::builder` + `AgentPool` 概念存在；缺 egui 独立面板与持久化格式 |
-| Claw 联邦运行时 | 🔄 空壳 | `clarity-claw` system-tray 占位；runtime 逻辑待填充 |
+| Claw 联邦运行时 | 🔄 骨架已落地 | `clarity-claw` system-tray 可用；`mesh` 模块（CRDT merger + gateway/syncthing 双 transport）已实现，E2EE 延至 Phase 3.5（见 `claw-mesh-phase3-design.md`） |
 | IPC 传输层 | ❌ 未启动 | TCP 回环 / UDS / Named Pipe，规划中 |
 | 多窗口 Agent 隔离 | ❌ 未启动 | `AppState.agent` → `AgentPool` 重构未开始 |
 
@@ -124,10 +148,10 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
-| WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
+| WebSocket MCP 传输 | ✅ 已完成 | `clarity-mcp::enhanced::websocket` |
 | Gateway ↔ BackgroundTaskManager 集成 | ✅ 已完成 | `GatewayTaskClient` + `GatewayManager` — egui 自动启动 Gateway，BTM ops 全走 `/v1/tasks` REST API，本地 store fallback |
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
-| 会话层统一 / Thread 生命周期 | 🔄 进行中 | 新增 `clarity-thread-store`、`clarity-rollout`：统一 Thread 资源模型与 JSONL rollout 真相源（API 设计受 Codex 启发） |
+| 会话层统一 / Thread 生命周期 | ✅ 已完成 | `clarity-thread-store` + `clarity-rollout`：统一 Thread 资源模型与 JSONL rollout 真相源（API 设计受 Codex 启发） |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
 | 子 Agent UI 接入（IS-1） | 🔄 后端就绪，前端待接入 | `subagents::builder` 已具备 spawn 能力，缺 egui 独立面板 |
 | Token 权限校验前端（IS-3） | 🔄 后端就绪，前端待接入 | `verify_sandbox_escape` 已存在，缺 UI 层的权限可视化 |
@@ -161,18 +185,20 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 | Mobile FFI 核心 | 🔄 进行中 | `clarity-mobile-core` 已落地；完整 Android/iOS UI 仍在路线图 |
 | `clarity-tauri` | 🗃️ 已归档 | 被 workspace 排除，禁止修改 |
 | Pretext 排版引擎（重型 TeX 移植） | ❌ 已否决 | 重型移植工程，不入主 repo 路线图；可作为个人探索项目 |
-| Pretext UI 设计哲学（轻型采纳） | ✅ 已采纳 | 见 [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)：S1+S2 已完成 Phase 0.5+1（图标即字符、Chrome StripBuilder），不重做布局引擎 |
+| Pretext UI 设计哲学（轻型采纳） | ✅ 已采纳 | 见 [`archive/plans/2026-05-12-pretext-ui-evolution.md`](archive/plans/2026-05-12-pretext-ui-evolution.md)：S1+S2 已完成 Phase 0.5+1（图标即字符、Chrome StripBuilder），不重做布局引擎 |
 
 ---
 
 ## 质量标准
 
 ```bash
-cargo test --workspace --lib --exclude clarity-slint      # 全绿
-cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings  # 零 warning
+cargo test --workspace --lib      # 全绿
+cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零 warning
 cargo fmt --all -- --check        # 格式检查通过
 cargo audit --deny unsound --deny yanked  # 无高危漏洞
 ```
+
+> 注：`clarity-slint` / `clarity-tauri` 已移入 `.archive/`，不再是 workspace 成员，所有命令不再需要 `--exclude`。
 
 ---
 
@@ -181,17 +207,17 @@ cargo audit --deny unsound --deny yanked  # 无高危漏洞
 ```
 2026-04 ── v0.3.0      本地优先标杆（已发布）— Local LLM + 离线 fallback + Desktop GUI + 健康维护基线
     │
-2026-05 ── v0.3.1+      质量硬化 + egui 方向验证 + 零依赖发行 — 单二进制打包 + 嵌入式模型 + unwrap 清理
+2026-05 ── v0.3.1~0.3.4 质量硬化 + egui 方向验证 + 零依赖发行 — 单二进制打包 + Pretext 三栏布局 + 设计系统
     │
-2026-06 ── v0.4.0-beta   性能优化 + 快捷键 + 搜索增强 + 审批系统增强
+2026-06 ── v0.4.0-rc    GUI 新分层（ui/shell/apps/chrome）+ Thread/Rollout 持久化 + Provider/Secret 体系
     │
-2026-07 ── v0.5.0-beta   集群语义验证（Hub-Worker + 多窗口 + IPC）
+2026-07 ── v0.4.0       Knowledge Field 全链路 + Claw 协议统一 + Android E2E 全绿 + syncthing 可靠性融合（当前）
     │
-2026-08 ── v0.6.0-rc     Sandbox + Plugin SDK
+2026-Q3 ── v0.5.0       移动端产品化 + GUI 分层迁移收尾（egui 退化为纯 host）+ Claude Code 能力对齐
     │
-2026-09 ── v0.7.0-rc     Bridge + Voice + Canvas
+2026-Q4 ── v0.6.0       集群语义验证（Hub-Worker + Claw Mesh E2EE）+ Sandbox + Plugin SDK
     │
-2026-10 ── v1.0.0        稳定版发布
+   后续 ── v1.0.0        稳定版发布（Bridge / Voice / Canvas 视社区反馈排期）
 ```
 
 ---

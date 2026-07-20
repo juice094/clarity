@@ -7,13 +7,207 @@ tags: [status]
 
 # Clarity 项目现状报告
 
-> 版本：v0.3.4-rc | 日期：2026-06-28 | 基于实机测试与代码审计
-> 关联文档：`ENGINEERING_PLAN.md` · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)
+> 版本：v0.4.0 | 日期：2026-07-07 | 基于实机测试与代码审计
+> 关联文档：`ENGINEERING_PLAN.md` · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`archive/plans/2026-05-12-pretext-ui-evolution.md`](archive/plans/2026-05-12-pretext-ui-evolution.md)
 > Pretext UI 演进：S1 (Phase 0.5) + S2 (Phase 1) 已完成 — 详见 `plans/2026-05-12-S1-session-archive.md` · `plans/2026-05-12-S2-session-archive.md`
 
 ---
 
-## 0. 最新状态（2026-06-13）
+## 0. 最新状态（2026-07-07）— Android 端到端验收全绿
+
+**目标**：交付基于 Clarity 后端、支持 DeepSeek 账密登录与 Claw 会话的 Android 移动应用，功能等效并超越 DeepSeek 原生体验。
+
+**本次完成**：
+
+- **DeepSeek 设备登录**：Android 端 ProviderSetupScreen 支持 `ProviderType.DEEPSEEK_DEVICE`，通过手机号 + 密码完成 PoW 登录，登录成功后缓存 `device_token`。
+- **本地多轮对话**：支持流式 `ContentPart` / `ReasoningPart`、DeepSeek 搜索/深度思考切换、Markdown / 代码块渲染、消息长按复制/重发/删除。
+- **Claw 模式**：ThreadList 顶部固定 Claw 入口，连接 Gateway WebSocket（`ws://10.0.2.2:18790/ws`），本地 JSON 持久化 Claw 会话并可在历史列表恢复。
+- **端到端测试**：`mobile/android/app/src/androidTest/.../EndToEndFlowTest` 14 项全部通过。
+
+**关键修复**：
+
+1. `crates/clarity-contract/src/reliable_provider.rs`：实现 `reset_conversation_context()` 透传，解决 `deepseek-device` provider 会话状态无法重置导致的空回复。
+2. `crates/clarity-gateway/src/main.rs`：Gateway `deepseek-device` 模式精简为 `ThinkTool` + `AskUserTool`，避免 `WebSearchTool` / `WebFetchTool` 长时间占用全局单 turn Agent 信号量导致其他 WebSocket 会话超时。
+3. `crates/clarity-knowledge/src/field.rs`：修正 `WatcherEvent` 导入路径，消除 Clippy 警告。
+
+**验证结果**：
+
+- `cargo clippy -p clarity-contract -p clarity-gateway -p clarity-knowledge --lib --bins --tests -- -D warnings` ✅
+- `cargo fmt --all -- --check` ✅
+- `./gradlew connectedDebugAndroidTest`：**14/14 通过，0 失败，0 跳过**
+- 验收报告：`target/acceptance-report.md`
+
+**待办**：真机冷启动 < 2s / 首 token < 3s 的量化基准；真机登录稳定性与反爬验证；Claw 模式下搜索/深度思考的端到端复验。
+
+---
+
+## 0. 本次增量（2026-07-07）— Knowledge Field 真实 vault QA 与搜索召回修复
+
+**目标**：在真实 Obsidian vault 上验证 `clarity-knowledge` 的外部 vault 索引与搜索召回链路，修复导致 `Map` / `map` 等确认存在内容召回为 0 的问题。
+
+**本次完成**：
+
+- **真实 vault 手动 QA**：使用 `C:\Users\22414\Documents\Obsidian Vault\00-Hub`（32 个 `.md`）与 `10-Courses`（145 个 `.md`）两个目录，177/177 文件索引成功。
+- **召回修复**：
+  - `KnowledgeField::top_activated(k)` 先过滤 file 节点再取 top k，避免 tag 节点占满前 k 位后过滤为空。
+  - `KnowledgeField::search` 每次查询前重置图激活状态，防止前序查询污染当前结果。
+  - 搜索结果中直接命中按 retriever score 优先返回，图传播邻居仅填充剩余位置。
+- **多字节文本修复**：`field.rs` 与 `retrieval.rs` 的 `make_snippet` 改用字符索引切片，消除中文内容 panic。
+- **Frontmatter 容错**：YAML 解析失败时跳过 frontmatter、继续索引正文，避免整文件被丢弃。
+- **中文/CJK 检索支持**：`clarity-memory` 的 BM25 / TF-IDF tokenizer 支持单个 CJK 汉字，中文正文可被召回。
+- **诊断工具**：新增 `crates/clarity-knowledge/examples/vault_index_qa.rs`，用于真实 vault 索引性能与召回检查。
+
+**关键修复文件**：
+
+1. `crates/clarity-knowledge/src/field.rs`：`top_activated` / `search` 排名逻辑、激活状态重置、snippet 字符边界。
+2. `crates/clarity-knowledge/src/graph.rs`：新增 `reset_activation()`。
+3. `crates/clarity-knowledge/src/extract.rs`：frontmatter 解析失败时降级为仅索引正文。
+4. `crates/clarity-knowledge/src/retrieval.rs`：snippet 字符边界修复。
+5. `crates/clarity-memory/src/bm25.rs` / `embedding.rs`：tokenizer 支持 CJK。
+
+**验证结果**：
+
+- `cargo test -p clarity-memory -p clarity-knowledge --lib` ✅（131 passed）
+- `cargo test -p clarity-egui --bin clarity-egui -- stores::knowledge` ✅（9 passed）
+- `cargo clippy -p clarity-knowledge -p clarity-memory -p clarity-egui --lib --bins --tests -- -D warnings` ✅
+- `cargo fmt --all` ✅
+- 真实 vault 召回验证：`Map` / `map` 首位返回 `第2章 - MapReduce与Spark.md`；`obsidian` 首位返回 `Obsidian-截图与图片插入指南.md`。
+
+**待办**：在更大规模 vault（>1000 文件）上评估索引与搜索性能；考虑引入jieba等中文分词器提升语义相关性；优化watcher批量事件处理。
+
+---
+
+## 0. 本次增量（2026-07-07 晚）— 大规模 Vault 性能摸底
+
+**目标**：使用合成 vault 验证 `clarity-knowledge` 在 1000/5000/10000 文件规模下的索引与搜索延迟，为下一步中文分词升级与 watcher 优化提供量化依据。
+
+**环境**：Windows 11 / AMD Ryzen（release 模式，单盘 SSD）。
+
+**方法**：`crates/clarity-knowledge/examples/vault_benchmark.rs` 生成合成 Markdown vault，调用 `KnowledgeField::index_directory` 全量索引，然后对 6 个典型查询分别测量冷搜（首次触发 cosine index 构建）与温搜（缓存后）延迟。
+
+| 规模 | 生成耗时 | 索引耗时 | 索引吞吐 | 冷搜（Rust） | 温搜（Rust） | 冷搜（map） | 温搜（map） |
+|------|----------|----------|----------|--------------|--------------|-------------|-------------|
+| 1000 文件 | 264 ms | 104 ms | 9527 files/s | 42 ms | 14 ms | 15 ms | 14 ms |
+| 5000 文件 | 1.18 s | 503 ms | 9940 files/s | 221 ms | 84 ms | 74 ms | 81 ms |
+| 10000 文件 | 2.72 s | 1.25 s | 7937 files/s | 570 ms | 213 ms | 200 ms | 220 ms |
+
+**其他查询参考（10000 文件）**：`大数据` 冷/温 268/295 ms，`笔记` 200/195 ms，`file:note` 49/54 ms，`tag:course` 56/51 ms。
+
+**结论**：
+
+- 索引吞吐接近线性，10000 文件仍可 1.3s 内完成，表现良好。
+- 冷搜比温搜慢 2–3 倍，主要因为首次查询需要构建 `CosineIndex`（本地 TF-IDF + 向量表）。后续同 session 查询可复用缓存。
+- 过滤查询（`file:` / `tag:`）始终保持在 50 ms 左右，远快于全文语义搜索。
+- 当前中文按单字切分，语义相关性仍有提升空间；引入 jieba 等分词器预计能改善长尾查询质量，但可能小幅增加索引耗时。
+
+**待办**：
+
+1. ✅ 接入 `jieba-rs` 做中文分词（作为 `clarity-memory` 的 `jieba` feature）。
+2. ✅ 优化 watcher 批量事件处理，避免大量文件同时变更时重复构建索引。
+3. 评估 bidirectional sync（Obsidian vault ↔ Clarity 记忆编译）的可行性与冲突策略。
+4. 参考架构：调研 `basidiocarp` 生态对 Clarity 记忆/协调分层的设计启示，详见 [`docs/notes/2026-07-07-basidiocarp-reference.md`](../notes/2026-07-07-basidiocarp-reference.md)。
+
+---
+
+## 0. 本次增量（2026-07-07 收尾）— Knowledge Field 优化批次
+
+**目标**：基于 `basidiocarp` 参考与 benchmark 结论，对 `clarity-knowledge` 和 `clarity-memory` 进行第一批可落地优化。
+
+**本次完成**：
+
+- **KnowledgeGraph 节点 importance/weight**：
+  - 新增 `Importance` 枚举（Critical / High / Medium / Low / Ephemeral），每个级别带 `weight()` 和 `decay_multiplier()`。
+  - `Node` 新增 `importance` 字段；`KnowledgeGraph` 提供 `upsert_node_with_importance` 和 `set_importance`。
+  - `top_activated` 按 `activation * weight` 排序；`spreading_activation` 按源节点 importance 加权传播；`decay_activation` 按 importance 倍数衰减（Critical 不衰减）。
+  - `KnowledgeField::index_document` 默认把 file 节点设为 `High`、tag 节点设为 `Low`。
+
+- **watcher 批量事件优化**：
+  - `KnowledgeField` 新增 `apply_watcher_events`，对同一 batch 内同一文件的事件去重，先删后建，避免反复索引。
+  - `clarity-egui` 的 vault watcher 改为 100 ms debounce，批量发送 `UiEvent::KnowledgeVaultEvents`。
+  - `UiEvent::KnowledgeVaultEvent` 升级为 `KnowledgeVaultEvents(Vec<WatcherEvent>)`。
+
+- **中文分词升级**：
+  - `clarity-memory` 新增可选 `jieba` feature，依赖 `jieba-rs`。
+  - 新增 `tokenizer` 模块统一 BM25 与 TF-IDF 切词；启用 `jieba` 时用 jieba 分中文，未启用时保持原有单字 CJK 回退。
+  - `bm25.rs` 与 `embedding.rs` 的本地 tokenizer 删除，统一调用 `crate::tokenizer::tokenize`。
+
+- **Clippy 修复**：
+  - `clarity-contract/src/transport.rs` 与 `clarity-claw/src/transports/manager.rs` 的 `request_pairing` 方法添加 `#[allow(clippy::too_many_arguments)]`，消除 Rust 1.96 下的默认 warning。
+
+- **Recall effectiveness 反馈闭环**：
+  - 新增 `clarity-knowledge/src/recall_store.rs`：`RecallStore` 用 SQLite 记录 `recall_events` / `outcome_signals`，支持按 session + 时间窗口计算 memory effectiveness。
+  - `KnowledgeField` 支持 `with_recall_store`，`search()` 自动记录 recall 事件，`record_outcome_signal()` 记录会话结果，`apply_recall_feedback()` 根据 effectiveness 调整节点 importance。
+  - `SearchQuery` 新增 `session_id` 与 `with_session_id`。
+
+- **Obsidian 单向导出 PoC**：
+  - 新增 `clarity-knowledge/src/export/obsidian.rs`：`ObsidianExporter` 把 `KnowledgeField` 投影为只读 Obsidian vault。
+  - 文件节点导出为 Markdown（合并 `clarity_id` / `type: file` / `source` frontmatter），tag 节点导出为 `tags/<tag>.md`。
+  - 新增 example：`obsidian_export`。
+
+- **本地 embedding 方案预研**：
+  - 笔记 `docs/notes/2026-07-07-local-embedding-presearch.md`：对比 fastembed+sqlite-vec / candle / ort / rust-bert，推荐 `fastembed-rs` + `sqlite-vec` + `BAAI/bge-small-zh-v1.5` 作为首选 PoC。
+
+- **Bidirectional sync 评估**：
+  - 笔记 `docs/notes/2026-07-07-bidirectional-sync-evaluation.md`：推荐默认 **Clarity → Obsidian 单向导出**，Obsidian 可作为只读投影或单向索引来源；双向同步仅作为可选高级场景，需稳定 `clarity_id` 与冲突规则。
+
+**验证结果**：
+
+- `cargo test -p clarity-memory --lib` ✅（107 passed）
+- `cargo test -p clarity-memory --lib --features jieba` ✅（109 passed）
+- `cargo test -p clarity-knowledge --lib` ✅（38 passed）
+- `cargo test -p clarity-egui --bin clarity-egui -- knowledge` ✅（9 passed）
+- `cargo clippy -p clarity-contract -p clarity-memory -p clarity-knowledge -p clarity-egui --lib --bins --tests --examples -- -D warnings` ✅
+- `cargo fmt --all -- --check` ✅
+- `cargo check --workspace --lib --bins` ✅
+
+**待办**：
+
+1. 本地 embedding PoC：在 `clarity-memory` 中接入 `fastembed-rs` + `sqlite-vec`，对比 TF-IDF cosine 的召回质量。
+2. 长程：把 recall-effectiveness 闭环接入 `clarity-core` 的 turn 结束路径，自动记录 `SessionSuccess` / `Correction` 等信号。
+3. 长程：考虑把 `KnowledgeField` 的 recall store 持久化路径暴露到 egui UI 与 Gateway。
+4. 长程：评估是否把 Obsidian exporter 接入 scheduled export / memory compiler 输出。
+
+---
+
+## 0. 上一状态（2026-07-06）
+
+**Sprint S6-E / P6 收尾 — 前端架构审计与 5 项改造落地**：基于 `docs/planning/architecture-audit-2026-07-06.md` 对 egui/前端栈进行结构化审计，并落地优先级最高的改造。
+
+- **性能**：虚拟列表在 Idle 时缓存总高度，避免最后一 agent turn 每帧重建；路由去重防止导航栈无限增长。
+- **状态一致性**：右 rail dock 与 router 同步硬化，维持 `right_rail_router` 单源真相；语言设置持久化到 `GuiSettings.language`。
+- **交互**：左侧「Plugins」导航改为打开统一 plugin picker 并聚焦输入框，与 composer `/` 行为一致。
+- **文档**：CHANGELOG、PROJECT_STATUS 与 `docs/planning/optimization-plan-2026-07-06.md` 同步更新。
+- **验证**：`cargo fmt --all -- --check`、`cargo test --workspace --lib --bins --doc`、`cargo test -p clarity-integration-tests --lib`、`cargo clippy --workspace --lib --bins --tests -- -D warnings` 全部通过。
+
+## 0. 本次增量（2026-07-06 晚）
+
+**Gateway `/ws` 端到端回路修复**：
+
+- **问题**：Android 端通过 Gateway WebSocket 发送消息后服务端无回复，60s 后超时；HTTP `/v1/chat/completions` 正常。
+- **根因**：`GatewayWebSocketTransport` 直接调用 `agent.run_streaming()`，其中 `build_messages_with_cache()` 触发记忆检索，在 Gateway 上下文挂起；同时 `TransportEvent::Done` 未映射到 `WsResponse`，客户端收不到 turn 结束标记。
+- **修复**：
+  - `crates/clarity-gateway/src/transports/gateway_ws.rs` 改为 `AgentController` + `ConversationChatDriver`，与 HTTP 路径共用同一套流式 controller。
+  - `crates/clarity-gateway/src/transports/common.rs` 新增 `session_messages_to_contract_messages()`。
+  - `crates/clarity-gateway/src/ws.rs` 新增 `WsResponse::Done`，事件循环会把 `Done` 发送给客户端后再退出。
+- **验证**：
+  - `scripts/test_gateway_ws_chat.py` 成功收到 welcome、流式 chat 分片、`{"type":"done"}`。
+  - `cargo fmt`、`cargo clippy --workspace --lib --bins --tests -- -D warnings`、`cargo test -p clarity-gateway --lib --bins` 全绿。
+- **待办**：Android 模拟器 UI 输入层未响应（非 Gateway 协议问题），需手动在真机/模拟器上复验聊天界面。
+
+## 0. 本次增量（2026-07-06 收尾）— Knowledge Field 三阶段落地
+
+**目标**：将 `clarity-knowledge` 的动态知识场能力端到端接入 Clarity 内核与 egui 桌面前端，使对话、记忆编译与 UI 检索共享同一套激活图。
+
+- **Phase 1 — 激活动力学**：`clarity-knowledge` 的 `KnowledgeGraph` 支持节点激活、沿边传播、横向抑制、时间衰减与休眠；`KnowledgeField` 封装 `HybridRetriever` + 图传播，提供 `search()` / `top_activated()` / `inject_activation()`。
+- **Phase 2 — 内核集成**：`clarity-core` 在每次对话 turn 中通过 `update_on_turn()` 提取 wikilink / `.md` 链接并注入知识场；`MemoryCompiler` 编译后的 `.md` 记忆产物通过 `index_compiled_memories()` 自动索引到知识场；`clarity-tools` 新增 `knowledge_search` 工具供 Agent 主动查询。
+- **Phase 3 — UI 接入**：`clarity-egui` 创建 `Arc<KnowledgeField>` 并注入 `Agent`；`KnowledgeStore` 承载共享 field；右 rail Knowledge 面板顶部新增 Knowledge Field 区域，支持搜索框检索、「Search」/「Top active」按钮、结果列表与选中详情；下半部分保留 OKF bundle 浏览器。
+- **Phase 4a — 外部 vault 索引**：新增 `KnowledgeField::index_directory` 扫描目录下 `.md` 文件并索引到知识场；`Agent::index_vault` 提供便捷入口；`clarity-egui` Knowledge 面板新增 vault 路径输入框与 **Index vault** 按钮，实现 **外部 Markdown vault → KnowledgeField → 会话引用** 的最小闭环。
+- **Phase 4b — 增量 vault 同步**：新增 `KnowledgeField::apply_watcher_event` 处理 Created/Modified/Removed/Renamed 事件；`KnowledgeStore::start_watching_vault` / `stop_watching_vault` 后台启动/停止 `NotifyWatcher`。`start_watching_vault` 启动时会先在阻塞任务上全量索引一次作为 baseline，再监听后续变更并通过 `UiEvent::KnowledgeVaultEvent` 增量应用到知识场。
+- **缺陷修复**：`KnowledgeGraph::add_edge` 不再覆盖已有节点 kind，避免 tag 节点被错误返回为 file 节点。
+- **验证**：`cargo fmt --all -- --check`、`cargo clippy --workspace --lib --bins --tests -- -D warnings`、`cargo test --workspace --lib --bins -- --test-threads=2`、`cargo test --workspace --doc -- --test-threads=2`、`cargo test -p clarity-integration-tests --lib` 全部通过。
+- **待办**：在真实 vault 上运行手动 QA，确认中文文件名、空 frontmatter、链接重命名后激活更新等边界行为；评估 watcher 性能与内存占用；考虑 watcher 启动时先做一次全量索引。
+
+## 0. 上一状态（2026-06-13）
 
 **Sprint S5 — egui 模块整理与健康维护已阶段性收尾**：为后续 Pretext 单页面/三栏布局整合完成架构准备。本次未删除任何现有功能，全部面板仍通过 `App::render_layout_shell()` 统一编排。
 
@@ -100,44 +294,21 @@ tags: [status]
 
 ---
 
-## 1. 核心指标（实测数据）
+## 1. 核心指标（2026-07-06 基线）
 
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
-| **编译检查** | `cargo check --workspace --lib --bins --exclude clarity-slint` | ✅ 零错误 |
-| **单元测试** | **1554 passed, 0 failed, 0 ignored**（`--workspace --lib --exclude clarity-slint`） | ✅ 全绿 |
-| **Binary 测试** | **275 passed, 0 failed, 2 ignored**（`--workspace --bins --exclude clarity-slint`） | ✅ 全绿 |
-| **集成测试** | **26 passed, 0 failed**（`cargo test -p clarity-integration-tests --lib`） | ✅ 全绿 |
-| **Doc Tests** | **34 passed, 0 failed, 3 ignored**（`cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2`） | ✅ 全绿 |
-| **Rustdoc** | `cargo doc --workspace --no-deps --exclude clarity-slint` | ✅ 无警告 |
-| **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | ✅ **零警告** |
+| **编译检查** | `cargo check --workspace --lib --bins` | ✅ 零错误 |
+| **单元测试** | **2037 passed, 0 failed, 13 ignored**（`cargo test --workspace --lib`） | ✅ 全绿 |
+| **Binary 测试** | **339 passed, 0 failed, 2 ignored**（`cargo test --workspace --bins`） | ✅ 全绿 |
+| **集成测试** | **37 passed, 0 failed**（`cargo test -p clarity-integration-tests --lib`） | ✅ 全绿 |
+| **Doc Tests** | **41 passed, 0 failed, 12 ignored**（`cargo test --workspace --doc`） | ✅ 全绿 |
+| **Rustdoc** | `cargo doc --workspace --no-deps` | ✅ 无警告 |
+| **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` + [`THREAT_MODEL.md`](../security/THREAT_MODEL.md) | ✅ 持续监控 |
-| **代码规模** | ~200+ 个 Rust 源文件 | 持续增长 |
-| **Workspace Crates** | 22 活跃 + 1 归档（`clarity-tauri`）+ 1 集成测试 crate（`tests/integration`） | 结构稳定 |
+| **Workspace Crates** | 24 个 clarity crate + 6 个 syncthing crate（`third_party/syncthing-rust`）+ 1 集成测试 crate；`clarity-slint` / `clarity-tauri` 已归档至 `.archive/` | 结构稳定 |
 
-**测试覆盖详情**（lib 目标）：
-- `clarity-channels`: 49 passed
-- `clarity-claw`: 18 passed
-- `clarity-contract`: 47 passed
-- `clarity-core`: 557 passed, 1 ignored
-- `clarity-llm`: 63 passed, 1 ignored
-- `clarity-mcp`: 37 passed
-- `clarity-wire`: 13 passed, 1 ignored
-- `clarity-memory`: 97 passed
-- `clarity-secrets`: 5 passed
-- `clarity-tools`: 99 passed, 5 ignored
-- `clarity-subagents`: 37 passed
-- `clarity-telemetry`: 8 passed
-- `clarity-gateway`: 62 passed
-- `clarity-thread-store`: 13 passed
-- `clarity-rollout`: 6 passed
-- `clarity-tui`: 10 passed（lib tests）+ 36 passed（bin tests）
-- `clarity-headless`: bin-only，16 passed（bin tests）
-- `clarity-egui`: bin-only；binary 测试 116 passed / 0 failed / 2 ignored
-- `clarity-integration-tests`: 26 个集成测试（adaptive_loop ×8 / session_v2_migration ×4 / telemetry_end_to_end ×4 / thread_api ×10）
-- 各 crate `tests/` 目录：gateway/http/ws/webhook、core_wire、memory_persistence、mcp_end_to_end 等约 70 个测试
-
-**前端测试**：`clarity-egui` binary 测试 116 passed / 0 failed / 2 ignored；新增 23 样本 pretext 对齐回归 + 1000 条消息性能基准（`#[ignore]`）
+> 注：`clarity-slint` 已移出 workspace，所有命令不再需要 `--exclude clarity-slint`。逐 crate 测试明细以最新 `cargo test` 输出与 AGENTS.md §6.2 为准。
 
 ---
 
@@ -335,16 +506,16 @@ tags: [status]
 
 | Job | 状态 | 说明 |
 |-----|------|------|
-| `check` | ✅ | `cargo check --workspace --exclude clarity-slint` |
-| `test` | ✅ | `cargo test --workspace --lib --exclude clarity-slint` |
-| `clippy` | ✅ | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` |
+| `check` | ✅ | `cargo check --workspace` |
+| `test` | ✅ | `cargo test --workspace --lib` |
+| `clippy` | ✅ | `cargo clippy --workspace --lib --bins --tests -- -D warnings` |
 | `fmt` | ✅ | `cargo fmt --all -- --check` |
 | `audit` | ✅ | `cargo audit --deny unsound --deny yanked` |
 | `doc-guard` | ✅ | README.md + AGENTS.md 存在性检查 + `cargo doc` + `cargo-modules` 结构验证 |
 | `integration-test` | ✅ | `cargo test -p clarity-integration-tests --lib` |
-| `binary-test` | ✅ | `cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` |
-| `doc-test` | ✅ | `cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2` |
-| `coverage` | ✅ | `cargo llvm-cov --workspace --lib --exclude clarity-slint` + LCOV/HTML artifact |
+| `binary-test` | ✅ | `cargo test --workspace --bins -- --test-threads=2` |
+| `doc-test` | ✅ | `cargo test --workspace --doc -- --test-threads=2` |
+| `coverage` | ✅ | `cargo llvm-cov --workspace --lib` + LCOV/HTML artifact |
 | `release` | ✅ | Tag-triggered GitHub Actions workflow，产出 `.msi` / `.exe` / `.nsis` |
 
 **平台矩阵**：ubuntu-latest, windows-latest, macos-latest

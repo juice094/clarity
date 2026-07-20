@@ -10,7 +10,7 @@ tags: [architecture, ui]
 > **Date**: 2026-05-12
 > **Status**: Accepted as architectural north star
 > **Scope**: All future UI work in `clarity-egui`, `clarity-tui`, and `clarity-core/src/ui`
-> **Anchors**: `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` (execution plan), `docs/audits/2026-05-12-ui-design-audit.md` (Phase 0.5 audit)
+> **Anchors**: `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` (execution plan), `docs/audits/2026-05-12-ui-design-audit.md` (Phase 0.5 audit)
 
 This document captures the **strategic rationale** for the Pretext UI evolution.
 Tactical phasing lives in the plan; this document explains *why* we accept the
@@ -221,7 +221,7 @@ This is what we will **not** do, despite ecosystem pressure:
 
 ### Internal references
 
-- `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` — execution plan with 5 phases
+- `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` — execution plan with 5 phases
 - `docs/audits/2026-05-12-ui-design-audit.md` — Phase 0.5 audit, 6-axis review
 - `crates/clarity-egui/EGUI_LAYOUT.md` — layout rules including 5 traps
 - `~/.config/agents/skills/egui-layout-canons/SKILL.md` — skill protocol

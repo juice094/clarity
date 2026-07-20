@@ -186,6 +186,6 @@ pub enum ApprovalOption {
 - Pretext UI theory: `docs/architecture/pretext-ui-theory.md` §1 (thesis), §5 (info-vs-decoration test)
 - ClaudeCode line patterns: empirical observation, 2026-05-13 session
 - openclaw bootstrap markers: ADR-011 + `~/dev/third_party/openclaw/docs/concepts/agent-workspace.md`
-- Pretext UI plan: `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` §5 Phase 2 (revised by this ADR)
+- Pretext UI plan: `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` §5 Phase 2 (revised by this ADR)
 - Companion: ADR-011 (workspace architecture, defines `notes/` subdirectories that store note variants matching `LineRole` semantics)
 - Related: ADR-010 (Lucide icons — `RenderLine` icon glyphs use Lucide unicode codepoints)

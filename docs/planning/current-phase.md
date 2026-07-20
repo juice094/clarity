@@ -13,7 +13,7 @@ tags: [planning, status, current-phase]
 
 ## 当前阶段
 
-- **版本**：v0.3.0（`Cargo.toml`），v0.3.4-rc（开发中）
+- **版本**：v0.4.0（`Cargo.toml`）
 - **默认分支**：`main`
 - **Rust 版本**：2024 edition · MSRV 1.85
 - **许可证**：AGPL-3.0-or-later
@@ -30,6 +30,8 @@ tags: [planning, status, current-phase]
 - **Phase E 设计系统替换已完成**：右 rail 全部卡片（status / tools / subagent / memory / context / progress）与关键 widgets（provider_row / sidebar_card / user_avatar）已使用 `design_system` 语义原语；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
 - **方向 B（OpenClaw 连接管理）**：修复 `openclaw_pair` 示例 token 保存 URL；token 支持 `${env:VAR}` 解析；`OpenClawAuthMode` 在发现与连接逻辑中生效；Settings 新增 **Claw** 标签页，支持增删改查远程连接；egui 内实现完整设备配对流程（请求 → 等待审批 → 保存 token）。
 - **方向 C（OKF 前端接入）**：新增 `KnowledgeStore`；右 rail `Knowledge` 面板支持输入 OKF bundle 路径、Load/Reload、搜索概念、浏览概念列表并查看详情（frontmatter + Markdown 正文）。
+- **方向 D（Gateway `/ws` 回路硬化）**：修复原生 Gateway WebSocket 聊天在服务端挂起的问题；`/ws` 现在与 HTTP `/v1/chat/completions` 共用 `AgentController` 流式路径，并补全 `WsResponse::Done` 作为 turn 结束标记，移动端可正确收到 `TurnEnd`。
+- **方向 E（Knowledge Field 端到端接入）**：`clarity-knowledge` 完成 `KnowledgeGraph` 激活/传播/抑制/衰减/休眠（Phase 1）；`clarity-core` 在对话 turn 中自动提取 wikilink / `.md` 链接注入激活，并将 `MemoryCompiler` 产物索引到知识场（Phase 2）；`clarity-egui` 右 rail Knowledge 面板接入 `KnowledgeField`，支持搜索框查询、Top active 节点浏览与详情展示（Phase 3）；新增 `KnowledgeField::index_directory` / `Agent::index_vault`，支持把外部 Markdown vault 索引到知识场（Phase 4a）；新增 `KnowledgeField::apply_watcher_event` / `KnowledgeStore::start_watching_vault`，实现 vault 变更的增量同步（Phase 4b），形成 **外部笔记 → 知识场 → 会话引用 → 增量同步** 的闭环。全 workspace 测试通过。
 
 ---
 
@@ -37,11 +39,11 @@ tags: [planning, status, current-phase]
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1554 | 0 | 0 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 275 | 0 | 2 |
-| `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
-| `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
-| `cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
+| `cargo test --workspace --lib` | 2037 | 0 | 13 |
+| `cargo test --workspace --bins -- --test-threads=2` | 339 | 0 | 2 |
+| `cargo test --workspace --doc -- --test-threads=2` | 41 | 0 | 12 |
+| `cargo test -p clarity-integration-tests --lib` | 37 | 0 | 0 |
+| `cargo clippy --workspace --lib --bins --tests -- -D warnings` | 0 warning | 0 | - |
 | `cargo fmt --all -- --check` | pass | 0 | - |
 
 ---
@@ -59,4 +61,8 @@ tags: [planning, status, current-phase]
 
 ---
 
-*最后更新：2026-06-25*
+- **前端架构审计与 P6 收尾（2026-07-06）**：完成 `docs/planning/architecture-audit-2026-07-06.md`；落地路由去重、虚拟列表高度缓存、右 rail 同步硬化、语言持久化、Plugins 导航语义修正 5 项改造；全 workspace `lib` / `bin` / `doc` / `clippy` / integration 测试通过。
+
+---
+
+*最后更新：2026-07-06*

@@ -197,5 +197,5 @@ This last rule is **critical** — it prevents `j/k/g/G` line navigation from in
 - Existing Clarity shortcuts: `PROJECT_STATUS.md` §6 Sprint 12 closure (MVP set); `~/.config/agents/skills/egui-layout-canons/SKILL.md`.
 - Companion ADR-011 §Decision item 4: "Save = global Ctrl+S router" framing is revised by this ADR (Save remains a button; keyboard accelerator is focus-scoped).
 - Companion ADR-012: RenderLine variants ToolCallHeader / ApprovalPrompt / Thinking define focus-scoped bindings target widgets.
-- Pretext UI plan: `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` §6.2 (P3B.6 description updated by companion commit).
+- Pretext UI plan: `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` §6.2 (P3B.6 description updated by companion commit).
 - Vim mode freeze: `PROJECT_STATUS.md` §10 T_SHORTCUTS (Vim engine deferred to v0.5+).

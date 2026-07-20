@@ -54,7 +54,7 @@ tags: [document, ui]
 
 - `docs/archive/**`：已归档，仅作考古参考，**不可直接执行**
 - `docs/planning/FUTURE_DIRECTION.md`：远景设计，执行前必须重新确认每个命名和每个接口
-- `docs/planning/BACKLOG.md`：任务清单，不等于技术规范
+- `docs/planning/archive/BACKLOG.md`：任务清单，不等于技术规范
 - **只有 `docs/adr/ADR-*.md` + 代码本身构成当前规范**
 
 ### 3.3 自动化检测（建议）

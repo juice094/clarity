@@ -1,6 +1,6 @@
 # Claw Mesh Phase 3：分布式角色上下文同步设计
 
-> 状态：设计草案（待评审）  
+> 状态：设计草案 → **骨架已落地（2026-07-20 注）**：`clarity-claw/src/mesh/` 已实现 CRDT merger、gateway/syncthing 双 transport、crypto 占位；E2EE 按本文决策延后到 Phase 3.5。本文作为剩余工作的设计参考继续有效。  
 > 设计参考：Matrix 协议（用户身份 → 联邦服务器 → 多设备同步 → 端到端加密）
 
 ## 1. 目标

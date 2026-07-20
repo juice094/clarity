@@ -9,6 +9,20 @@ tags: [optimization, roadmap, gap-analysis, claude-code-alignment]
 
 > 基于 2026-06-27 并行模块分析（8个子系统，210个文件），对 Clarity 各模块与 Claude Code 的等效能力差距进行了系统性评估。本文档输出优先级排序的优化路线图。
 
+## 进度快照（2026-07-20 核实）
+
+| 项 | 状态 | 证据 |
+|----|------|------|
+| CE-1 / T2-1 Tokenizer 贯通 | 🔄 部分落地 | `compaction::estimate_text_tokens` 已公开并被 `agent/run/loop_helpers.rs` 消费；`clarity-llm` 已引入 tiktoken；字节启发式替换未完成 |
+| CE-2 / T2-2 JSON Mode | 🔄 部分落地 | `LlmProvider::set_response_format`（`clarity-contract/src/llm.rs`）已入 trait；各 provider 原生 `response_format` 请求字段未全量接入 |
+| CE-3 / T2-3 Anthropic Messages | 🔄 部分落地 | `clarity-llm::anthropic` 适配器模块（adapter/tools/types/prompt）已交付，`clarity-gateway` `anthropic-api` feature 提供 `/v1/messages` 端点；cache_control / extended thinking 未实现 |
+| T1-1 非阻塞 Spawn + Handle | ⏸️ 未启动 | `run_parallel` 仍为阻塞式 |
+| T1-2 Worktree 隔离 | ✅ 已落地 | `clarity-subagents/src/runner.rs`：`create_worktree_for_agent` + `WorktreeGuard`（`enable_worktree` token 开关） |
+| T1-3 Structured Output Schema | ✅ 已落地 | `RunSpec::output_schema`（`clarity-contract/src/subagent.rs`）+ runner 注入 `response_format` |
+| T1-4 Pipeline DAG | ⏸️ 未启动 | 无 `depends_on` / `pipeline.rs` |
+| T2-5 流式 Tool-Call 增量 | 🔄 部分落地 | `StreamDelta.partial_tool_calls` 已贯通 6 crate，`ToolCallProgress` wire 事件 e2e 可用 |
+| T2-4 / T2-6~T2-8 / Tier 3 | ⏸️ 未启动 | — |
+
 ## 差距评分总览
 
 | 子系统 | 差距评分 | 状态 |
@@ -194,5 +208,5 @@ T1 (Subagent) ─────┼── T1-1 (Non-blocking Spawn) ── T1-4 (Pi
 
 ---
 
-*最后更新：2026-06-27*
+*最后更新：2026-07-20（增加进度快照）*
 *数据来源：并行模块分析 Workflow (21 agents, 526s), 实机验证*

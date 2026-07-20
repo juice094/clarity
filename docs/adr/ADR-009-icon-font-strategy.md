@@ -97,7 +97,7 @@ This decision should be revisited if **any** of the following becomes true:
 - Survey data: `crates.io` API responses captured 2026-05-12 (Lucide, Phosphor, iconflow, egui_nerdfonts)
 - Source conversation: `C:\Users\22414\Desktop\图标与字体参考.md` (Kimi-user dialogue, 471 lines)
 - Architecture context: `docs/architecture/pretext-ui-theory.md` (icons-as-glyphs philosophy)
-- Implementation plan: `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` (Phase 2 RenderLine, Phase 3 TUI Parity)
+- Implementation plan: `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` (Phase 2 RenderLine, Phase 3 TUI Parity)
 - Project state: `docs/planning/plans/2026-05-12-S1-session-archive.md` (HEAD = 561696ba, 27 ICON_* constants, 123 call sites)
 - Upstream crate: <https://crates.io/crates/egui-phosphor>
 - Re-evaluation candidate: <https://crates.io/crates/iconflow>

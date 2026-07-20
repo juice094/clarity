@@ -13,7 +13,7 @@ tags: [adr, ui, egui, pretext]
 
 ## Context
 
-S5 completed the `clarity-egui` module hygiene pass: ViewState single-source-of-truth, `panels/` directory reorganisation, design system registration, and a `layout.rs` / `App::render_layout_shell()` staging point. The next architectural target is the Pretext UI evolution described in `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` and the concrete migration plan in `docs/planning/plans/clarity-egui-pretext-layout-migration.md`.
+S5 completed the `clarity-egui` module hygiene pass: ViewState single-source-of-truth, `panels/` directory reorganisation, design system registration, and a `layout.rs` / `App::render_layout_shell()` staging point. The next architectural target is the Pretext UI evolution described in `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` and the concrete migration plan in `docs/planning/archive/plans/clarity-egui-pretext-layout-migration.md`.
 
 The current GUI has evolved into a "titlebar + left sidebar + main view + floating right panels" model. The concept art for Pretext shows a single-page three-column layout:
 

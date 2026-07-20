@@ -95,4 +95,4 @@ Pre-commit verification required:
 - User-provided diligence: `C:\Users\22414\Desktop\lucide 图标库.md` (third-party verification of API claims)
 - Superseded ADR: `docs/adr/ADR-009-icon-font-strategy.md` (Decision section item 2)
 - Related: ADR-001 (egui as sole desktop stack; cargo-only toolchain constraint), ADR-009 (icon font strategy first pass)
-- Implementation plan: `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` (Phase 1 / S2)
+- Implementation plan: `docs/planning/archive/plans/2026-05-12-pretext-ui-evolution.md` (Phase 1 / S2)

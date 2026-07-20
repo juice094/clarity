@@ -383,7 +383,7 @@ cargo check -p clarity-egui
   - ✅ P2: `clarity-contract` crate PoC — `ToolCall` + `FunctionCall` 提取，core 重新导出保持兼容
   - ✅ P3: MCP 提取评估 — 当前被 `clarity-contract` 成熟度阻塞，暂缓
 
-> 详细执行计划见 [`docs/planning/BACKLOG.md`](BACKLOG.md)
+> 详细执行计划见 [`docs/planning/archive/BACKLOG.md`](archive/BACKLOG.md)
 > 长程计划见 `docs/plans/black-widow-stature-john-stewart.md`
 
 > 详见 `docs/planning/plans/2026-04-30-sprint11-surpass-kimicli.md`

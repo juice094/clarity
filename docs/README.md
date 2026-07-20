@@ -80,13 +80,17 @@ tags: [index, moc]
 |------|------|----------|
 | [`planning/current-phase.md`](./planning/current-phase.md) | 当前阶段、Sprint 焦点、已知问题 | 全员 |
 | [`planning/PROJECT_STATUS.md`](./planning/PROJECT_STATUS.md) | 项目现状报告（指标 + 功能清单 + 债务） | 全员 |
-| [`planning/ROADMAP.md`](./planning/ROADMAP.md) | **统一路线图**（策略 + 详细功能规划） | 决策者、开发者 |
-| [`planning/FUTURE_DIRECTION.md`](./planning/FUTURE_DIRECTION.md) | 长期技术路线图 Phase A→D | 开发者、架构师 |
+| [`planning/ROADMAP.md`](./planning/ROADMAP.md) | **统一路线图**（策略 + 详细功能规划，当前 v0.4.0） | 决策者、开发者 |
+| [`planning/FUTURE_DIRECTION.md`](./planning/FUTURE_DIRECTION.md) | 长期技术路线图 Phase A→D（注意其时效注） | 开发者、架构师 |
+| [`planning/CLARITY_CLAUDE_ALIGNMENT_ROADMAP.md`](./planning/CLARITY_CLAUDE_ALIGNMENT_ROADMAP.md) | Claude Code 能力对齐路线图（含进度快照） | 开发者 |
+| [`planning/CLARITY_MODULE_RESEARCH.md`](./planning/CLARITY_MODULE_RESEARCH.md) | 模块解构与工程路线对照（2026-06 快照，注意时效注） | 开发者 |
+| [`planning/claw-mesh-phase3-design.md`](./planning/claw-mesh-phase3-design.md) | Claw Mesh 分布式上下文同步设计（骨架已落地） | 架构师 |
+| [`planning/optimization-plan-2026-07-06.md`](./planning/optimization-plan-2026-07-06.md) | 前端优化批次计划 | 开发者 |
+| [`planning/architecture-audit-2026-07-06.md`](./planning/architecture-audit-2026-07-06.md) | 前端架构审计报告（5 项改造已落地） | 架构师 |
 | [`planning/sprint-archive.md`](./planning/sprint-archive.md) | 历史 Sprint 摘要 | 维护者 |
-| [`planning/BACKLOG.md`](./planning/BACKLOG.md) | 产品 Backlog | 决策者 |
-| [`planning/long-term-roadmap-2026.md`](./planning/long-term-roadmap-2026.md) | 2026 全年路线 | 决策者 |
 | [`planning/methodology-shape-up.md`](./planning/methodology-shape-up.md) | 工程方法论速查 | 规划者 |
-| [`planning/plans/`](./planning/plans/) | 具体 Sprint 执行计划 | 开发者 |
+| [`planning/plans/`](./planning/plans/) | 概念参考文档 | 开发者 |
+| [`planning/archive/`](./planning/archive/) | 已归档历史规划（BACKLOG、长期路线、已完成 sprint 计划等） | 维护者 |
 
 ---
 
