@@ -13,6 +13,7 @@
 #![allow(deprecated)]
 
 use clarity_wire::{ButtonStyle, TextRole, UserAction, ViewCommand};
+use std::collections::HashMap;
 
 /// Snapshot of settings state that can be persisted or applied to an Agent.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -38,6 +39,34 @@ pub struct SettingsSnapshot {
 /// The tuple layout is `(provider_id, display_label, model_ids)`.
 pub type ProviderModelEntry = (String, String, Vec<String>);
 
+/// Per-provider model catalog refresh state.
+///
+/// The state machine is driven externally: the frontend sends
+/// [`UserAction::RefreshModels`], the host performs the (async) catalog fetch
+/// via `clarity_llm`, then reports the outcome through
+/// [`SettingsViewModel::apply_refresh_result`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ModelRefreshState {
+    /// No refresh has been requested for this provider.
+    #[default]
+    Idle,
+    /// A catalog fetch is in flight.
+    Loading,
+    /// The fetch succeeded; carries the number of models received.
+    Ready {
+        /// Number of models the refreshed catalog contains.
+        count: usize,
+    },
+    /// The fetch failed; carries a human-readable error message.
+    Error {
+        /// Human-readable failure reason.
+        message: String,
+    },
+    /// The provider exposes no listable model catalog API (e.g. OAuth
+    /// device-flow channels, device-relay providers, local GGUF files).
+    Unsupported,
+}
+
 /// Protocol-driven ViewModel for the settings panel.
 ///
 /// Holds form state, generates `ViewCommand` trees, and routes `UserAction` events.
@@ -58,6 +87,7 @@ pub struct SettingsViewModel {
     profiles: Vec<(String, String)>, // (id, display_label)
     dirty: bool,
     available_models: Vec<ProviderModelEntry>,
+    refresh_states: HashMap<String, ModelRefreshState>,
 }
 
 impl Default for SettingsViewModel {
@@ -80,6 +110,7 @@ impl Default for SettingsViewModel {
             profiles: Vec::new(),
             dirty: false,
             available_models: Vec::new(),
+            refresh_states: HashMap::new(),
         }
     }
 }
@@ -103,6 +134,7 @@ impl SettingsViewModel {
             profiles,
             dirty: false,
             available_models: Vec::new(),
+            refresh_states: HashMap::new(),
         }
     }
 
@@ -141,6 +173,94 @@ impl SettingsViewModel {
     /// Read back the currently injected available models.
     pub fn available_models(&self) -> &[ProviderModelEntry] {
         &self.available_models
+    }
+
+    /// Current catalog refresh state for a provider (`Idle` when never touched).
+    pub fn refresh_state(&self, provider: &str) -> &ModelRefreshState {
+        self.refresh_states
+            .get(provider)
+            .unwrap_or(&ModelRefreshState::Idle)
+    }
+
+    /// Inject the catalog-pull capability for a provider.
+    ///
+    /// The host derives this from `clarity_llm::catalog::capability` (the
+    /// single source of truth) and marks every listed provider before the
+    /// settings UI is shown. `false` pins the provider to
+    /// [`ModelRefreshState::Unsupported`]; `true` lifts that pin.
+    pub fn set_catalog_supported(&mut self, provider: &str, supported: bool) {
+        if supported {
+            if self.refresh_states.get(provider) == Some(&ModelRefreshState::Unsupported) {
+                self.refresh_states.remove(provider);
+            }
+        } else {
+            self.refresh_states
+                .insert(provider.to_string(), ModelRefreshState::Unsupported);
+        }
+    }
+
+    /// Begin a catalog refresh and return the providers that transitioned to
+    /// [`ModelRefreshState::Loading`].
+    ///
+    /// `None` targets every provider in `available_models`. Providers pinned
+    /// to `Unsupported` or already `Loading` are skipped, so the returned
+    /// list is exactly the work the host must perform. The host should fetch
+    /// each returned provider and report back via
+    /// [`Self::apply_refresh_result`].
+    pub fn begin_refresh(&mut self, provider: Option<&str>) -> Vec<String> {
+        let targets: Vec<String> = match provider {
+            Some(id) => vec![id.to_string()],
+            None => self
+                .available_models
+                .iter()
+                .map(|(id, _, _)| id.clone())
+                .collect(),
+        };
+
+        let mut started = Vec::new();
+        for id in targets {
+            match self.refresh_states.get(&id) {
+                Some(ModelRefreshState::Unsupported | ModelRefreshState::Loading) => {}
+                _ => {
+                    self.refresh_states
+                        .insert(id.clone(), ModelRefreshState::Loading);
+                    started.push(id);
+                }
+            }
+        }
+        started
+    }
+
+    /// Report the outcome of a catalog fetch for a provider.
+    ///
+    /// On success the provider's model list in `available_models` is replaced
+    /// (an entry is appended when the provider was not listed yet) and the
+    /// state becomes `Ready`. On failure the existing model list is kept and
+    /// the state becomes `Error`. The form's dirty flag is unaffected: a
+    /// catalog refresh is not a user edit.
+    pub fn apply_refresh_result(&mut self, provider: &str, result: Result<Vec<String>, String>) {
+        let state = match result {
+            Ok(models) => {
+                let count = models.len();
+                match self
+                    .available_models
+                    .iter_mut()
+                    .find(|(id, _, _)| id == provider)
+                {
+                    Some((_, _, slot)) => *slot = models,
+                    // ponytail: unknown providers reuse their id as display label;
+                    // the next set_available_models injection restores proper labels.
+                    None => self.available_models.push((
+                        provider.to_string(),
+                        provider.to_string(),
+                        models,
+                    )),
+                }
+                ModelRefreshState::Ready { count }
+            }
+            Err(message) => ModelRefreshState::Error { message },
+        };
+        self.refresh_states.insert(provider.to_string(), state);
     }
 
     /// Generate the declarative command tree for the current state.
@@ -357,6 +477,9 @@ impl SettingsViewModel {
                 self.local_model_path = if value.is_empty() { None } else { Some(value) };
                 self.dirty = true;
             }
+            UserAction::RefreshModels { provider } => {
+                self.begin_refresh(provider.as_deref());
+            }
             _ => {}
         }
     }
@@ -465,5 +588,128 @@ mod tests {
             matches!(c, ViewCommand::HStack { children } if children.iter().any(|c| matches!(c, ViewCommand::ComboBox { id, .. } if id == "provider")))
         });
         assert!(provider_hstack.is_some());
+    }
+
+    // ── Catalog refresh state machine ───────────────────────────────────────
+
+    #[test]
+    fn test_refresh_state_defaults_to_idle() {
+        let vm = SettingsViewModel::new();
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Idle);
+    }
+
+    #[test]
+    fn test_refresh_models_action_starts_loading() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.handle_action(UserAction::RefreshModels {
+            provider: Some("openai".into()),
+        });
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Loading);
+        assert_eq!(vm.refresh_state("kimi"), &ModelRefreshState::Idle);
+        assert!(!vm.is_dirty(), "catalog refresh must not dirty the form");
+    }
+
+    #[test]
+    fn test_begin_refresh_none_targets_all_capable_providers() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.set_catalog_supported("local", false);
+
+        let started = vm.begin_refresh(None);
+        assert_eq!(started, vec!["openai".to_string(), "kimi".to_string()]);
+        assert_eq!(vm.refresh_state("local"), &ModelRefreshState::Unsupported);
+    }
+
+    #[test]
+    fn test_begin_refresh_skips_unsupported_and_in_flight() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.set_catalog_supported("openai", false);
+        assert!(vm.begin_refresh(Some("openai")).is_empty());
+
+        assert_eq!(vm.begin_refresh(Some("kimi")), vec!["kimi".to_string()]);
+        // Already Loading: no duplicate work.
+        assert!(vm.begin_refresh(Some("kimi")).is_empty());
+    }
+
+    #[test]
+    fn test_set_catalog_supported_true_lifts_unsupported_pin() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_catalog_supported("openai", false);
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Unsupported);
+        vm.set_catalog_supported("openai", true);
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Idle);
+    }
+
+    #[test]
+    fn test_apply_refresh_result_writes_models_back() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.begin_refresh(Some("openai"));
+
+        vm.apply_refresh_result(
+            "openai",
+            Ok(vec!["gpt-4o".into(), "gpt-4.1".into(), "o3".into()]),
+        );
+
+        assert_eq!(
+            vm.refresh_state("openai"),
+            &ModelRefreshState::Ready { count: 3 }
+        );
+        let (_, _, models) = vm
+            .available_models()
+            .iter()
+            .find(|(id, _, _)| id == "openai")
+            .expect("openai entry");
+        assert_eq!(models, &["gpt-4o", "gpt-4.1", "o3"]);
+    }
+
+    #[test]
+    fn test_apply_refresh_result_inserts_unknown_provider() {
+        let mut vm = SettingsViewModel::new();
+        vm.apply_refresh_result("custom", Ok(vec!["m1".into()]));
+        assert_eq!(
+            vm.refresh_state("custom"),
+            &ModelRefreshState::Ready { count: 1 }
+        );
+        assert!(
+            vm.available_models()
+                .iter()
+                .any(|(id, _, _)| id == "custom")
+        );
+    }
+
+    #[test]
+    fn test_apply_refresh_error_keeps_existing_models() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.begin_refresh(Some("kimi"));
+
+        vm.apply_refresh_result("kimi", Err("connection refused".into()));
+
+        assert_eq!(
+            vm.refresh_state("kimi"),
+            &ModelRefreshState::Error {
+                message: "connection refused".into()
+            }
+        );
+        let (_, _, models) = vm
+            .available_models()
+            .iter()
+            .find(|(id, _, _)| id == "kimi")
+            .expect("kimi entry");
+        assert_eq!(models, &["kimi-k2.6", "kimi-k2-07132k"]);
+    }
+
+    #[test]
+    fn test_refresh_after_error_can_retry() {
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(sample_catalog());
+        vm.begin_refresh(Some("openai"));
+        vm.apply_refresh_result("openai", Err("boom".into()));
+
+        assert_eq!(vm.begin_refresh(Some("openai")), vec!["openai".to_string()]);
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Loading);
     }
 }

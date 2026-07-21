@@ -8,6 +8,7 @@
 //! 3. Minimal offline bootstrap seed from [`crate::registry_table`].
 
 pub mod cache;
+pub mod capability;
 pub mod entry;
 pub mod fetcher;
 pub mod fetchers;

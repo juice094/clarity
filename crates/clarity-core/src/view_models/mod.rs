@@ -1,2 +1,2 @@
 pub mod settings;
-pub use settings::{ProviderModelEntry, SettingsSnapshot, SettingsViewModel};
+pub use settings::{ModelRefreshState, ProviderModelEntry, SettingsSnapshot, SettingsViewModel};

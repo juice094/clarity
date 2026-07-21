@@ -53,6 +53,17 @@ pub struct RuntimeProviderConfig {
     pub model: String,
 }
 
+impl RuntimeProviderConfig {
+    /// Whether this provider's model catalog can be pulled from a remote API.
+    ///
+    /// Delegates to [`crate::catalog::capability`], the single source of truth
+    /// for catalog-pull capability. Frontends should gate any "refresh models"
+    /// affordance on this instead of hard-coding provider lists.
+    pub fn supports_model_catalog(&self) -> bool {
+        crate::catalog::capability::api_format_supports_catalog(&self.api_format)
+    }
+}
+
 // ── Provider construction ──────────────────────────────────────────────────
 
 /// Build an `LlmProvider` from an explicit [`RuntimeProviderConfig`].
@@ -239,6 +250,23 @@ mod tests {
             normalise_base_url("https://api.openai.com/v1/"),
             "https://api.openai.com/v1"
         );
+    }
+
+    #[test]
+    fn test_supports_model_catalog_matrix() {
+        let cfg = |api_format: &str| RuntimeProviderConfig {
+            provider_id: "test".into(),
+            base_url: "https://test.com/v1".into(),
+            api_format: api_format.into(),
+            api_key: "sk-test".into(),
+            model: "m".into(),
+        };
+        assert!(cfg("openai_chat").supports_model_catalog());
+        assert!(cfg("ollama").supports_model_catalog());
+        assert!(cfg("llama_server").supports_model_catalog());
+        assert!(!cfg("anthropic_messages").supports_model_catalog());
+        assert!(!cfg("deepseek_device").supports_model_catalog());
+        assert!(!cfg("openclaw").supports_model_catalog());
     }
 
     #[test]

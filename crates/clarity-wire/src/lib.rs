@@ -1004,6 +1004,16 @@ pub enum UserAction {
         /// Button identifier.
         id: String,
     },
+    /// Request a refresh of the model catalog for one provider, or for all
+    /// catalog-capable providers when `provider` is `None`.
+    ///
+    /// The receiving ViewModel transitions the affected providers into its
+    /// per-provider refresh state machine (Loading → Ready/Error); providers
+    /// without a listable API surface the `Unsupported` state instead.
+    RefreshModels {
+        /// Target provider id, or `None` to refresh every capable provider.
+        provider: Option<String>,
+    },
 }
 
 #[cfg(test)]
@@ -1333,6 +1343,10 @@ mod tests {
                 selected: "openai".into(),
             },
             UserAction::ButtonClick { id: "save".into() },
+            UserAction::RefreshModels {
+                provider: Some("openai".into()),
+            },
+            UserAction::RefreshModels { provider: None },
         ] {
             let json = serde_json::to_string(&action).unwrap();
             let decoded: UserAction = serde_json::from_str(&json).unwrap();
