@@ -191,6 +191,34 @@ impl fmt::Display for ExecutionStatus {
     }
 }
 
+/// Completion notification for a background (spawned) subagent run.
+///
+/// Emitted by `SubagentHandle` (in `clarity-subagents`) when a non-blocking
+/// subagent run finishes. [`SubagentCompletion::to_system_message`] renders
+/// the notification as system-message text that the parent agent can inject
+/// into its conversation context.
+#[derive(Debug, Clone)]
+pub struct SubagentCompletion {
+    /// Human-readable task description from the originating [`RunSpec`].
+    pub description: String,
+    /// Final outcome of the run.
+    pub result: Result<SubagentResult, SubagentError>,
+}
+
+impl SubagentCompletion {
+    /// Render the completion as system-message text suitable for injection
+    /// into the parent agent's conversation context.
+    pub fn to_system_message(&self) -> String {
+        match &self.result {
+            Ok(r) => format!(
+                "[subagent completed] {} (agent {}, type {}): {}",
+                self.description, r.agent_id, r.agent_type, r.summary
+            ),
+            Err(e) => format!("[subagent failed] {}: {}", self.description, e),
+        }
+    }
+}
+
 /// Specification for a single subagent run.
 #[derive(Debug, Clone)]
 pub struct RunSpec {

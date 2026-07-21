@@ -14,6 +14,7 @@
 //! 设计参考 std::process::Command 的构建器模式。
 
 pub mod builder;
+mod handle;
 pub mod kimiclaw_agent_loader;
 mod parallel;
 pub mod registry;
@@ -34,6 +35,7 @@ pub use clarity_contract::subagent::{
 
 // Re-export local types with logic.
 pub use builder::SubagentBuilder;
+pub use handle::{CompletionCallback, SubagentHandle, SubagentPoll};
 pub use kimiclaw_agent_loader::{kimiclaw_agents_dir, load_kimiclaw_agents};
 pub use parallel::{ParallelExecutor, SubagentBatch, run_parallel};
 pub use runner::{ExecutionContext, OutputCollector, SubagentRunner};
@@ -114,6 +116,20 @@ impl SubagentManager {
             self.runner.clone()
         };
         runner.run(spec, &mut self.store, None).await
+    }
+
+    /// 非阻塞 spawn：立即返回 [`SubagentHandle`]，子代理在后台 tokio task 中执行。
+    ///
+    /// 父代理可在自己的 turn 中通过 `handle.poll()` 查询进度，或稍后 `handle.join()`
+    /// 取最终结果。`on_complete` 回调在任务结束时触发，可用于把
+    /// `SubagentCompletion::to_system_message()` 注入父对话上下文（core 侧接入点）。
+    pub fn spawn(&self, spec: RunSpec, on_complete: Option<CompletionCallback>) -> SubagentHandle {
+        match on_complete {
+            Some(callback) => {
+                SubagentHandle::spawn_with_callback(self.runner.clone(), spec, callback)
+            }
+            None => SubagentHandle::spawn(self.runner.clone(), spec),
+        }
     }
 
     /// 并行运行多个子代理

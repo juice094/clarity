@@ -251,9 +251,9 @@ pub use rollout_retention::{RetentionPolicy, prune_files};
 pub use subagent::{
     AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle, BatchStatus,
     CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
-    MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
-    SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
-    TeamResult, TokenError, collect_git_context,
+    MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentCompletion,
+    SubagentError, SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState,
+    SubagentStatus, TeamResult, TokenError, collect_git_context,
 };
 pub use thread::{SessionId, ThreadId};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
