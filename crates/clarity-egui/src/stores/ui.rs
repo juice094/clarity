@@ -52,6 +52,10 @@ pub struct UiStore {
     pub kimi_conversation_style: bool,
     /// S7 Phase 2D: global selected line index in the flat line stream (line-mode only).
     pub line_cursor_selected: Option<usize>,
+    /// A2: keyboard-selected chat message index (first message of the selected
+    /// turn unit) in the active session. Drives ↑/↓ navigation and the
+    /// Ctrl+C / E / R message actions; `None` means no selection.
+    pub selected_message_idx: Option<usize>,
     /// S7 Phase 2D: total flat line count last frame (used to clamp cursor).
     pub line_cursor_total_lines: usize,
     /// Cached shell prompt prefix: "cwd branch" (e.g. "clarity main").
@@ -119,6 +123,7 @@ impl Default for UiStore {
             focus_target: None,
             kimi_conversation_style: false,
             line_cursor_selected: None,
+            selected_message_idx: None,
             line_cursor_total_lines: 0,
             shell_prompt: String::new(),
             active_project: None,

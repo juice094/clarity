@@ -207,6 +207,20 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
     #[cfg(not(feature = "line-mode"))]
     let line_cursor_selected: Option<usize> = None;
 
+    // A2: clamp the keyboard message selection against history mutations
+    // (edit / regenerate truncate the message list, leaving a dangling index).
+    if let Some(sel) = app.context.ui_store.selected_message_idx {
+        let valid = app
+            .context
+            .session_store
+            .active_session()
+            .is_some_and(|s| sel < s.messages.len());
+        if !valid {
+            app.context.ui_store.selected_message_idx = None;
+        }
+    }
+    let selected_message_idx = app.context.ui_store.selected_message_idx;
+
     let available_height = ui.available_height();
     let scroll_y = app.context.ui_store.last_scroll_offset;
     let mut pending = PendingActions::default();
@@ -314,6 +328,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
                     editing_idx,
                     edit_buffer,
                     line_cursor_selected,
+                    selected_message_idx,
                     render_metrics,
                     cache,
                     &mut pending,
@@ -454,13 +469,18 @@ pub fn estimate_total_height(app: &mut crate::App, content_max_width: f32, theme
 // ============================================================================
 
 /// Lightweight index-based turn descriptor — avoids cloning every Message per frame.
-struct RenderUnit {
-    start: usize,
-    end: usize,
-    is_user: bool,
+pub(crate) struct RenderUnit {
+    /// Index of the first message of this unit in `Session::messages`.
+    pub(crate) start: usize,
+    /// End-exclusive message index of this unit.
+    pub(crate) end: usize,
+    /// Whether this unit is a single user message (vs. an agent turn).
+    pub(crate) is_user: bool,
 }
 
-fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
+/// Aggregate a flat message list into render units: one unit per user
+/// message, one unit per run of consecutive agent messages.
+pub(crate) fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
     let mut units = Vec::new();
     let mut i = 0;
     let n = messages.len();
@@ -511,11 +531,16 @@ fn render_unit(
     editing_idx: Option<usize>,
     edit_buffer: &mut String,
     line_cursor_selected: Option<usize>,
+    selected_message_idx: Option<usize>,
     render_metrics: Option<&crate::pretext::EguiFontMetrics>,
     turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
     pending: &mut PendingActions,
 ) {
     let editing = editing_idx == Some(unit.start);
+    // A2: keyboard selection highlight. Selection does not change the unit's
+    // height, so the height cache stays valid (no revision bump needed).
+    let selected = selected_message_idx == Some(unit.start);
+    let unit_top = ui.cursor().min.y;
     if unit.is_user {
         let bubble_h = if editing {
             let (h, save, cancel) = render_edit_bubble(ui, edit_buffer, theme);
@@ -557,7 +582,7 @@ fn render_unit(
         write_back_unit_height(session, unit_index, unit_h);
 
         if !editing {
-            render_message_actions(ui, theme, unit, session, pending, true);
+            render_message_actions(ui, theme, unit, session, pending, true, selected);
         }
     } else {
         let bubble_h = {
@@ -575,7 +600,20 @@ fn render_unit(
             bubble_h + theme.space_24 + theme.space_8,
         );
 
-        render_message_actions(ui, theme, unit, session, pending, false);
+        render_message_actions(ui, theme, unit, session, pending, false, selected);
+    }
+
+    if selected {
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(ui.max_rect().left(), unit_top),
+            egui::pos2(ui.max_rect().right(), ui.cursor().min.y),
+        );
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(theme.radius_md as u8),
+            egui::Stroke::new(1.0, theme.accent.gamma_multiply(0.6)),
+            egui::StrokeKind::Inside,
+        );
     }
 }
 
@@ -584,6 +622,8 @@ fn render_unit(
 /// User messages get [Edit | Copy]; agent messages get [Copy | Regenerate].
 /// Timestamp is shown only when the message is older than a minute, in the
 /// smallest/dimmest caption style so it does not compete with content.
+/// Action icons are visible on hover or while the unit is keyboard-selected.
+#[allow(clippy::too_many_arguments)]
 fn render_message_actions(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -591,6 +631,7 @@ fn render_message_actions(
     session: &crate::ui::types::Session,
     pending: &mut PendingActions,
     is_user: bool,
+    selected: bool,
 ) {
     let row_id = ui.id().with(unit.start).with("msg_actions");
     let hovered = ui
@@ -613,7 +654,7 @@ fn render_message_actions(
         // Action icons on the right; only visible on hover to keep the
         // conversation clean. They remain allocated so text does not jump.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let icon_alpha = if hovered { 1.0 } else { 0.0 };
+            let icon_alpha = if hovered || selected { 1.0 } else { 0.0 };
             let action_color = theme.text_dim.linear_multiply(icon_alpha);
             if is_user {
                 if icon_button_toolbar_colored(

@@ -120,6 +120,20 @@ pub mod ids {
     pub const SHOW_SHORTCUTS: &str = "show-shortcuts";
     /// `SCROLL_TO_BOTTOM` constant — jump to the latest chat message.
     pub const SCROLL_TO_BOTTOM: &str = "scroll-to-bottom";
+
+    // ── Message-level keyboard navigation (A2) ──
+    /// `NAVIGATE_MESSAGE_UP` constant — select the previous chat message.
+    pub const NAVIGATE_MESSAGE_UP: &str = "navigate-message-up";
+    /// `NAVIGATE_MESSAGE_DOWN` constant — select the next chat message.
+    pub const NAVIGATE_MESSAGE_DOWN: &str = "navigate-message-down";
+    /// `COPY_SELECTED_MESSAGE` constant — copy the selected message content.
+    pub const COPY_SELECTED_MESSAGE: &str = "copy-selected-message";
+    /// `EDIT_SELECTED_MESSAGE` constant — inline-edit the selected message.
+    pub const EDIT_SELECTED_MESSAGE: &str = "edit-selected-message";
+    /// `REGENERATE_SELECTED_MESSAGE` constant — regenerate from the selected message.
+    pub const REGENERATE_SELECTED_MESSAGE: &str = "regenerate-selected-message";
+    /// `CLEAR_MESSAGE_SELECTION` constant — clear the keyboard message selection.
+    pub const CLEAR_MESSAGE_SELECTION: &str = "clear-message-selection";
 }
 
 /// 预置的常用命令常量 — 避免两端硬编码重复。

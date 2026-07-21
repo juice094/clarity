@@ -70,6 +70,18 @@ impl App {
                             crate::shortcuts::ShortcutAction::ToggleLayoutDebug,
                         ],
                     ),
+                    (
+                        "Chat Messages",
+                        &[
+                            crate::shortcuts::ShortcutAction::NavigateMessageUp,
+                            crate::shortcuts::ShortcutAction::NavigateMessageDown,
+                            crate::shortcuts::ShortcutAction::CopySelectedMessage,
+                            crate::shortcuts::ShortcutAction::EditSelectedMessage,
+                            crate::shortcuts::ShortcutAction::RegenerateSelectedMessage,
+                            crate::shortcuts::ShortcutAction::ClearMessageSelection,
+                            crate::shortcuts::ShortcutAction::ScrollToBottom,
+                        ],
+                    ),
                 ];
 
                 for (group, items) in actions {

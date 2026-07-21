@@ -65,6 +65,18 @@ pub enum ShortcutAction {
     ShowShortcuts,
     /// Jump to the bottom of the chat stream.
     ScrollToBottom,
+    /// Select the previous chat message (`ArrowUp`).
+    NavigateMessageUp,
+    /// Select the next chat message (`ArrowDown`).
+    NavigateMessageDown,
+    /// Copy the selected chat message (`Ctrl+C` with an active selection).
+    CopySelectedMessage,
+    /// Inline-edit the selected chat message (`E`, user messages only).
+    EditSelectedMessage,
+    /// Regenerate from the selected chat message (`R`, agent messages only).
+    RegenerateSelectedMessage,
+    /// Clear the keyboard message selection (`Escape`).
+    ClearMessageSelection,
 }
 
 impl ShortcutAction {
@@ -93,6 +105,12 @@ impl ShortcutAction {
             ShortcutAction::ToggleShare => "Ctrl+Shift+S",
             ShortcutAction::ShowShortcuts => "Ctrl+/",
             ShortcutAction::ScrollToBottom => "End",
+            ShortcutAction::NavigateMessageUp => "↑",
+            ShortcutAction::NavigateMessageDown => "↓",
+            ShortcutAction::CopySelectedMessage => "Ctrl+C",
+            ShortcutAction::EditSelectedMessage => "E",
+            ShortcutAction::RegenerateSelectedMessage => "R",
+            ShortcutAction::ClearMessageSelection => "Esc",
         }
     }
 
@@ -121,6 +139,12 @@ impl ShortcutAction {
             ShortcutAction::ToggleShare => "Toggle share panel",
             ShortcutAction::ShowShortcuts => "Show this reference",
             ShortcutAction::ScrollToBottom => "Scroll to bottom of chat",
+            ShortcutAction::NavigateMessageUp => "Select previous message",
+            ShortcutAction::NavigateMessageDown => "Select next message",
+            ShortcutAction::CopySelectedMessage => "Copy selected message",
+            ShortcutAction::EditSelectedMessage => "Edit selected message",
+            ShortcutAction::RegenerateSelectedMessage => "Regenerate selected message",
+            ShortcutAction::ClearMessageSelection => "Clear message selection",
         }
     }
     /// Stable kebab-case identifier shared with the CommandPalette.
@@ -150,6 +174,12 @@ impl ShortcutAction {
             ShortcutAction::ToggleShare => ids::TOGGLE_SHARE,
             ShortcutAction::ShowShortcuts => ids::SHOW_SHORTCUTS,
             ShortcutAction::ScrollToBottom => ids::SCROLL_TO_BOTTOM,
+            ShortcutAction::NavigateMessageUp => ids::NAVIGATE_MESSAGE_UP,
+            ShortcutAction::NavigateMessageDown => ids::NAVIGATE_MESSAGE_DOWN,
+            ShortcutAction::CopySelectedMessage => ids::COPY_SELECTED_MESSAGE,
+            ShortcutAction::EditSelectedMessage => ids::EDIT_SELECTED_MESSAGE,
+            ShortcutAction::RegenerateSelectedMessage => ids::REGENERATE_SELECTED_MESSAGE,
+            ShortcutAction::ClearMessageSelection => ids::CLEAR_MESSAGE_SELECTION,
         }
     }
 }
@@ -166,7 +196,17 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     // ── Always-on shortcuts (safety critical) ──
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-        actions.push(ShortcutAction::CloseModal);
+        // A2: with an active keyboard message selection, Escape clears the
+        // selection first instead of navigating back (same layering as the
+        // find bar, which closes before CloseModal).
+        if !modal_open
+            && app.current_main() == &clarity_core::ui::AppView::Chat
+            && app.context.ui_store.selected_message_idx.is_some()
+        {
+            actions.push(ShortcutAction::ClearMessageSelection);
+        } else {
+            actions.push(ShortcutAction::CloseModal);
+        }
     }
 
     if app.view_state.turn == clarity_core::ui::TurnState::Loading
@@ -250,6 +290,45 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         && ctx.input(|i| i.key_pressed(egui::Key::End))
     {
         actions.push(ShortcutAction::ScrollToBottom);
+    }
+
+    // ── Message-level keyboard navigation (A2) ──
+    // Focus guard: never hijack keys while any widget owns keyboard input
+    // (composer, inline-edit bubble, palette / picker search fields). The
+    // command palette and find bar also handle arrows themselves, so they
+    // block message navigation while open.
+    let keyboard_free = !ctx.egui_wants_keyboard_input()
+        && !app.command_palette.open
+        && !app.chat_store().find_open;
+    if app.current_main() == &clarity_core::ui::AppView::Chat && keyboard_free {
+        let no_modifiers = ctx.input(|i| i.modifiers.is_none());
+        if no_modifiers && ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            actions.push(ShortcutAction::NavigateMessageUp);
+        }
+        if no_modifiers && ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            actions.push(ShortcutAction::NavigateMessageDown);
+        }
+        let has_selection = app.context.ui_store.selected_message_idx.is_some();
+        if has_selection && no_modifiers && ctx.input(|i| i.key_pressed(egui::Key::E)) {
+            actions.push(ShortcutAction::EditSelectedMessage);
+        }
+        if has_selection
+            && no_modifiers
+            && ctx.input(|i| i.key_pressed(egui::Key::R))
+            && app.view_state.turn != clarity_core::ui::TurnState::Loading
+        {
+            actions.push(ShortcutAction::RegenerateSelectedMessage);
+        }
+        // Ctrl+C copies the selection only when idle — while a turn is
+        // loading Ctrl+C stays bound to StopGeneration (handled above).
+        // ponytail: mouse text-selection inside bubbles is not detectable
+        // here; keyboard selection wins when both exist.
+        if has_selection
+            && app.view_state.turn != clarity_core::ui::TurnState::Loading
+            && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
+        {
+            actions.push(ShortcutAction::CopySelectedMessage);
+        }
     }
 
     // ── Line-mode navigation (S7 Phase 2D) ──
@@ -340,6 +419,27 @@ mod tests {
             (ShortcutAction::NavigateBottom, ids::NAVIGATE_BOTTOM),
             (ShortcutAction::CopyLine, ids::COPY_LINE),
             (ShortcutAction::ScrollToBottom, ids::SCROLL_TO_BOTTOM),
+            (ShortcutAction::NavigateMessageUp, ids::NAVIGATE_MESSAGE_UP),
+            (
+                ShortcutAction::NavigateMessageDown,
+                ids::NAVIGATE_MESSAGE_DOWN,
+            ),
+            (
+                ShortcutAction::CopySelectedMessage,
+                ids::COPY_SELECTED_MESSAGE,
+            ),
+            (
+                ShortcutAction::EditSelectedMessage,
+                ids::EDIT_SELECTED_MESSAGE,
+            ),
+            (
+                ShortcutAction::RegenerateSelectedMessage,
+                ids::REGENERATE_SELECTED_MESSAGE,
+            ),
+            (
+                ShortcutAction::ClearMessageSelection,
+                ids::CLEAR_MESSAGE_SELECTION,
+            ),
         ];
         for (action, expected) in all {
             assert_eq!(

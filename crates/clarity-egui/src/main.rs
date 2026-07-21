@@ -1232,6 +1232,30 @@ impl App {
                 self.chat_store_mut().stick_to_bottom = true;
                 true
             }
+            ids::NAVIGATE_MESSAGE_UP => {
+                self.navigate_message_selection(-1);
+                true
+            }
+            ids::NAVIGATE_MESSAGE_DOWN => {
+                self.navigate_message_selection(1);
+                true
+            }
+            ids::COPY_SELECTED_MESSAGE => {
+                // Actual copy is handled in App::update() where egui::Context is available.
+                true
+            }
+            ids::EDIT_SELECTED_MESSAGE => {
+                self.edit_selected_message();
+                true
+            }
+            ids::REGENERATE_SELECTED_MESSAGE => {
+                self.regenerate_selected_message();
+                true
+            }
+            ids::CLEAR_MESSAGE_SELECTION => {
+                self.context.ui_store.selected_message_idx = None;
+                true
+            }
             other => {
                 tracing::warn!("dispatch_command: unknown command id '{}'", other);
                 false
@@ -1627,6 +1651,7 @@ impl eframe::App for App {
         if self.context.ui_store.last_active_session_id != active_id {
             self.context.ui_store.last_active_session_id = active_id;
             self.context.ui_store.last_scroll_offset = 0.0;
+            self.context.ui_store.selected_message_idx = None;
             let chat_store = self.chat_store_mut();
             // Start new sessions at the top of the message list so the wheel is
             // not locked to the bottom on launch; stick-to-bottom is enabled
@@ -1701,6 +1726,12 @@ impl eframe::App for App {
         for action in shortcuts::collect_actions(&ctx, self) {
             if action == shortcuts::ShortcutAction::CopyLine {
                 if let Some(text) = self.selected_line_text() {
+                    ctx.copy_text(text);
+                    self.context
+                        .push_toast("Copied to clipboard", ToastLevel::Info);
+                }
+            } else if action == shortcuts::ShortcutAction::CopySelectedMessage {
+                if let Some(text) = self.selected_message_text() {
                     ctx.copy_text(text);
                     self.context
                         .push_toast("Copied to clipboard", ToastLevel::Info);
