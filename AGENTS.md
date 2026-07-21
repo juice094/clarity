@@ -392,7 +392,7 @@ cargo run -p clarity-egui --features cuda
 | 规则 | 来源 | 说明 |
 |------|------|------|
 | `missing_docs = "deny"` | `Cargo.toml` | 所有 `pub` 项必须有 `///` 文档注释 |
-| `unsafe_code = "deny"` | `Cargo.toml` | 禁止新增 `unsafe`；已有 1 处白名单（`clarity-memory`） |
+| `unsafe_code = "deny"` | `Cargo.toml` | 禁止新增 `unsafe`；白名单 2 处：`clarity-memory`；`clarity-knowledge`（`local-embedding` feature 内 sqlite-vec `sqlite3_auto_extension` 注册，2026-07-20 批准） |
 | `unwrap_used = "deny"` | Clippy | 新增 `unwrap()` 必须配 `// SAFE: <不变量说明>` |
 | `expect_used = "deny"` | Clippy | 同上 |
 | `panic = "deny"` | Clippy | 禁止新增 `panic!` |

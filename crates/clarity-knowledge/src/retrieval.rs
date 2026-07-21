@@ -71,6 +71,10 @@ pub struct HybridRetriever {
     cosine_index: Option<CosineIndex>,
     /// Documents indexed by path.
     documents: HashMap<PathBuf, ExtractedDocument>,
+    /// Optional local embedding recall branch (PoC lane B1). When set,
+    /// its ranking is fused with the baseline ranking via RRF.
+    #[cfg(feature = "local-embedding")]
+    embedding: Option<crate::embedding::EmbeddingBranch>,
 }
 
 impl HybridRetriever {
@@ -84,7 +88,21 @@ impl HybridRetriever {
             vector_dirty: true,
             cosine_index: None,
             documents: HashMap::new(),
+            #[cfg(feature = "local-embedding")]
+            embedding: None,
         }
+    }
+
+    /// Enable the local embedding recall branch (PoC lane B1, feature
+    /// `local-embedding`). Existing documents are embedded lazily on the
+    /// next search; the baseline scoring path is unchanged when no branch
+    /// is set.
+    #[cfg(feature = "local-embedding")]
+    pub fn enable_local_embedding(&mut self, mut branch: crate::embedding::EmbeddingBranch) {
+        for path in self.documents.keys() {
+            branch.mark_dirty(path);
+        }
+        self.embedding = Some(branch);
     }
 
     /// Index or re-index a single document.
@@ -102,6 +120,10 @@ impl HybridRetriever {
         }
 
         self.bm25.add_document(&text);
+        #[cfg(feature = "local-embedding")]
+        if let Some(branch) = &mut self.embedding {
+            branch.mark_dirty(&path);
+        }
         self.documents.insert(path, doc);
         self.vector_dirty = true;
         Ok(())
@@ -113,6 +135,10 @@ impl HybridRetriever {
             self.bm25.remove_document(idx);
             self.documents.remove(path);
             self.vector_dirty = true;
+        }
+        #[cfg(feature = "local-embedding")]
+        if let Some(branch) = &mut self.embedding {
+            branch.remove(path)?;
         }
         Ok(())
     }
@@ -224,8 +250,65 @@ impl HybridRetriever {
                 .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        // Optional local-embedding branch (PoC lane B1): fuse the baseline
+        // ranking with the embedding ranking via RRF. No-op unless a branch
+        // was enabled with `enable_local_embedding`.
+        #[cfg(feature = "local-embedding")]
+        if self.embedding.is_some() && !parsed.text.is_empty() {
+            results = self.fuse_with_embedding(&parsed.text, &candidates, results)?;
+        }
+
         results.truncate(query.limit);
         Ok(results)
+    }
+
+    /// Fuse the baseline ranking with the embedding branch ranking via RRF.
+    #[cfg(feature = "local-embedding")]
+    fn fuse_with_embedding(
+        &mut self,
+        text: &str,
+        candidates: &HashSet<PathBuf>,
+        baseline: Vec<SearchResult>,
+    ) -> Result<Vec<SearchResult>> {
+        let Some(branch) = self.embedding.as_mut() else {
+            return Ok(baseline);
+        };
+        branch.ensure_index(&self.documents, document_search_text)?;
+        let embedding_ranking: Vec<PathBuf> = branch
+            .search(text, candidates.len().max(1))?
+            .into_iter()
+            .filter(|(path, similarity)| *similarity > 0.0 && candidates.contains(path))
+            .map(|(path, _)| path)
+            .collect();
+        let baseline_ranking: Vec<PathBuf> = baseline.iter().map(|r| r.path.clone()).collect();
+        let fused =
+            crate::embedding::reciprocal_rank_fusion(&[baseline_ranking, embedding_ranking]);
+
+        // Reuse baseline SearchResult metadata where available; synthesize
+        // entries for embedding-only hits (paraphrase recall).
+        let mut by_path: HashMap<PathBuf, SearchResult> =
+            baseline.into_iter().map(|r| (r.path.clone(), r)).collect();
+        let text_lower = text.to_lowercase();
+        Ok(fused
+            .into_iter()
+            .filter_map(|(path, rrf_score)| {
+                if let Some(mut result) = by_path.remove(&path) {
+                    result.score = rrf_score;
+                    Some(result)
+                } else {
+                    let doc = self.documents.get(&path)?;
+                    Some(SearchResult {
+                        path,
+                        title: doc.title.clone(),
+                        snippet: make_snippet(&doc.content, &text_lower),
+                        score: rrf_score,
+                        matched_tags: matched_tags(doc, text),
+                        graph_distance: 0,
+                    })
+                }
+            })
+            .collect())
     }
 
     fn ensure_cosine_index(&mut self) {
@@ -438,5 +521,106 @@ mod tests {
         let content = "前言：这是一些中文内容，用于测试搜索摘要功能。";
         let snippet = make_snippet(content, "中文内容");
         assert!(snippet.contains("中文内容"));
+    }
+
+    /// Deterministic embedder that treats the table entries as synonyms:
+    /// texts containing tokens mapped to the same dimension get similar
+    /// vectors, simulating semantic recall without a real model.
+    #[cfg(feature = "local-embedding")]
+    #[derive(Debug)]
+    struct SynonymEmbedder {
+        table: Vec<(String, usize)>,
+        dim: usize,
+    }
+
+    #[cfg(feature = "local-embedding")]
+    impl crate::embedding::Embedder for SynonymEmbedder {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+            Ok(texts
+                .iter()
+                .map(|t| {
+                    let mut v = vec![0.0f32; self.dim];
+                    for (token, dim) in &self.table {
+                        if t.contains(token.as_str()) {
+                            v[*dim] += 1.0;
+                        }
+                    }
+                    v[self.dim - 1] = 1.0;
+                    v
+                })
+                .collect())
+        }
+
+        fn dim(&self) -> usize {
+            self.dim
+        }
+    }
+
+    #[cfg(feature = "local-embedding")]
+    #[test]
+    fn embedding_branch_recalls_paraphrase() {
+        use crate::embedding::{EmbeddingBranch, VectorStore};
+
+        let mut retriever = HybridRetriever::new();
+        // No literal overlap between query "人工智能" and this document.
+        retriever
+            .add_document(doc(
+                "ai.md",
+                "深度学习入门",
+                "神经网络与梯度下降的基础概念。",
+                &[],
+            ))
+            .unwrap();
+        retriever
+            .add_document(doc("cook.md", "Cooking", "Italian recipes.", &[]))
+            .unwrap();
+
+        // Baseline: BM25 + TF-IDF cannot recall the paraphrase document.
+        let query = SearchQuery::new("人工智能").with_limit(5);
+        let baseline = retriever.search(&query, &KnowledgeGraph::new()).unwrap();
+        assert!(
+            baseline
+                .iter()
+                .all(|r| r.path != std::path::Path::new("ai.md"))
+        );
+
+        // With the embedding branch, the paraphrase document is recalled.
+        let embedder = SynonymEmbedder {
+            table: vec![
+                ("人工智能".to_string(), 0),
+                ("深度学习".to_string(), 0),
+                ("Cooking".to_string(), 1),
+            ],
+            dim: 3,
+        };
+        let branch = EmbeddingBranch::with_store(
+            VectorStore::open_in_memory(crate::embedding::Embedder::dim(&embedder)).unwrap(),
+            Box::new(embedder),
+        );
+        retriever.enable_local_embedding(branch);
+
+        let fused = retriever.search(&query, &KnowledgeGraph::new()).unwrap();
+        assert_eq!(fused[0].path, PathBuf::from("ai.md"));
+        assert!(fused[0].score > 0.0);
+    }
+
+    #[cfg(feature = "local-embedding")]
+    #[test]
+    fn default_search_unchanged_without_embedding_branch() {
+        // The embedding field exists but stays None: results must match the
+        // baseline scoring exactly.
+        let mut retriever = HybridRetriever::new();
+        retriever
+            .add_document(doc(
+                "rust.md",
+                "Rust",
+                "Rust is a systems programming language.",
+                &["programming"],
+            ))
+            .unwrap();
+        let query = SearchQuery::new("rust").with_limit(5);
+        let results = retriever.search(&query, &KnowledgeGraph::new()).unwrap();
+        assert_eq!(results[0].path, PathBuf::from("rust.md"));
+        assert!(results[0].score > 1.0, "baseline additive scoring kept");
     }
 }

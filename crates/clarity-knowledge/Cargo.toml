@@ -34,6 +34,19 @@ petgraph = "0.6"
 rusqlite = { version = "0.34", features = ["bundled-full"] }
 ulid = "1"
 
+# Optional local embedding PoC (lane B1): fastembed + sqlite-vec.
+fastembed = { version = "5", optional = true }
+sqlite-vec = { version = "0.1", optional = true }
+
+[features]
+# Local embedding retrieval branch (fastembed + sqlite-vec). Default off;
+# the default build and CI are unaffected.
+local-embedding = ["dep:fastembed", "dep:sqlite-vec"]
+
+[[example]]
+name = "vault_embedding_benchmark"
+required-features = ["local-embedding"]
+
 [dev-dependencies]
 tempfile = "3"
 tokio-test = "0.4"

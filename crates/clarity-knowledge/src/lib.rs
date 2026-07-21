@@ -17,6 +17,8 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+#[cfg(feature = "local-embedding")]
+pub mod embedding;
 pub mod error;
 pub mod export;
 pub mod extract;

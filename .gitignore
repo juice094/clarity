@@ -21,6 +21,9 @@ tasks/
 **/.clarity/**
 experiments/**/target/
 
+# fastembed model cache (local-embedding PoC, lane B1)
+.fastembed_cache/
+
 # Editor / personal workspace metadata
 .obsidian/
 docs/.obsidian/

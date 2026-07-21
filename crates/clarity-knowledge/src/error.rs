@@ -41,6 +41,10 @@ pub enum KnowledgeError {
     /// A requested operation is not yet implemented.
     #[error("not implemented: {0}")]
     NotImplemented(String),
+
+    /// A local embedding operation failed (feature `local-embedding`).
+    #[error("embedding error: {0}")]
+    Embedding(String),
 }
 
 impl KnowledgeError {
