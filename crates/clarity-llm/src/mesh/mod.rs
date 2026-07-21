@@ -201,6 +201,13 @@ impl LlmProvider for MeshLlmProvider {
         }
     }
 
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        for (name, provider) in &self.providers {
+            provider.set_response_format(format.clone());
+            tracing::debug!("Mesh: set response format on {}", name);
+        }
+    }
+
     fn clear_cache(&self) {
         for provider in self.providers.values() {
             provider.clear_cache();

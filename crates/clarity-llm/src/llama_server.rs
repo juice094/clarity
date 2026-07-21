@@ -121,6 +121,11 @@ impl LlmProvider for LlamaServerProvider {
         self.inner.set_prompt_cache_key(key);
     }
 
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        // Disambiguate from the inherent `set_response_format(Option<ResponseFormat>)`.
+        LlmProvider::set_response_format(&self.inner, format);
+    }
+
     fn capabilities(&self) -> crate::api::ProviderCapabilities {
         crate::api::ProviderCapabilities {
             native_tool_calling: true,

@@ -104,9 +104,20 @@ pub trait LlmProvider: Send + Sync {
     /// - `{"type": "json_object"}` for free-form JSON
     /// - `{"type": "json_schema", "json_schema": {...}}` for schema-constrained output
     ///
-    /// Pass `None` to disable. Default is a no-op; providers that support
-    /// structured output should override.
-    fn set_response_format(&self, _format: Option<serde_json::Value>) {}
+    /// Pass `None` to disable. The default implementation logs a warning when
+    /// a format is requested but the provider does not override this method,
+    /// so unsupported providers never silently swallow the setting; callers
+    /// may then fall back to text parsing. Providers that support structured
+    /// output should override.
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        if format.is_some() {
+            tracing::warn!(
+                provider = std::any::type_name::<Self>(),
+                "provider does not support response_format / JSON mode; \
+                 ignoring (caller may fall back to text parsing)"
+            );
+        }
+    }
 
     /// Clear any provider-side cache (e.g., local KV cache).
     /// Default is a no-op; providers with local state should override.

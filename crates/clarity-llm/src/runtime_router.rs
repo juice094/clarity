@@ -81,6 +81,8 @@ pub struct RouterLlmProvider {
     registry: ModelRegistry,
     secrets: Option<clarity_secrets::SecretStore>,
     hint: RouterHint,
+    /// Structured-output setting forwarded to each per-request delegate.
+    response_format: parking_lot::RwLock<Option<Value>>,
 }
 
 impl RouterLlmProvider {
@@ -90,6 +92,7 @@ impl RouterLlmProvider {
             registry,
             secrets: default_secret_store().ok(),
             hint,
+            response_format: parking_lot::RwLock::new(None),
         }
     }
 
@@ -250,6 +253,7 @@ impl LlmProvider for RouterLlmProvider {
             .ok_or_else(|| AgentError::Llm("Router could not select any alias".into()))?;
         tracing::info!("Routing request to alias: {}", alias);
         let delegate = self.build_delegate(&alias).await?;
+        delegate.set_response_format(self.response_format.read().clone());
         delegate.complete(messages, tools).await
     }
 
@@ -265,12 +269,18 @@ impl LlmProvider for RouterLlmProvider {
             // Build is async; stream is sync.  Spawn a tiny runtime block.
             tokio::runtime::Handle::current().block_on(self.build_delegate(&alias))
         })?;
+        delegate.set_response_format(self.response_format.read().clone());
         delegate.stream(messages, tools)
     }
 
     fn set_prompt_cache_key(&self, key: &str) {
         // No-op: delegates are created per-request.
         let _ = key;
+    }
+
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        // Delegates are created per-request; store and forward on each build.
+        *self.response_format.write() = format;
     }
 
     fn capabilities(&self) -> ProviderCapabilities {

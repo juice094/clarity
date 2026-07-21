@@ -274,6 +274,114 @@ mod tests {
         };
         let json = serde_json::to_value(&request).unwrap();
         assert!(json.get("prompt_cache_key").is_none());
+        assert!(json.get("response_format").is_none());
+    }
+
+    #[test]
+    fn test_chat_completion_request_serialization_with_response_format() {
+        let request = ChatCompletionRequest {
+            model: "test-model".into(),
+            messages: vec![ApiMessage {
+                role: "user".into(),
+                content: "hello".into(),
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+            }],
+            tools: None,
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            prompt_cache_key: None,
+            thinking: None,
+            response_format: Some(json!({"type": "json_object"})),
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            json.get("response_format").unwrap(),
+            &json!({"type": "json_object"})
+        );
+    }
+
+    /// Read one full HTTP/1.1 request (headers + Content-Length body).
+    async fn read_http_request(stream: &mut tokio::net::TcpStream) -> String {
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 4096];
+        let header_end = loop {
+            let n = stream.read(&mut tmp).await.unwrap();
+            buf.extend_from_slice(&tmp[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+        };
+        let headers = String::from_utf8_lossy(&buf[..header_end]).to_string();
+        let content_length = headers
+            .lines()
+            .find_map(|l| {
+                l.strip_prefix("Content-Length:")
+                    .or_else(|| l.strip_prefix("content-length:"))
+            })
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        while buf.len() < header_end + content_length {
+            let n = stream.read(&mut tmp).await.unwrap();
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&tmp[..n]);
+        }
+        String::from_utf8_lossy(&buf).to_string()
+    }
+
+    #[tokio::test]
+    async fn test_openai_complete_sends_response_format_only_when_set() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(2);
+        tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let request = read_http_request(&mut stream).await;
+                let _ = tx.send(request).await;
+                let response_body =
+                    r#"{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        let llm = OpenAiCompatibleLlm::with_client(
+            "test-key",
+            format!("http://127.0.0.1:{}", port),
+            "gpt-4o",
+            no_proxy_client(),
+        );
+        let messages = vec![Message::user("hello")];
+        let tools = serde_json::json!({});
+
+        // With response_format set, the request body carries the field.
+        LlmProvider::set_response_format(&llm, Some(json!({"type": "json_object"})));
+        llm.complete(&messages, &tools).await.unwrap();
+        let request = rx.recv().await.unwrap();
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+        let body_json: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(
+            body_json.get("response_format").unwrap(),
+            &json!({"type": "json_object"})
+        );
+
+        // After clearing, the field disappears from the request body.
+        LlmProvider::set_response_format(&llm, None);
+        llm.complete(&messages, &tools).await.unwrap();
+        let request = rx.recv().await.unwrap();
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+        let body_json: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert!(body_json.get("response_format").is_none());
     }
 
     #[test]

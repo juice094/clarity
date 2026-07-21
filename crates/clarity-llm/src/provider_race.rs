@@ -363,6 +363,12 @@ impl LlmProvider for RacingProvider {
         }
     }
 
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        for p in &self.providers {
+            p.set_response_format(format.clone());
+        }
+    }
+
     fn capabilities(&self) -> ProviderCapabilities {
         // Report the union of all providers' capabilities.
         let mut caps = self
