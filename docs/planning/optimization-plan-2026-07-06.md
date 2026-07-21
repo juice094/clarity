@@ -2,7 +2,7 @@
 
 > 生成时间：2026-07-06  
 > 范围：`clarity-egui` / `clarity-ui` / `clarity-apps` / `clarity-shell` / `clarity-chrome` 前端栈  
-> 状态：第一、二批已落地
+> 状态：第一~三批已落地（第三批 2026-07-20：#1 虚拟列表高度缓存 `cb92637c`、#6 消息键盘导航 `de8659a6`、#7 token 清理 `a13e1c18`）
 
 ## 目标
 
