@@ -291,6 +291,19 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Clear Batch Grants", "清除批量授权");
     m.insert("No custom providers configured.", "未配置自定义服务商。");
 
+    // ── Settings: model catalog refresh ──
+    m.insert("Refresh Models", "刷新模型");
+    m.insert("Refreshing...", "刷新中…");
+    m.insert("Refresh model list", "从 API 拉取最新模型列表");
+    m.insert("Refresh in progress...", "正在刷新模型列表…");
+    m.insert("Retry model refresh", "重试拉取模型列表");
+    m.insert(
+        "This channel has no public model API",
+        "该渠道无公开模型 API",
+    );
+    m.insert("models", "个模型");
+    m.insert("Model refresh failed", "模型列表刷新失败");
+
     // ── Ops tab ──
     m.insert("Ops Actions", "运维操作");
     m.insert("AI Diagnostics", "AI 问题诊断");

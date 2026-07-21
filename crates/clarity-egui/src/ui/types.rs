@@ -191,10 +191,10 @@ pub enum UiEvent {
         success: bool,
         error: Option<String>,
     },
-    /// Provider model list fetched from API (async callback from Provider panel).
+    /// Provider model catalog fetch completed (async callback from Provider panel).
     ProviderModelList {
         provider_id: String,
-        models: Vec<String>,
+        result: Result<Vec<String>, String>,
     },
     /// Async web page fetch completed — payload delivered to chat preview area.
     #[allow(dead_code)]

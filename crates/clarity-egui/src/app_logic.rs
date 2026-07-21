@@ -297,7 +297,6 @@ impl App {
             add_provider_format: "openai-completions".into(),
             provider_registry: crate::provider::ProviderRegistry::load(),
             testing_provider: None,
-            refreshing_provider: None,
             kimi_code_login_state: clarity_apps::KimiCodeLoginState::Idle,
             claw_editing_index: None,
             claw_form: crate::settings::OpenClawConnection::default(),

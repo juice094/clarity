@@ -96,7 +96,6 @@ pub(crate) fn test_app(ctx: &egui::Context) -> crate::App {
                     add_provider_format: String::new(),
                     provider_registry: crate::provider::ProviderRegistry::default(),
                     testing_provider: None,
-                    refreshing_provider: None,
                     kimi_code_login_state: clarity_apps::KimiCodeLoginState::Idle,
                     claw_editing_index: None,
                     claw_form: crate::settings::OpenClawConnection::default(),

@@ -328,10 +328,10 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::ProviderModelList {
                 provider_id,
-                models,
+                result,
             } => {
                 let (settings_store, ui_store) = app.settings_and_ui_mut();
-                settings::on_provider_model_list(settings_store, ui_store, provider_id, models);
+                settings::on_provider_model_list(settings_store, ui_store, provider_id, result);
             }
             UiEvent::WebPageFetched {
                 title,

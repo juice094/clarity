@@ -37,7 +37,6 @@ pub enum KimiCodeLoginState {
 #[derive(Clone, Debug, Default)]
 pub struct SettingsStore {
     pub settings_edit: GuiSettings,
-    #[allow(dead_code)]
     pub settings_vm: SettingsViewModel,
     pub settings_active_tab: u8,
     pub show_add_provider: bool,
@@ -47,7 +46,6 @@ pub struct SettingsStore {
     pub add_provider_format: String,
     pub provider_registry: crate::provider::ProviderRegistry,
     pub testing_provider: Option<String>,
-    pub refreshing_provider: Option<String>,
     /// Current state of the Kimi Code OAuth login flow.
     pub kimi_code_login_state: KimiCodeLoginState,
     /// Index of the OpenClaw connection currently being edited in settings.

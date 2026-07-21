@@ -511,12 +511,10 @@ impl clarity_shell::AppState for App {
         let tx = self.context.ui_tx.clone();
         let pid = provider_id;
         self.context.runtime.spawn(async move {
-            let models = clarity_llm::runtime::list_models(&cfg)
-                .await
-                .unwrap_or_default();
+            let result = clarity_llm::runtime::list_models(&cfg).await;
             let _ = tx.send(UiEvent::ProviderModelList {
                 provider_id: pid,
-                models,
+                result,
             });
         });
     }

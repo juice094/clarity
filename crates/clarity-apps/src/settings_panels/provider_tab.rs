@@ -1,13 +1,54 @@
 use crate::provider::ProviderDefinition;
 use crate::settings::SettingsStore;
+use clarity_core::view_models::settings::SettingsViewModel;
 use clarity_shell::AppState;
 use clarity_ui::design_system::{self, Space, TextStyle};
 
 use super::provider_add_form;
 use super::provider_detail;
 
+/// Whether a provider's model catalog can be pulled from a remote API.
+///
+/// Delegates to `clarity_llm::catalog::capability`, the single source of
+/// truth: built-in providers are judged by their canonical family (which
+/// knows about OAuth device-flow channels like Kimi Code and local GGUF),
+/// custom providers by the runtime config they would produce.
+pub(crate) fn provider_supports_catalog(def: &ProviderDefinition) -> bool {
+    if def.builtin {
+        // Note: the built-in Kimi Code id is `kimi_code` while the canonical
+        // family is `kimi-code`; unknown families are denied by default, which
+        // is exactly the correct verdict for that OAuth channel.
+        clarity_llm::catalog::capability::family_supports_catalog(&def.id)
+    } else {
+        clarity_llm::runtime::RuntimeProviderConfig {
+            provider_id: def.id.clone(),
+            base_url: def.base_url.clone(),
+            api_format: def.api_format.runtime_api_format().to_string(),
+            api_key: String::new(),
+            model: String::new(),
+        }
+        .supports_model_catalog()
+    }
+}
+
+/// Inject catalog-pull capability for every known provider into the
+/// ViewModel, pinning incapable channels to `ModelRefreshState::Unsupported`.
+///
+/// Idempotent and cheap (the registry holds a handful of entries), so the
+/// provider page re-applies it on every open/frame.
+pub(crate) fn apply_catalog_capabilities<'a>(
+    vm: &mut SettingsViewModel,
+    defs: impl IntoIterator<Item = &'a ProviderDefinition>,
+) {
+    for def in defs {
+        vm.set_catalog_supported(&def.id, provider_supports_catalog(def));
+    }
+}
+
 /// Renders the provider UI.
 pub fn render_provider(store: &mut SettingsStore, state: &mut dyn AppState, ui: &mut egui::Ui) {
+    apply_catalog_capabilities(&mut store.settings_vm, store.provider_registry.list());
+
     let left_w = (ui.available_width() * 0.35).clamp(180.0, 260.0);
     let theme = state.theme().clone();
 
@@ -141,4 +182,99 @@ fn render_empty_state(
                 .color(theme.text_muted),
         );
     });
+}
+
+// ============================================================================
+// Unit tests
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{ApiFormat, AuthType};
+    use clarity_core::view_models::settings::ModelRefreshState;
+
+    fn def(
+        id: &str,
+        builtin: bool,
+        api_format: ApiFormat,
+        auth_type: AuthType,
+    ) -> ProviderDefinition {
+        ProviderDefinition {
+            id: id.to_string(),
+            builtin,
+            api_format,
+            auth_type,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn builtin_family_matrix() {
+        for supported in ["openai", "deepseek", "kimi"] {
+            assert!(
+                provider_supports_catalog(&def(
+                    supported,
+                    true,
+                    ApiFormat::OpenaiCompletions,
+                    AuthType::ApiKey
+                )),
+                "{supported} should support catalog pull"
+            );
+        }
+        for unsupported in ["anthropic", "deepseek-device", "kimi_code", "local"] {
+            let api_format = match unsupported {
+                "anthropic" => ApiFormat::AnthropicMessages,
+                "deepseek-device" => ApiFormat::DeepSeekDevice,
+                _ => ApiFormat::OpenaiCompletions,
+            };
+            assert!(
+                !provider_supports_catalog(&def(unsupported, true, api_format, AuthType::ApiKey)),
+                "{unsupported} should NOT support catalog pull"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_provider_uses_runtime_config_verdict() {
+        assert!(provider_supports_catalog(&def(
+            "my-openai",
+            false,
+            ApiFormat::OpenaiCompletions,
+            AuthType::ApiKey
+        )));
+        assert!(!provider_supports_catalog(&def(
+            "my-anthropic",
+            false,
+            ApiFormat::AnthropicMessages,
+            AuthType::ApiKey
+        )));
+        assert!(!provider_supports_catalog(&def(
+            "my-device",
+            false,
+            ApiFormat::DeepSeekDevice,
+            AuthType::ApiKey
+        )));
+    }
+
+    #[test]
+    fn apply_catalog_capabilities_pins_unsupported_providers() {
+        let defs = [
+            def(
+                "openai",
+                true,
+                ApiFormat::OpenaiCompletions,
+                AuthType::ApiKey,
+            ),
+            def("local", true, ApiFormat::OpenaiCompletions, AuthType::None),
+        ];
+
+        let mut vm = SettingsViewModel::new();
+        apply_catalog_capabilities(&mut vm, defs.iter());
+
+        assert_eq!(vm.refresh_state("openai"), &ModelRefreshState::Idle);
+        assert_eq!(vm.refresh_state("local"), &ModelRefreshState::Unsupported);
+        // begin_refresh must skip the pinned provider.
+        assert_eq!(vm.begin_refresh(Some("local")), Vec::<String>::new());
+        assert_eq!(vm.begin_refresh(Some("openai")), vec!["openai".to_string()]);
+    }
 }

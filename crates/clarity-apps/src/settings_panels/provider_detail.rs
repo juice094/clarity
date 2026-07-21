@@ -2,6 +2,7 @@
 
 use crate::provider::{ApiFormat, AuthMode, ProviderDefinition, ProviderRegistry};
 use crate::settings::{KimiCodeLoginState, SettingsStore};
+use clarity_core::view_models::settings::ModelRefreshState;
 use clarity_shell::{AppState, ToastLevel};
 use clarity_ui::design_system::{self, Space, TextStyle};
 use clarity_ui::theme::ICON_X;
@@ -22,6 +23,56 @@ fn deepseek_mode_to_model(mode: &str) -> &'static str {
         "expert" => "deepseek-reasoner",
         "vision" => "deepseek-vision",
         _ => "deepseek-chat",
+    }
+}
+
+/// Presentation model for the per-provider "refresh models" affordance,
+/// derived purely from the ViewModel's [`ModelRefreshState`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RefreshButtonModel {
+    /// Whether the button accepts clicks.
+    pub enabled: bool,
+    /// i18n key for the button label.
+    pub label_key: &'static str,
+    /// i18n key for the hover tooltip.
+    pub hover_key: &'static str,
+    /// Whether to show an in-flight spinner next to the button.
+    pub show_spinner: bool,
+    /// Model-count badge shown after a successful refresh.
+    pub badge_count: Option<usize>,
+}
+
+/// Map a catalog refresh state onto the button presentation.
+pub(crate) fn refresh_button_model(state: &ModelRefreshState) -> RefreshButtonModel {
+    let model = |enabled, label_key, hover_key, show_spinner, badge_count| RefreshButtonModel {
+        enabled,
+        label_key,
+        hover_key,
+        show_spinner,
+        badge_count,
+    };
+    match state {
+        ModelRefreshState::Idle => model(true, "Refresh Models", "Refresh model list", false, None),
+        ModelRefreshState::Loading => {
+            model(false, "Refreshing...", "Refresh in progress...", true, None)
+        }
+        ModelRefreshState::Ready { count } => model(
+            true,
+            "Refresh Models",
+            "Refresh model list",
+            false,
+            Some(*count),
+        ),
+        ModelRefreshState::Error { .. } => {
+            model(true, "Refresh Models", "Retry model refresh", false, None)
+        }
+        ModelRefreshState::Unsupported => model(
+            false,
+            "Refresh Models",
+            "This channel has no public model API",
+            false,
+            None,
+        ),
     }
 }
 
@@ -429,9 +480,7 @@ pub(super) fn render_provider_detail(
             .map(|p| p.api_format == ApiFormat::DeepSeekDevice)
             .unwrap_or(false);
         let supports_connection_test = !is_local && !is_chat_only && !is_deepseek_device;
-        let supports_model_refresh = !is_local && !is_chat_only && !is_deepseek_device;
         let is_testing = store.testing_provider.as_deref() == Some(&current);
-        let is_refreshing = store.refreshing_provider.as_deref() == Some(&current);
 
         // Test Connection
         let test_label = if is_testing {
@@ -483,27 +532,28 @@ pub(super) fn render_provider_detail(
             }
         }
 
-        // Refresh Models
-        let refresh_label = if is_refreshing {
-            "Refreshing..."
-        } else {
-            "Refresh Models"
-        };
-        let refresh_hover = if is_chat_only {
-            "Model refresh is not supported for chat-only providers"
-        } else if is_deepseek_device {
-            "Model refresh is not supported for DeepSeek (Device)"
-        } else {
-            "Refresh model list"
-        };
+        // Refresh Models — driven by the ViewModel's catalog refresh state,
+        // which is pinned to `Unsupported` for channels with no listable API
+        // (see `provider_tab::apply_catalog_capabilities`).
+        let refresh_ui = refresh_button_model(store.settings_vm.refresh_state(&current));
         let refresh_response = ui
             .add_enabled(
-                !is_local && !is_refreshing && supports_model_refresh,
-                clarity_ui::widgets::Button::new(refresh_label)
+                refresh_ui.enabled,
+                clarity_ui::widgets::Button::new(state.t(refresh_ui.label_key))
                     .secondary()
                     .small(),
             )
-            .on_hover_text(refresh_hover);
+            .on_hover_text(state.t(refresh_ui.hover_key));
+        if refresh_ui.show_spinner {
+            ui.add(egui::Spinner::new());
+        }
+        if let Some(count) = refresh_ui.badge_count {
+            ui.label(
+                egui::RichText::new(format!("{} {}", count, state.t("models")))
+                    .font(theme.font(theme.text_xs))
+                    .color(theme.ok),
+            );
+        }
         if refresh_response.clicked() {
             let (_, base_url, api_fmt) = prov
                 .as_ref()
@@ -532,8 +582,13 @@ pub(super) fn render_provider_detail(
             } else if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
                 state.push_toast(e, ToastLevel::Warn);
             } else {
-                store.refreshing_provider = Some(current.clone());
-                state.spawn_provider_refresh(current.clone(), base_url, api_fmt, key, model);
+                // Mirrors `UserAction::RefreshModels` handling in the ViewModel;
+                // `begin_refresh` is called directly because the action handler
+                // consumes the started-list the host needs to spawn fetches.
+                let started = store.settings_vm.begin_refresh(Some(&current));
+                if !started.is_empty() {
+                    state.spawn_provider_refresh(current.clone(), base_url, api_fmt, key, model);
+                }
             }
         }
 
@@ -601,4 +656,67 @@ pub(super) fn render_provider_detail(
             }
         }
     });
+
+    // ── Refresh error (inline, below the action row) ──
+    if let ModelRefreshState::Error { message } = store.settings_vm.refresh_state(&current) {
+        design_system::gap(ui, Space::S1);
+        ui.label(
+            egui::RichText::new(format!("{}: {}", state.t("Model refresh failed"), message))
+                .font(theme.font(theme.text_xs))
+                .color(theme.error_text),
+        )
+        .on_hover_text(message);
+    }
+}
+
+// ============================================================================
+// Unit tests
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_button_idle_is_plain_enabled_button() {
+        let m = refresh_button_model(&ModelRefreshState::Idle);
+        assert!(m.enabled);
+        assert_eq!(m.label_key, "Refresh Models");
+        assert!(!m.show_spinner);
+        assert_eq!(m.badge_count, None);
+    }
+
+    #[test]
+    fn refresh_button_loading_disables_and_shows_spinner() {
+        let m = refresh_button_model(&ModelRefreshState::Loading);
+        assert!(!m.enabled);
+        assert_eq!(m.label_key, "Refreshing...");
+        assert!(m.show_spinner);
+        assert_eq!(m.badge_count, None);
+    }
+
+    #[test]
+    fn refresh_button_ready_carries_count_badge() {
+        let m = refresh_button_model(&ModelRefreshState::Ready { count: 7 });
+        assert!(m.enabled);
+        assert_eq!(m.badge_count, Some(7));
+        assert!(!m.show_spinner);
+    }
+
+    #[test]
+    fn refresh_button_error_offers_retry() {
+        let m = refresh_button_model(&ModelRefreshState::Error {
+            message: "boom".into(),
+        });
+        assert!(m.enabled, "error state must allow a retry");
+        assert_eq!(m.hover_key, "Retry model refresh");
+        assert_eq!(m.badge_count, None);
+    }
+
+    #[test]
+    fn refresh_button_unsupported_is_greyed_out_with_explanation() {
+        let m = refresh_button_model(&ModelRefreshState::Unsupported);
+        assert!(!m.enabled);
+        assert_eq!(m.hover_key, "This channel has no public model API");
+        assert!(!m.show_spinner);
+    }
 }
