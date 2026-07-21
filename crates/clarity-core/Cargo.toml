@@ -68,6 +68,9 @@ default = ["mcp"]
 mcp = []
 session-migration = ["dep:rusqlite"]
 hermes = ["clarity-memory/hermes"]
+# Pass-through to the knowledge local-embedding recall branch (fastembed +
+# sqlite-vec, RRF fusion). Default off; the default build is unaffected.
+local-embedding = ["clarity-knowledge/local-embedding"]
 
 [[bench]]
 name = "tool_registry"

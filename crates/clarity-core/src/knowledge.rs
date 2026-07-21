@@ -5,12 +5,18 @@
 //! indexing, spreading activation) lives in `clarity-knowledge`.
 
 use clarity_contract::Message;
-use clarity_knowledge::{KnowledgeField, MarkdownExtractor, NodeId};
+use clarity_knowledge::{KnowledgeField, MarkdownExtractor, NodeId, SearchQuery};
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
+
+/// Number of top knowledge-field results injected into the turn context.
+///
+/// Kept small on purpose: this section shares the dynamic-prompt budget with
+/// memories and compiled memory, and each entry already carries a snippet.
+const RECALL_TOP_K: usize = 3;
 
 #[allow(clippy::expect_used)]
 static WIKILINK_RE: LazyLock<Regex> =
@@ -88,6 +94,52 @@ pub fn index_compiled_memories(
     Ok(())
 }
 
+/// Recall relevant knowledge for the current turn.
+///
+/// Runs a hybrid field search over `query` and formats the top hits as a
+/// markdown section for the dynamic system prompt. When the field's local
+/// embedding branch is enabled (feature `local-embedding`), the ranking is
+/// already RRF-fused at the retriever level, so this path transparently
+/// upgrades to fused results.
+///
+/// Returns `None` when the query is blank or the field has no relevant
+/// entries, so callers can skip the section entirely. Best-effort: retrieval
+/// failures are logged and yield `None` so a broken index never breaks a
+/// turn.
+pub fn recall_context(field: &Arc<KnowledgeField>, query: &str) -> Option<String> {
+    if query.trim().is_empty() {
+        return None;
+    }
+    let results = match field.search(&SearchQuery::new(query).with_limit(RECALL_TOP_K)) {
+        Ok(results) => results,
+        Err(e) => {
+            tracing::warn!("Knowledge field recall failed: {}", e);
+            return None;
+        }
+    };
+    if results.is_empty() {
+        return None;
+    }
+
+    let mut section = String::from("\n\n# Relevant Knowledge\n");
+    for result in &results {
+        let title = result.title.as_deref().unwrap_or("untitled");
+        // Collapse whitespace so multi-line snippets stay on one prompt line.
+        let snippet: String = result
+            .snippet
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        section.push_str(&format!(
+            "- **{}** ({}): {}\n",
+            title,
+            result.path.display(),
+            snippet
+        ));
+    }
+    Some(section)
+}
+
 /// Extract candidate node ids from query and messages.
 ///
 /// Currently recognizes:
@@ -153,5 +205,30 @@ mod tests {
             .unwrap();
         assert!(!results.is_empty(), "compiled memory should be searchable");
         assert_eq!(results[0].path, memory_path);
+    }
+
+    #[test]
+    fn recall_context_includes_indexed_hits() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("rust.md"),
+            "# Rust\nRust ownership model explained.",
+        )
+        .unwrap();
+
+        let field = Arc::new(KnowledgeField::new(FieldConfig::default()));
+        index_compiled_memories(&field, temp.path()).unwrap();
+
+        let section = recall_context(&field, "rust ownership").unwrap();
+        assert!(section.contains("# Relevant Knowledge"));
+        assert!(section.contains("rust.md"));
+        assert!(section.contains("Rust"));
+    }
+
+    #[test]
+    fn recall_context_none_when_nothing_relevant() {
+        let field = Arc::new(KnowledgeField::new(FieldConfig::default()));
+        assert!(recall_context(&field, "anything").is_none());
+        assert!(recall_context(&field, "   ").is_none());
     }
 }

@@ -15,6 +15,13 @@ use std::collections::HashMap;
 const MAX_STATIC_PROMPT_BYTES: usize = 200_000;
 const MAX_DYNAMIC_PROMPT_BYTES: usize = 200_000;
 
+/// Byte budget for the knowledge-field recall section of the dynamic prompt.
+///
+/// The section is capped independently so a large vault cannot crowd out
+/// memories and compiled memory; the whole dynamic prompt is still bounded
+/// by `MAX_DYNAMIC_PROMPT_BYTES` afterwards.
+const MAX_KNOWLEDGE_SECTION_BYTES: usize = 4_000;
+
 // ponytail: manual UTF-8 boundary scan. Replace with str::floor_char_boundary once MSRV >= 1.91.
 /// Find the largest valid UTF-8 boundary at or before `byte_idx`.
 fn floor_char_boundary(text: &str, byte_idx: usize) -> usize {
@@ -260,6 +267,15 @@ pub(crate) async fn build_system_prompt_split(
                     dynamic_prompt.push_str(&format!("\n\n# Compiled Memory\n{}\n", content));
                 }
             }
+        }
+    }
+
+    // Knowledge-field recall: inject the top-scoring hits for this query.
+    // When the field's local embedding branch is enabled, these are already
+    // RRF-fused results. No-op unless a knowledge field is configured.
+    if let Some(field) = agent.knowledge_field() {
+        if let Some(section) = crate::knowledge::recall_context(&field, query) {
+            dynamic_prompt.push_str(&truncate_to_bytes(&section, MAX_KNOWLEDGE_SECTION_BYTES));
         }
     }
 

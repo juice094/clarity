@@ -94,6 +94,40 @@ impl KnowledgeField {
         self
     }
 
+    /// Enable the local embedding recall branch for this field.
+    ///
+    /// After enabling, every search fuses the baseline BM25/TF-IDF ranking
+    /// with a dense-vector ranking (fastembed + sqlite-vec) via RRF. Vectors
+    /// are persisted in `db_path`; the embedding model (BGE-small-zh-v1.5) is
+    /// downloaded into `cache_dir` on first use, or the fastembed default
+    /// cache when `None`. Documents already indexed are embedded lazily on
+    /// the next search.
+    ///
+    /// When `clarity-knowledge` is built without the `local-embedding`
+    /// feature this method is a no-op that logs a warning, so callers can
+    /// wire their configuration unconditionally.
+    #[cfg(feature = "local-embedding")]
+    pub fn enable_local_embedding(&self, db_path: &Path, cache_dir: Option<PathBuf>) -> Result<()> {
+        let embedder = crate::embedding::FastembedEmbedder::new(
+            fastembed::EmbeddingModel::BGESmallZHV15,
+            cache_dir,
+        )?;
+        let branch = crate::embedding::EmbeddingBranch::new(db_path, Box::new(embedder))?;
+        self.retriever.write().enable_local_embedding(branch);
+        Ok(())
+    }
+
+    /// No-op variant used when the `local-embedding` feature is disabled.
+    #[cfg(not(feature = "local-embedding"))]
+    pub fn enable_local_embedding(&self, db_path: &Path, cache_dir: Option<PathBuf>) -> Result<()> {
+        let _ = (db_path, cache_dir);
+        tracing::warn!(
+            "KnowledgeField::enable_local_embedding called but the `local-embedding` \
+             feature is disabled; recall stays on the baseline retriever"
+        );
+        Ok(())
+    }
+
     /// Index or re-index a document.
     ///
     /// The document is added to the hybrid retriever and its metadata is
@@ -767,6 +801,25 @@ mod tests {
             .search(&SearchQuery::new("Updated content").with_limit(5))
             .unwrap();
         assert!(!results.iter().any(|r| r.path == created));
+    }
+
+    #[cfg(not(feature = "local-embedding"))]
+    #[test]
+    fn enable_local_embedding_is_noop_without_feature() {
+        // Regression lock: without the feature the method must succeed as a
+        // no-op and baseline retrieval must be byte-for-byte unchanged.
+        let field = KnowledgeField::new(FieldConfig::default());
+        field
+            .index_document(doc("a.md", "A", "Rust is fast.", &[]))
+            .unwrap();
+        field
+            .enable_local_embedding(Path::new("ignored.db"), None)
+            .unwrap();
+
+        let results = field
+            .search(&SearchQuery::new("rust").with_limit(5))
+            .unwrap();
+        assert!(results.iter().any(|r| r.path == *"a.md"));
     }
 
     #[test]
