@@ -66,12 +66,66 @@ impl VirtualWindow {
     }
 }
 
-/// Compute per-unit height estimates for the virtual list.
-///
-/// Takes individual slices rather than `&Session` so the caller can split
-/// immutable (`messages`) and mutable (`turn_heights`) borrows across slices.
+/// Quantize a content width so sub-pixel jitter does not thrash the height
+/// cache. Heights only change meaningfully when the width moves by more than
+/// a fraction of a pixel.
+fn width_bucket(max_w: f32) -> u32 {
+    (max_w.max(0.0) * 8.0).round() as u32
+}
+
+/// Measure a single unit's height, including the inter-unit action gap.
 #[allow(clippy::too_many_arguments)]
-fn compute_unit_estimates(
+fn measure_unit(
+    messages: &[crate::ui::types::Message],
+    units: &[RenderUnit],
+    idx: usize,
+    editing_idx: Option<usize>,
+    max_w: f32,
+    theme: &Theme,
+    metrics: &crate::pretext::EguiFontMetrics,
+    turn_heights: &mut [Option<f32>],
+    turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
+) -> f32 {
+    // Keep this in sync with the rendered layout so the virtual window and
+    // the ScrollArea stick-to-bottom math agree.
+    let action_gap_h = theme.space_24 + theme.space_8;
+    let u = &units[idx];
+    let editing = editing_idx == Some(u.start);
+    if u.is_user {
+        let bubble_h = messages[u.start].cached_height.unwrap_or_else(|| {
+            crate::ui::render::estimate_height(&messages[u.start], max_w, theme, metrics)
+        });
+        if editing {
+            bubble_h + 80.0
+        } else {
+            bubble_h + action_gap_h
+        }
+    } else {
+        let cached = turn_heights.get(idx).copied().flatten();
+        cached.unwrap_or_else(|| {
+            let turn = turn_cache[idx].get_or_insert_with(|| {
+                crate::components::agent_turn::AgentTurn::from_messages(&messages[u.start..u.end])
+            });
+            turn.estimate_height(max_w, theme, metrics)
+        }) + action_gap_h
+    }
+}
+
+/// Refresh the per-session unit-height cache for the virtual list.
+///
+/// A cache hit (same width bucket, revision, editing index and unit count)
+/// returns immediately without touching a single message — this is what
+/// keeps per-frame height estimation O(1) on stable conversations instead of
+/// walking every turn. While a turn is active, mutations are append-only at
+/// the trailing turn, so only the tail is re-measured; any other change
+/// (width, edit, session switch) rebuilds the cache once.
+///
+/// ponytail: the streaming fast path assumes active-turn mutations only
+/// append to or extend the trailing turn — the same assumption the
+/// `turn_cache` invalidation already makes. Edits of earlier messages change
+/// `editing_idx` or truncate the history, both of which force a full rebuild.
+#[allow(clippy::too_many_arguments)]
+fn refresh_height_cache(
     messages: &[crate::ui::types::Message],
     units: &[RenderUnit],
     editing_idx: Option<usize>,
@@ -80,35 +134,60 @@ fn compute_unit_estimates(
     metrics: &crate::pretext::EguiFontMetrics,
     turn_heights: &mut [Option<f32>],
     turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
-    out: &mut Vec<f32>,
+    turn_active: bool,
+    revision: u64,
+    height_cache: &mut Option<crate::ui::types::UnitHeightCache>,
 ) {
-    // Keep this in sync with `estimate_total_height` so the virtual window and
-    // the ScrollArea stick-to-bottom math agree.
-    let action_gap_h = theme.space_24 + theme.space_8;
-    out.clear();
-    out.extend(units.iter().enumerate().map(|(i, u)| {
-        let editing = editing_idx == Some(u.start);
-        if u.is_user {
-            let bubble_h = messages[u.start].cached_height.unwrap_or_else(|| {
-                crate::ui::render::estimate_height(&messages[u.start], max_w, theme, metrics)
-            });
-            if editing {
-                bubble_h + 80.0
-            } else {
-                bubble_h + action_gap_h
-            }
-        } else {
-            let cached = turn_heights.get(i).copied().flatten();
-            cached.unwrap_or_else(|| {
-                let turn = turn_cache[i].get_or_insert_with(|| {
-                    crate::components::agent_turn::AgentTurn::from_messages(
-                        &messages[u.start..u.end],
-                    )
-                });
-                turn.estimate_height(max_w, theme, metrics)
-            }) + action_gap_h
+    let bucket = width_bucket(max_w);
+    if let Some(c) = height_cache.as_ref() {
+        if c.width_bucket == bucket
+            && c.revision == revision
+            && c.editing_idx == editing_idx
+            && c.unit_heights.len() == units.len()
+        {
+            return;
         }
-    }));
+    }
+
+    // Streaming fast path: reuse the stable prefix and re-measure only the
+    // trailing unit (the one still growing) plus any newly appended units.
+    let prefix_len = height_cache
+        .as_ref()
+        .filter(|c| turn_active && c.width_bucket == bucket && c.editing_idx == editing_idx)
+        .map_or(0, |c| c.unit_heights.len().min(units.len()));
+    let reuse = prefix_len.saturating_sub(1);
+
+    let mut unit_heights = Vec::with_capacity(units.len());
+    let mut units_total = 0.0_f32;
+    if reuse > 0 {
+        if let Some(c) = height_cache.as_ref() {
+            unit_heights.extend_from_slice(&c.unit_heights[..reuse]);
+            units_total = unit_heights.iter().sum();
+        }
+    }
+    for i in reuse..units.len() {
+        let h = measure_unit(
+            messages,
+            units,
+            i,
+            editing_idx,
+            max_w,
+            theme,
+            metrics,
+            turn_heights,
+            turn_cache,
+        );
+        unit_heights.push(h);
+        units_total += h;
+    }
+
+    *height_cache = Some(crate::ui::types::UnitHeightCache {
+        width_bucket: bucket,
+        revision,
+        editing_idx,
+        unit_heights,
+        units_total,
+    });
 }
 
 /// Renders the message list UI.
@@ -176,19 +255,20 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
                 session.turn_heights.resize(units.len(), None);
             }
             cache.resize(units.len(), None);
+            let turn_active = !matches!(turn_state, clarity_core::ui::TurnState::Idle);
             if !units.is_empty() {
                 // Only invalidate the last agent turn while a turn is actively
                 // streaming/generating. When idle the content is stable, so
                 // keeping the cached AgentTurn avoids rebuilding it every frame.
                 let last_idx = units.len() - 1;
-                let turn_active = !matches!(turn_state, clarity_core::ui::TurnState::Idle);
                 if turn_active && !units[last_idx].is_user {
                     cache[last_idx] = None;
                 }
             }
 
             let editing_idx = chat_store.editing_message_idx;
-            compute_unit_estimates(
+            let revision = session.updated_at;
+            refresh_height_cache(
                 &session.messages,
                 &units,
                 editing_idx,
@@ -197,8 +277,14 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
                 &metrics,
                 &mut session.turn_heights,
                 cache,
-                &mut session.estimate_buffer,
+                turn_active,
+                revision,
+                &mut session.height_cache,
             );
+            session.estimate_buffer.clear();
+            if let Some(c) = &session.height_cache {
+                session.estimate_buffer.extend_from_slice(&c.unit_heights);
+            }
             let win = VirtualWindow::compute(&session.estimate_buffer, scroll_y, available_height);
 
             let top = win.top_spacer(&session.estimate_buffer);
@@ -286,9 +372,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
 /// inter-unit spacing and the typing indicator, without doing any actual layout.
 ///
 /// This is used by `ChatApp::render` to decide whether the conversation is
-/// tall enough to need a scrollable area. It intentionally uses only the
-/// current-width estimate so that cached heights from previous frames do not
-/// inflate the value after a resize.
+/// tall enough to need a scrollable area. Per-unit heights are cached in
+/// `Session::height_cache`, keyed by the quantized width and the session
+/// revision (`updated_at`); on a cache hit this returns in O(1) without
+/// walking the turns. Width changes and message mutations rebuild the cache
+/// once, and while a turn streams only the trailing unit is re-measured.
 pub fn estimate_total_height(app: &mut crate::App, content_max_width: f32, theme: &Theme) -> f32 {
     let max_w = content_max_width;
     let metrics = &app.pretext_metrics;
@@ -311,81 +399,54 @@ pub fn estimate_total_height(app: &mut crate::App, content_max_width: f32, theme
         return 0.0;
     }
 
+    // Typing-indicator tail, added on top of the cached unit sum.
+    let typing_tail = if is_loading
+        && session.messages.last().is_none_or(|m| m.role == Role::User)
+        && tool_calls_empty
+    {
+        60.0
+    } else {
+        0.0
+    };
+
+    // O(1) hot path: the conversation, width and editing state are unchanged
+    // since the cache was built, so the cached sum is still exact.
+    let bucket = width_bucket(max_w);
+    let revision = session.updated_at;
+    if let Some(c) = &session.height_cache {
+        if c.width_bucket == bucket && c.revision == revision && c.editing_idx == editing_idx {
+            return c.units_total + typing_tail;
+        }
+    }
+
     let units = aggregate_turns(&session.messages);
+    if session.turn_heights.len() < units.len() {
+        session.turn_heights.resize(units.len(), None);
+    }
     cache.resize(units.len(), None);
+    let turn_active = !matches!(app.view_state.turn, clarity_core::ui::TurnState::Idle);
     if !units.is_empty() {
         let last_idx = units.len() - 1;
-        let turn_active = !matches!(app.view_state.turn, clarity_core::ui::TurnState::Idle);
         if turn_active && !units[last_idx].is_user {
             cache[last_idx] = None;
         }
     }
 
-    // ponytail: cache the total height estimate across frames when the
-    // conversation is idle. Streaming/content changes invalidate via the key.
-    let turn_state = app.view_state.turn;
-    let estimate_key = (units.len(), max_w, editing_idx, turn_state);
-    if matches!(turn_state, clarity_core::ui::TurnState::Idle)
-        && session.estimate_key == Some(estimate_key)
-    {
-        return session.cached_total_height.unwrap_or(0.0);
-    }
-
-    let mut total = 0.0_f32;
-    // ponytail: prefer cached rendered heights. The cold-path estimator
-    // systematically overestimates (action-bar + inter-unit spacing), which
-    // inflates max_scroll and scrolls the conversation above the viewport.
-    let action_gap_h = theme.space_24 + theme.space_8;
-    for (i, u) in units.iter().enumerate() {
-        let editing = editing_idx == Some(u.start);
-        let cached = if u.is_user {
-            session.messages[u.start].cached_height
-        } else {
-            session.turn_heights.get(i).copied().flatten()
-        };
-        let h = if let Some(bubble_h) = cached {
-            if editing {
-                bubble_h + 80.0
-            } else {
-                bubble_h + action_gap_h
-            }
-        } else if u.is_user {
-            let bubble_h = crate::ui::render::estimate_height(
-                &session.messages[u.start],
-                max_w,
-                theme,
-                metrics,
-            );
-            if editing {
-                bubble_h + 80.0
-            } else {
-                bubble_h + action_gap_h
-            }
-        } else {
-            let turn = cache[i].get_or_insert_with(|| {
-                crate::components::agent_turn::AgentTurn::from_messages(
-                    &session.messages[u.start..u.end],
-                )
-            });
-            let turn_h = turn.estimate_height(max_w, theme, metrics);
-            turn_h + action_gap_h
-        };
-        total += h;
-    }
-
-    if is_loading
-        && session.messages.last().is_none_or(|m| m.role == Role::User)
-        && tool_calls_empty
-    {
-        total += 60.0;
-    }
-
-    if matches!(turn_state, clarity_core::ui::TurnState::Idle) {
-        session.estimate_key = Some(estimate_key);
-        session.cached_total_height = Some(total);
-    }
-
-    total
+    refresh_height_cache(
+        &session.messages,
+        &units,
+        editing_idx,
+        max_w,
+        theme,
+        metrics,
+        &mut session.turn_heights,
+        cache,
+        turn_active,
+        revision,
+        &mut session.height_cache,
+    );
+    let units_total = session.height_cache.as_ref().map_or(0.0, |c| c.units_total);
+    units_total + typing_tail
 }
 
 // ============================================================================
@@ -424,6 +485,19 @@ fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
         }
     }
     units
+}
+
+/// Write a render-measured unit height back into the height cache so the
+/// virtual window and stick-to-bottom math track the real layout instead of
+/// stale estimates (previously the per-frame estimate rebuild picked these
+/// up implicitly).
+fn write_back_unit_height(session: &mut crate::ui::types::Session, unit_index: usize, unit_h: f32) {
+    if let Some(c) = &mut session.height_cache {
+        if let Some(slot) = c.unit_heights.get_mut(unit_index) {
+            c.units_total += unit_h - *slot;
+            *slot = unit_h;
+        }
+    }
 }
 
 /// Render a single aggregated unit inside the virtual list.
@@ -475,6 +549,12 @@ fn render_unit(
             )
         };
         session.messages[unit.start].cached_height = Some(bubble_h);
+        let unit_h = if editing {
+            bubble_h + 80.0
+        } else {
+            bubble_h + theme.space_24 + theme.space_8
+        };
+        write_back_unit_height(session, unit_index, unit_h);
 
         if !editing {
             render_message_actions(ui, theme, unit, session, pending, true);
@@ -489,6 +569,11 @@ fn render_unit(
             crate::render::turn_renderer::render_agent_turn(ui, turn, theme, unit_index)
         };
         session.turn_heights[unit_index] = Some(bubble_h);
+        write_back_unit_height(
+            session,
+            unit_index,
+            bubble_h + theme.space_24 + theme.space_8,
+        );
 
         render_message_actions(ui, theme, unit, session, pending, false);
     }
@@ -691,6 +776,16 @@ mod tests {
         msg
     }
 
+    /// Helper: borrow the named session out of the test app.
+    fn find_session<'a>(app: &'a crate::App, id: &str) -> &'a crate::ui::types::Session {
+        app.context
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == id)
+            .expect("session exists")
+    }
+
     #[test]
     fn estimate_total_height_caches_when_idle() {
         let egui_ctx = egui::Context::default();
@@ -712,21 +807,14 @@ mod tests {
         });
         assert!(first > 0.0, "height should be positive");
 
-        let session = app
-            .context
-            .session_store
-            .sessions
-            .iter()
-            .find(|s| s.id == "cache-test")
-            .expect("session exists");
-        assert!(
-            session.estimate_key.is_some(),
-            "estimate key should be populated after idle estimate"
-        );
+        let session = find_session(&app, "cache-test");
+        let cache = session
+            .height_cache
+            .as_ref()
+            .expect("height cache should be populated after the estimate");
         assert_eq!(
-            session.cached_total_height,
-            Some(first),
-            "cached total height should match first estimate"
+            cache.units_total, first,
+            "cached unit sum should match the first estimate"
         );
 
         let mut second = 0.0_f32;
@@ -739,37 +827,158 @@ mod tests {
         );
     }
 
+    /// Cache hit must not re-measure anything: poison the underlying height
+    /// source after the cache is built and verify the cached value is kept.
     #[test]
-    fn estimate_total_height_invalidates_cache_when_turn_active() {
+    fn estimate_total_height_hit_does_not_remeasure() {
         let egui_ctx = egui::Context::default();
         let mut app = crate::apps::test_app(&egui_ctx);
         let mut session = crate::session::new_session(0, SessionContext::Chat);
-        session.id = "active-test".to_string();
-        session.messages.push(make_message(
-            Role::Agent,
-            "This turn is considered active and should not be cached.",
-        ));
+        session.id = "hit-test".to_string();
+        session
+            .messages
+            .push(make_message(Role::User, "a stable user prompt"));
         app.context.session_store.sessions.push(session);
-        app.context.session_store.active_session_id = "active-test".to_string();
-        app.view_state.turn = clarity_core::ui::TurnState::Loading;
+        app.context.session_store.active_session_id = "hit-test".to_string();
+        app.view_state.turn = clarity_core::ui::TurnState::Idle;
 
         let theme = app.context.ui_store.theme.clone();
-        let mut first = 0.0_f32;
         let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
-            first = estimate_total_height(&mut app, 600.0, &theme);
+            let _ = estimate_total_height(&mut app, 600.0, &theme);
         });
-        assert!(first > 0.0);
+        let cached_first = find_session(&app, "hit-test")
+            .height_cache
+            .as_ref()
+            .expect("cache built")
+            .unit_heights[0];
 
-        let session = app
-            .context
+        // Poison the per-message height source; a re-measure would pick this up.
+        app.context
             .session_store
             .sessions
-            .iter()
-            .find(|s| s.id == "active-test")
-            .expect("session exists");
-        assert!(
-            session.estimate_key.is_none(),
-            "estimate key should not be cached while turn is active"
+            .iter_mut()
+            .find(|s| s.id == "hit-test")
+            .expect("session exists")
+            .messages[0]
+            .cached_height = Some(9999.0);
+
+        let mut second = 0.0_f32;
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            second = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        let cache = find_session(&app, "hit-test")
+            .height_cache
+            .as_ref()
+            .expect("cache still present");
+        assert_eq!(
+            cache.unit_heights[0], cached_first,
+            "cache hit must reuse the stored height, not re-measure"
+        );
+        assert_eq!(second, cached_first);
+    }
+
+    /// Streaming invalidates only the trailing turn: the stable prefix must be
+    /// reused even though the session revision bumped.
+    #[test]
+    fn estimate_total_height_reuses_prefix_when_streaming() {
+        let egui_ctx = egui::Context::default();
+        let mut app = crate::apps::test_app(&egui_ctx);
+        let mut session = crate::session::new_session(0, SessionContext::Chat);
+        session.id = "stream-test".to_string();
+        session
+            .messages
+            .push(make_message(Role::User, "a stable user prompt"));
+        session
+            .messages
+            .push(make_message(Role::Agent, "partial answer"));
+        app.context.session_store.sessions.push(session);
+        app.context.session_store.active_session_id = "stream-test".to_string();
+        app.view_state.turn = clarity_core::ui::TurnState::Idle;
+
+        let theme = app.context.ui_store.theme.clone();
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            let _ = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        let prefix_height = find_session(&app, "stream-test")
+            .height_cache
+            .as_ref()
+            .expect("cache built")
+            .unit_heights[0];
+
+        // Simulate a streaming chunk: the trailing agent message grows and the
+        // session revision bumps. Poison the user message so any prefix
+        // re-measure would be visible.
+        app.view_state.turn = clarity_core::ui::TurnState::Loading;
+        {
+            let session = app
+                .context
+                .session_store
+                .sessions
+                .iter_mut()
+                .find(|s| s.id == "stream-test")
+                .expect("session exists");
+            session.messages[0].cached_height = Some(9999.0);
+            let last = session.messages.last_mut().expect("agent message");
+            last.content.push_str(" continues with more streamed text");
+            last.prepare();
+            session.updated_at += 1;
+        }
+
+        let mut total = 0.0_f32;
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            total = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        assert!(total > 0.0);
+        let cache = find_session(&app, "stream-test")
+            .height_cache
+            .as_ref()
+            .expect("cache rebuilt incrementally");
+        assert_eq!(
+            cache.unit_heights[0], prefix_height,
+            "streaming must reuse the stable prefix instead of re-measuring it"
+        );
+        assert_eq!(cache.unit_heights.len(), 2);
+    }
+
+    /// A width change must rebuild the cache for the new width bucket.
+    #[test]
+    fn estimate_total_height_invalidates_on_width_change() {
+        let egui_ctx = egui::Context::default();
+        let mut app = crate::apps::test_app(&egui_ctx);
+        let mut session = crate::session::new_session(0, SessionContext::Chat);
+        session.id = "width-test".to_string();
+        session.messages.push(make_message(
+            Role::Agent,
+            "agent turn long enough to wrap differently at another width",
+        ));
+        app.context.session_store.sessions.push(session);
+        app.context.session_store.active_session_id = "width-test".to_string();
+        app.view_state.turn = clarity_core::ui::TurnState::Idle;
+
+        let theme = app.context.ui_store.theme.clone();
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            let _ = estimate_total_height(&mut app, 600.0, &theme);
+        });
+        assert_eq!(
+            find_session(&app, "width-test")
+                .height_cache
+                .as_ref()
+                .expect("cache built")
+                .width_bucket,
+            width_bucket(600.0)
+        );
+
+        let _ = egui_ctx.run_ui(egui::RawInput::default(), |_ctx| {
+            let _ = estimate_total_height(&mut app, 400.0, &theme);
+        });
+        assert_eq!(
+            find_session(&app, "width-test")
+                .height_cache
+                .as_ref()
+                .expect("cache rebuilt")
+                .width_bucket,
+            width_bucket(400.0),
+            "width change must rebuild the cache for the new bucket"
         );
     }
 }

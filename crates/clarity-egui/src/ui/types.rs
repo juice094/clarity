@@ -310,6 +310,27 @@ pub struct DiffStats {
     pub computed_at: u64,
 }
 
+/// Runtime-only per-unit height cache for the chat virtual list.
+///
+/// Built by `panels::chat::message_list`; keyed by the quantized content
+/// width and the session revision (`updated_at`, bumped on every message
+/// mutation). While a turn streams, only the trailing unit is re-measured
+/// and the stable prefix is reused, so cache hits make the per-frame height
+/// estimation O(1) instead of walking every turn.
+#[derive(Clone)]
+pub struct UnitHeightCache {
+    /// Quantized content width (`max_w * 8`, rounded) the heights fit.
+    pub width_bucket: u32,
+    /// `Session::updated_at` at build time.
+    pub revision: u64,
+    /// Editing index at build time; the edit bubble changes a unit's height.
+    pub editing_idx: Option<usize>,
+    /// Per-unit heights including the inter-unit action gap.
+    pub unit_heights: Vec<f32>,
+    /// Sum of `unit_heights` (excludes the typing-indicator tail).
+    pub units_total: f32,
+}
+
 /// Holds session state.
 #[derive(Clone)]
 pub struct Session {
@@ -336,11 +357,9 @@ pub struct Session {
     pub estimate_buffer: Vec<f32>,
     /// Runtime-only reusable buffer for line-mode flat-line offsets.
     pub line_offset_buffer: Vec<usize>,
-    /// Runtime-only cache key for `estimate_total_height`.
-    /// Tuple: (unit count, max width, editing index, turn state).
-    pub estimate_key: Option<(usize, f32, Option<usize>, clarity_core::ui::TurnState)>,
-    /// Runtime-only cached total height from `estimate_total_height`.
-    pub cached_total_height: Option<f32>,
+    /// Runtime-only unit-height cache for the chat virtual list.
+    /// Invalidated by message mutations (`updated_at`) or width changes.
+    pub height_cache: Option<UnitHeightCache>,
     /// Opaque provider-side state blobs, keyed by provider id.
     /// Clarity does not interpret the contents; stateful providers use this to
     /// resume server-side sessions across app restarts.
