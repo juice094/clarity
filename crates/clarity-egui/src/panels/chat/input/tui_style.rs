@@ -146,6 +146,8 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 ui.spacing_mut().item_spacing.x = 6.0;
 
                 if app.view_state.turn == clarity_core::ui::TurnState::Loading {
+                    // LAYOUT-EXEMPT: 10px stop-button radius sits between
+                    // radius_sm (8) and radius_md (16); matches the send button.
                     let stop_resp = clarity_ui::widgets::icon_button::icon_button(
                         ui,
                         crate::theme::ICON_X,
@@ -163,6 +165,8 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                     } else {
                         theme.accent
                     };
+                    // LAYOUT-EXEMPT: 10px send-button radius sits between
+                    // radius_sm (8) and radius_md (16); matches the stop button.
                     let send_resp = clarity_ui::widgets::icon_button::icon_button_with_color(
                         ui,
                         crate::theme::ICON_SEND,

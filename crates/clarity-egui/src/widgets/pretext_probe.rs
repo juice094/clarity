@@ -74,11 +74,13 @@ pub fn render_pretext_probe(app: &mut App, ctx: &egui::Context) {
         egui::ScrollArea::both().show(ui, |ui| {
             ui.horizontal(|ui| {
                 text(ui, "Sample", TextStyle::CaptionStrong);
+                // LAYOUT-EXEMPT: fixed column gap of this diagnostic probe
+                // table; not part of the spacing rhythm.
                 ui.add_space(120.0);
                 text(ui, "Predicted", TextStyle::CaptionStrong);
-                ui.add_space(40.0);
+                ui.add_space(theme.space_40);
                 text(ui, "Actual", TextStyle::CaptionStrong);
-                ui.add_space(40.0);
+                ui.add_space(theme.space_40);
                 text(ui, "Δ", TextStyle::CaptionStrong);
             });
             ui.separator();

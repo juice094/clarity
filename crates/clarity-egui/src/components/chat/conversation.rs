@@ -28,20 +28,26 @@ impl CardStyle {
                 .frame(theme)
                 .fill(theme.bg_accent)
                 .stroke(egui::Stroke::new(0.5, theme.border))
+                // LAYOUT-EXEMPT: 20px approval-card radius sits between
+                // radius_md (16) and radius_lg (28).
                 .corner_radius(egui::CornerRadius::same(20))
                 .shadow(theme.shadow_card),
             CardStyle::ListItem => clarity_ui::design_system::Elevation::Base
                 .frame(theme)
                 .fill(egui::Color32::TRANSPARENT)
                 .stroke(egui::Stroke::new(0.5, theme.border))
-                .corner_radius(egui::CornerRadius::same(16)),
+                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8)),
             CardStyle::Nested => clarity_ui::design_system::Elevation::Surface
                 .frame(theme)
                 .fill(theme.surface)
+                // LAYOUT-EXEMPT: 12px nested-card radius sits between
+                // radius_sm (8) and radius_md (16).
                 .corner_radius(egui::CornerRadius::same(12)),
             CardStyle::Error => clarity_ui::design_system::Elevation::Elevated
                 .frame(theme)
                 .fill(theme.error_bubble)
+                // LAYOUT-EXEMPT: 10px error-card radius sits between
+                // radius_sm (8) and radius_md (16).
                 .corner_radius(egui::CornerRadius::same(10)),
         }
     }
@@ -76,7 +82,7 @@ pub fn card<R>(
             if item_resp.hovered() {
                 ui.painter().rect_filled(
                     item_resp.rect,
-                    egui::CornerRadius::same(16),
+                    egui::CornerRadius::same(theme.radius_md as u8),
                     theme.bg_hover,
                 );
             }
@@ -201,7 +207,7 @@ pub fn collapsible<R>(
         }
 
         if state.expanded {
-            ui.add_space(8.0);
+            ui.add_space(theme.space_8);
             add_body(ui);
         }
     });
@@ -235,7 +241,7 @@ pub fn thinking_block(
     collapsible(ui, theme, id, header, state, |ui| {
         for (i, step) in steps.iter().enumerate() {
             ui.horizontal(|ui| {
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
                 ui.label(
                     egui::RichText::new(step)
                         .size(theme.text_md)
@@ -408,7 +414,7 @@ fn render_subagent_row(ui: &mut egui::Ui, theme: &Theme, step: &SubagentStep<'_>
                 .monospace()
                 .color(theme.text_muted),
         );
-        ui.add_space(4.0);
+        ui.add_space(theme.space_4);
         ui.add(
             egui::Label::new(
                 egui::RichText::new(step.description)
@@ -457,7 +463,7 @@ pub fn approval_dock(
                 ui.allocate_exact_size(egui::vec2(dot_size, dot_size), egui::Sense::hover());
             ui.painter()
                 .circle_filled(dot_rect.center(), dot_size * 0.5, theme.warn);
-            ui.add_space(4.0);
+            ui.add_space(theme.space_4);
             ui.add(
                 egui::Label::new(
                     egui::RichText::new(&request.title)
@@ -468,10 +474,12 @@ pub fn approval_dock(
                 .truncate(),
             );
             if let Some(ref badge) = request.badge {
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
                 let badge_frame = clarity_ui::design_system::Elevation::Elevated
                     .frame(theme)
                     .fill(theme.warn.linear_multiply(0.15))
+                    // LAYOUT-EXEMPT: 21px pill badge radius; no pill token
+                    // (radius_full is 999 and would change the shape).
                     .corner_radius(egui::CornerRadius::same(21));
                 badge_frame.show(ui, |ui| {
                     clarity_ui::design_system::text_with_color(
@@ -503,7 +511,7 @@ pub fn approval_dock(
             if ui.add(theme.primary_button("Allow")).clicked() {
                 allowed = Some(request.id.clone());
             }
-            ui.add_space(8.0);
+            ui.add_space(theme.space_8);
             if ui.add(theme.secondary_button("Deny")).clicked() {
                 denied = Some(request.id.clone());
             }

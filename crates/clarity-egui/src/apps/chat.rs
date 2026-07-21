@@ -86,7 +86,7 @@ impl ChatRenderer for App {
             // Find-in-session bar (Ctrl+F).
             if chat.store.find_open {
                 app.render_find_bar(ui);
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
             }
 
             // The input bar is rendered by `render_input_panel` in a separate

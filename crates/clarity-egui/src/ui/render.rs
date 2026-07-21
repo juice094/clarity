@@ -425,6 +425,8 @@ fn user_bubble(
     ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
         design_system::gap(ui, Space::S1);
         ui.set_max_width(max_width);
+        // LAYOUT-EXEMPT: custom user-bubble frame (own fill/stroke/margin);
+        // no equivalent design_system surface primitive.
         let bubble_resp = egui::Frame::new()
             .fill(theme.user_bubble)
             .stroke(egui::Stroke::new(1.0, theme.border))
@@ -615,7 +617,7 @@ fn line_mode_agent(
     if show_header {
         ui.horizontal(|ui| {
             crate::components::chat::avatar::avatar(ui, "A", theme);
-            ui.add_space(8.0);
+            ui.add_space(theme.space_8);
             ui.label(
                 egui::RichText::new("Agent")
                     .size(theme.text_xs)

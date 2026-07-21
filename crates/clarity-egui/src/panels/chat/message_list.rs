@@ -672,7 +672,7 @@ fn render_message_actions(
                         pending.copy_content = Some(msg.content.clone());
                     }
                 }
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
                 if icon_button_toolbar_colored(
                     ui,
                     crate::theme::ICON_EDIT,
@@ -698,7 +698,7 @@ fn render_message_actions(
                 {
                     pending.regenerate_idx = Some(unit.start);
                 }
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
                 if icon_button_toolbar_colored(
                     ui,
                     crate::theme::ICON_COPY,

@@ -153,7 +153,7 @@ pub fn render_file_tree(
                             .color(text_color),
                     );
 
-                    ui.add_space(4.0);
+                    ui.add_space(theme.space_4);
 
                     // Filename
                     let label = if compact {
