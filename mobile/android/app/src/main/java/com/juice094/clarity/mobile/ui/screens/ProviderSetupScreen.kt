@@ -3,6 +3,7 @@ package com.juice094.clarity.mobile.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -27,11 +28,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.juice094.clarity.mobile.model.ProviderCapabilities
 import com.juice094.clarity.mobile.ui.components.ClarityTextField
 import com.juice094.clarity.mobile.ui.theme.ClarityColors
 import com.juice094.clarity.mobile.ui.theme.ClaritySpacing
@@ -109,10 +112,23 @@ fun ProviderSetupScreen(viewModel: ChatViewModel, modifier: Modifier = Modifier)
                     orderedTypes.forEach { type ->
                         DropdownMenuItem(
                             text = {
-                                Text(
-                                    text = type.name,
-                                    color = ClarityColors.TextPrimary
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = type.name,
+                                        color = ClarityColors.TextPrimary
+                                    )
+                                    ProviderCapabilities.badgeLabel(type)?.let { badge ->
+                                        Text(
+                                            text = badge,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = ClarityColors.Warning
+                                        )
+                                    }
+                                }
                             },
                             onClick = {
                                 viewModel.providerType.value = type
@@ -122,6 +138,16 @@ fun ProviderSetupScreen(viewModel: ChatViewModel, modifier: Modifier = Modifier)
                         )
                     }
                 }
+            }
+
+            // Non-API channels (App login flow) have no public API and no
+            // enumerable model list; say so instead of implying an API flow.
+            ProviderCapabilities.badgeDescription(providerType)?.let { description ->
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ClarityColors.Warning
+                )
             }
 
             ClarityTextField(
@@ -165,7 +191,16 @@ fun ProviderSetupScreen(viewModel: ChatViewModel, modifier: Modifier = Modifier)
             ClarityTextField(
                 value = model,
                 onValueChange = { viewModel.model.value = it },
-                label = "Model",
+                // TODO(clarity-mobile-core): expose a `listModels()` FFI so API
+                // channels can refresh the model list from `/v1/models`; the
+                // Rust core has no such endpoint binding yet. Until then the
+                // model name stays free-form input with static suggestions
+                // (ChatViewModel.availableModels) in the chat screen.
+                label = if (ProviderCapabilities.hasPublicApi(providerType)) {
+                    "Model"
+                } else {
+                    "Model (由服务端决定 / set by server)"
+                },
                 modifier = Modifier.fillMaxWidth()
             )
 

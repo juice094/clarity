@@ -471,7 +471,12 @@ class EndToEndFlowTest {
             viewModel.currentScreen.value = Screen.ProviderSetup
         }
         composeTestRule.waitForIdle()
-        composeTestRule.waitUntilAtLeastOneExists(hasText("DEEPSEEK"), timeoutMillis = 15000)
+        // substring=true: the provider text field shows the full enum name
+        // (e.g. "DEEPSEEK_DEVICE"), which never equals the exact text "DEEPSEEK".
+        composeTestRule.waitUntilAtLeastOneExists(
+            hasText("DEEPSEEK", substring = true),
+            timeoutMillis = 15000
+        )
     }
 
     @OptIn(ExperimentalTestApi::class)

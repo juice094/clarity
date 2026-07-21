@@ -169,9 +169,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun generateMessageId(): String = UUID.randomUUID().toString()
 
     /**
-     * Clear the active runtime and related UI state.  Used by instrumentation
-     * tests to ensure each test starts from a clean slate without recreating
-     * the Activity (and therefore the ViewModel).
+     * Clear the active runtime and related in-memory UI state. Used by
+     * instrumentation tests to ensure each test starts from a clean slate
+     * without recreating the Activity (and therefore the ViewModel), and by
+     * [signOutToProviderSetup] to drop the current connection.
+     *
+     * Note this only clears in-memory state; on-disk chat history (Rust
+     * session store and [ClawSessionStore] files) is intentionally kept.
      */
     fun resetRuntime() {
         eventLoopJob?.cancel()
@@ -204,6 +208,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         streamingAssistantId = null
         stopRequested = false
         sendTimestampMs = 0L
+    }
+
+    /**
+     * Sign out of the current provider and return to the setup screen so the
+     * user can pick a different provider or gateway.
+     *
+     * Clears the runtime, saved credentials and launch mode, but keeps local
+     * chat history on disk (Rust session store and Claw session files) so old
+     * conversations are still listed after re-connecting.
+     */
+    fun signOutToProviderSetup() {
+        resetRuntime()
+        val app = getApplication<Application>()
+        PreferencesStore.clear(app)
+        // Persist the cleared state so the next cold start also lands on the
+        // setup screen instead of auto-logging in with stale defaults.
+        launchMode.value = PreferencesStore.LaunchMode.Unset
+        PreferencesStore.save(app, this)
+        currentScreen.value = Screen.ProviderSetup
     }
 
     /**
