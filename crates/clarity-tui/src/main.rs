@@ -81,8 +81,9 @@ async fn main() -> Result<()> {
                 ))
             };
 
-            // Bind cron tools to the background task manager
+            // Bind task/cron tools to the background task manager
             if let Some(ref tm) = task_manager {
+                agent.with_task_manager(tm.clone());
                 agent.with_cron_manager(tm.clone());
             }
 

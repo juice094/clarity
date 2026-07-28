@@ -22,6 +22,8 @@ use clarity_core::{
         },
     },
     approval::ApprovalMode,
+    background::BackgroundTaskManager,
+    background::agent_executor::DefaultAgentTaskExecutor,
     config::Config,
 };
 use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm};
@@ -281,12 +283,35 @@ async fn run_command(args: RunArgs) -> Result<()> {
 
     let config = AgentConfig::new()
         .with_max_iterations(args.max_iterations)
-        .with_working_dir(working_dir);
+        .with_working_dir(working_dir.clone());
 
     let registry = ToolRegistry::with_builtin_tools();
     let agent = Agent::with_config(registry, config)
         .with_llm(provider)
         .with_approval_mode(approval_mode);
+
+    // Bind a local BackgroundTaskManager so task_create / cron tools have a consumer.
+    // ponytail: uses cwd/.clarity/tasks for storage; for headless CI usage this is
+    // acceptable because each invocation gets its own isolated working directory.
+    let task_manager = {
+        let clarity_dir = working_dir.join(".clarity");
+        let store_dir = clarity_dir.join("tasks");
+        let work_dir = clarity_dir.join("work");
+        let _ = std::fs::create_dir_all(&store_dir);
+        let _ = std::fs::create_dir_all(&work_dir);
+
+        let llm = agent
+            .llm()
+            .unwrap_or_else(|| Arc::new(clarity_core::agent::MockLlm));
+        let registry = agent.registry().clone();
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(llm, registry, working_dir));
+        Arc::new(
+            BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
+                .with_agent_executor(executor),
+        )
+    };
+    agent.with_task_manager(task_manager.clone());
+    agent.with_cron_manager(task_manager);
 
     let start = Instant::now();
     let result = agent.run(&prompt).await;
