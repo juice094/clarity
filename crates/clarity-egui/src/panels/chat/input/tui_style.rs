@@ -114,7 +114,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
 
             // Left: attachment / plugins / agent mode.
             if icon_button_toolbar(ui, crate::theme::ICON_PLUS, theme.text_sm, theme)
-                .on_hover_text("Add attachment")
+                .on_hover_text(app.t("Add attachment"))
                 .clicked()
             {
                 if let Some(paths) = rfd::FileDialog::new().pick_files() {
@@ -132,7 +132,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
 
             if ui
                 .add(Button::new("/").ghost().small())
-                .on_hover_text("Plugins (type /)")
+                .on_hover_text(app.t("Plugins (type /)"))
                 .clicked()
             {
                 app.context.ui_store.plugin_picker_state.open = true;
@@ -156,7 +156,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                         egui::CornerRadius::same(10),
                         theme,
                     );
-                    if stop_resp.on_hover_text("Stop generation").clicked() {
+                    if stop_resp.on_hover_text(app.t("Stop generation")).clicked() {
                         app.stop();
                     }
                 } else {
@@ -176,7 +176,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                         egui::CornerRadius::same(10),
                         theme,
                     );
-                    if send_resp.on_hover_text("Send (Ctrl+Enter)").clicked()
+                    if send_resp
+                        .on_hover_text(app.t("Send (Ctrl+Enter)"))
+                        .clicked()
                         && !app.chat_store_mut().input.trim().is_empty()
                         && app.view_state.turn != clarity_core::ui::TurnState::Loading
                     {
@@ -190,7 +192,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                     let label = format!("{} ↓", model_name);
                     if ui
                         .add(Button::new(&label).ghost().small())
-                        .on_hover_text("Switch model")
+                        .on_hover_text(app.t("Switch model"))
                         .clicked()
                     {
                         app.navigate(clarity_core::ui::AppView::Settings.into());
@@ -335,7 +337,7 @@ fn render_agent_mode_dropdown(app: &mut App, ui: &mut egui::Ui, _theme: &crate::
         }
     })
     .response
-    .on_hover_text("Agent mode");
+    .on_hover_text(app.t("Agent mode"));
 }
 
 fn agent_mode_label(mode: clarity_core::ui::AgentMode) -> &'static str {

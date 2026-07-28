@@ -196,7 +196,7 @@ impl ClarityApp for DashboardApp {
             .show(ui, |ui| {
                 design_system::gap(ui, Space::S2);
                 ui.horizontal(|ui| {
-                    design_system::text(ui, "Dashboard", TextStyle::Title);
+                    design_system::text(ui, ctx.state.t("Dashboard"), TextStyle::Title);
                 });
                 design_system::gap(ui, Space::S2);
 
@@ -211,9 +211,9 @@ impl ClarityApp for DashboardApp {
                 metric_card_pair(
                     ui,
                     &theme,
-                    "Session Messages",
+                    ctx.state.t("Session Messages"),
                     &format!("{}", msg_count),
-                    "Session Tokens",
+                    ctx.state.t("Session Tokens"),
                     &token_str,
                 );
 
@@ -222,7 +222,13 @@ impl ClarityApp for DashboardApp {
                 // ── Agent Status ──
                 let status_label = ctx.state.agent_status_label();
                 let status_color = ctx.state.agent_status_color();
-                status_card(ui, &theme, "Agent Status", status_label, status_color);
+                status_card(
+                    ui,
+                    &theme,
+                    ctx.state.t("Agent Status"),
+                    status_label,
+                    status_color,
+                );
 
                 design_system::gap(ui, Space::S1);
 
@@ -231,7 +237,7 @@ impl ClarityApp for DashboardApp {
                 metric_card(
                     ui,
                     &theme,
-                    "Tool Calls (Session)",
+                    ctx.state.t("Tool Calls (Session)"),
                     &format!("{}", tool_count),
                 );
 
@@ -243,9 +249,9 @@ impl ClarityApp for DashboardApp {
                 metric_card_pair(
                     ui,
                     &theme,
-                    "Running Subagents",
+                    ctx.state.t("Running Subagents"),
                     &format!("{}", running),
-                    "Parallel Batches",
+                    ctx.state.t("Parallel Batches"),
                     &format!("{}", batches),
                 );
 
@@ -255,7 +261,7 @@ impl ClarityApp for DashboardApp {
                 metric_card(
                     ui,
                     &theme,
-                    "Active Teams",
+                    ctx.state.t("Active Teams"),
                     &format!("{}", self.team_store.teams.len()),
                 );
 
@@ -265,7 +271,7 @@ impl ClarityApp for DashboardApp {
                 metric_card(
                     ui,
                     &theme,
-                    "Background Tasks",
+                    ctx.state.t("Background Tasks"),
                     &format!("{}", self.task_store.tasks.len()),
                 );
 
@@ -274,7 +280,13 @@ impl ClarityApp for DashboardApp {
                 // ── Gateway Status ──
                 let gw_label = ctx.state.gateway_status_label();
                 let gw_color = ctx.state.gateway_status_color();
-                status_card(ui, &theme, "Gateway Status", gw_label, gw_color);
+                status_card(
+                    ui,
+                    &theme,
+                    ctx.state.t("Gateway Status"),
+                    gw_label,
+                    gw_color,
+                );
 
                 design_system::gap(ui, Space::S1);
 

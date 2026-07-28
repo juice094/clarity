@@ -64,18 +64,18 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
         .width(420.0)
         .max_height(600.0)
         .show(ctx, |ui| {
-            text(ui, "Tool Call Approval", TextStyle::Title);
+            text(ui, app.t("Tool Call Approval"), TextStyle::Title);
             gap(ui, Space::S2);
 
             // Tool name
             ui.horizontal(|ui| {
-                text(ui, "Tool:", TextStyle::CaptionStrong);
+                text(ui, app.t("Tool:"), TextStyle::CaptionStrong);
                 text(ui, &request.tool_call.function.name, TextStyle::Accent);
             });
             gap(ui, Space::S1);
 
             // Arguments (monospace JSON block)
-            text(ui, "Arguments:", TextStyle::CaptionStrong);
+            text(ui, app.t("Arguments:"), TextStyle::CaptionStrong);
             code_frame(ui, |ui| {
                 text(ui, display_args, TextStyle::Mono);
             });
@@ -83,7 +83,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             // Diff preview using the unified diff viewer widget.
             if let Some(ref patch) = request.diff_preview {
                 gap(ui, Space::S1);
-                text(ui, "Preview:", TextStyle::CaptionStrong);
+                text(ui, app.t("Preview:"), TextStyle::CaptionStrong);
                 let hunks = clarity_core::diff::parse_unified_diff(patch);
                 let cfg = crate::widgets::diff_viewer::approval_diff_config();
                 let _diff_resp =
@@ -116,15 +116,16 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     let file_count = patch.lines().filter(|l| l.starts_with("--- ")).count();
                     if file_count > 0 {
                         format!(
-                            "Approve ({} file{}) (Enter)",
+                            "{} ({} {}) (Enter)",
+                            app.t("Approve"),
                             file_count,
-                            if file_count > 1 { "s" } else { "" },
+                            app.t("files"),
                         )
                     } else {
-                        "Approve (Enter)".to_string()
+                        format!("{} (Enter)", app.t("Approve"))
                     }
                 } else {
-                    "Approve (Enter)".to_string()
+                    format!("{} (Enter)", app.t("Approve"))
                 };
 
                 if ui
@@ -140,7 +141,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
                 if ui
                     .add(
-                        Button::new("Approve for Session (Shift+Enter)")
+                        Button::new(&format!("{} (Shift+Enter)", app.t("Approve for Session")))
                             .ghost()
                             .small()
                             .width(180.0),
@@ -155,7 +156,12 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 }
 
                 if ui
-                    .add(Button::new("Reject (Esc)").danger().small().width(80.0))
+                    .add(
+                        Button::new(&format!("{} (Esc)", app.t("Reject")))
+                            .danger()
+                            .small()
+                            .width(80.0),
+                    )
                     .clicked()
                 {
                     let req_id = request.id.clone();

@@ -220,6 +220,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
         }
     }
     let selected_message_idx = app.context.ui_store.selected_message_idx;
+    let locale = app.context.ui_store.locale;
 
     let available_height = ui.available_height();
     let scroll_y = app.context.ui_store.last_scroll_offset;
@@ -332,6 +333,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
                     render_metrics,
                     cache,
                     &mut pending,
+                    locale,
                 );
             }
 
@@ -379,7 +381,10 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
         app.navigate(clarity_core::ui::AppView::Settings.into());
     }
     if pending.copy_content.is_some() {
-        app.push_toast("Copied to clipboard", crate::ui::types::ToastLevel::Info);
+        app.push_toast(
+            app.t("Copied to clipboard"),
+            crate::ui::types::ToastLevel::Info,
+        );
     }
 }
 
@@ -535,6 +540,7 @@ fn render_unit(
     render_metrics: Option<&crate::pretext::EguiFontMetrics>,
     turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
     pending: &mut PendingActions,
+    locale: crate::i18n::Locale,
 ) {
     let editing = editing_idx == Some(unit.start);
     // A2: keyboard selection highlight. Selection does not change the unit's
@@ -582,7 +588,7 @@ fn render_unit(
         write_back_unit_height(session, unit_index, unit_h);
 
         if !editing {
-            render_message_actions(ui, theme, unit, session, pending, true, selected);
+            render_message_actions(ui, theme, unit, session, pending, true, selected, locale);
         }
     } else {
         let bubble_h = {
@@ -591,7 +597,7 @@ fn render_unit(
                     &session.messages[unit.start..unit.end],
                 )
             });
-            crate::render::turn_renderer::render_agent_turn(ui, turn, theme, unit_index)
+            crate::render::turn_renderer::render_agent_turn(ui, turn, theme, unit_index, locale)
         };
         session.turn_heights[unit_index] = Some(bubble_h);
         write_back_unit_height(
@@ -600,7 +606,7 @@ fn render_unit(
             bubble_h + theme.space_24 + theme.space_8,
         );
 
-        render_message_actions(ui, theme, unit, session, pending, false, selected);
+        render_message_actions(ui, theme, unit, session, pending, false, selected, locale);
     }
 
     if selected {
@@ -632,6 +638,7 @@ fn render_message_actions(
     pending: &mut PendingActions,
     is_user: bool,
     selected: bool,
+    locale: crate::i18n::Locale,
 ) {
     let row_id = ui.id().with(unit.start).with("msg_actions");
     let hovered = ui
@@ -664,7 +671,7 @@ fn render_message_actions(
                     action_color,
                     theme,
                 )
-                .on_hover_text("Copy")
+                .on_hover_text(locale.t("Copy"))
                 .clicked()
                 {
                     if let Some(msg) = session.messages.get(unit.start) {
@@ -680,7 +687,7 @@ fn render_message_actions(
                     action_color,
                     theme,
                 )
-                .on_hover_text("Edit")
+                .on_hover_text(locale.t("Edit"))
                 .clicked()
                 {
                     pending.edit_idx = Some(unit.start);
@@ -693,7 +700,7 @@ fn render_message_actions(
                     action_color,
                     theme,
                 )
-                .on_hover_text("Regenerate")
+                .on_hover_text(locale.t("Regenerate"))
                 .clicked()
                 {
                     pending.regenerate_idx = Some(unit.start);
@@ -706,7 +713,7 @@ fn render_message_actions(
                     action_color,
                     theme,
                 )
-                .on_hover_text("Copy")
+                .on_hover_text(locale.t("Copy"))
                 .clicked()
                 {
                     let content: String = session.messages[unit.start..unit.end]
@@ -979,6 +986,33 @@ mod tests {
             "streaming must reuse the stable prefix instead of re-measuring it"
         );
         assert_eq!(cache.unit_heights.len(), 2);
+    }
+
+    /// Expanding/collapsing a tool-call detail changes the rendered unit
+    /// height without bumping the session revision; the render-measured
+    /// write-back must fold the new height into the cache both ways.
+    #[test]
+    fn write_back_unit_height_tracks_expand_collapse() {
+        let mut session = crate::session::new_session(0, SessionContext::Chat);
+        session.height_cache = Some(crate::ui::types::UnitHeightCache {
+            width_bucket: width_bucket(600.0),
+            revision: 1,
+            editing_idx: None,
+            unit_heights: vec![100.0, 100.0],
+            units_total: 200.0,
+        });
+
+        // Tool detail expands: unit 1 grows from 100 → 340.
+        write_back_unit_height(&mut session, 1, 340.0);
+        let c = session.height_cache.as_ref().expect("cache present");
+        assert_eq!(c.unit_heights[1], 340.0);
+        assert_eq!(c.units_total, 440.0);
+
+        // Collapsing shrinks the cached height back.
+        write_back_unit_height(&mut session, 1, 100.0);
+        let c = session.height_cache.as_ref().expect("cache present");
+        assert_eq!(c.unit_heights[1], 100.0);
+        assert_eq!(c.units_total, 200.0);
     }
 
     /// A width change must rebuild the cache for the new width bucket.

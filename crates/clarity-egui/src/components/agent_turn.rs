@@ -12,8 +12,7 @@ use crate::ui::types::{ContentBlock, Message, ToolCallStatus};
 /// An aggregated rendering unit for a single agent ReAct turn.
 #[derive(Clone)]
 pub struct AgentTurn {
-    /// Reserved — will be wired to the turn header renderer.
-    #[allow(dead_code)]
+    /// Turn-level meta (duration / tokens / tool count) shown in the header line.
     pub header: TurnHeader,
     pub thinking: Option<ThinkingBlock>,
     pub tool_calls: Vec<ToolCallRow>,
@@ -28,14 +27,16 @@ pub struct AgentTurn {
 /// Holds turn header state.
 #[derive(Clone, Debug)]
 pub struct TurnHeader {
-    /// Reserved — will be wired to runtime telemetry.
-    #[allow(dead_code)]
+    /// Wall-clock duration of the turn, derived from first/last message
+    /// timestamps (approximate — the last message is stamped on arrival).
     pub duration_ms: u64,
-    /// Reserved — will be wired to token-usage events.
-    #[allow(dead_code)]
+    /// Token usage attributed to this turn.
+    ///
+    /// ponytail: always 0 today — the wire `Usage` event is session-scoped
+    /// (see `handlers/chat.rs::on_usage`), so per-turn attribution needs a
+    /// protocol/session change. The header omits the token piece while 0.
     pub token_count: usize,
-    /// Reserved — will be displayed in the turn header.
-    #[allow(dead_code)]
+    /// Number of tool calls in this turn.
     pub tool_count: usize,
 }
 
@@ -52,9 +53,12 @@ pub struct ToolCallRow {
     pub name: String,
     pub status: ToolCallStatus,
     pub result_preview: String,
-    /// Reserved for future expand-in-place detail view.
-    #[allow(dead_code)]
+    /// Whether the in-place detail view (full arguments + output) is open.
     pub expanded: bool,
+    /// Full argument payload (JSON string) for the expanded detail view.
+    pub arguments: Option<String>,
+    /// Full tool output for the expanded detail view.
+    pub full_output: String,
 }
 
 // ============================================================================
@@ -78,12 +82,16 @@ impl AgentTurn {
                             token_hint: hint,
                         });
                     }
-                    ContentBlock::ToolResult { name, output, .. } => {
+                    ContentBlock::ToolResult {
+                        name, args, output, ..
+                    } => {
                         tool_calls.push(ToolCallRow {
                             name: name.clone(),
                             status: infer_tool_status(output),
                             result_preview: crate::ui::truncate::truncate(output, 120),
                             expanded: false,
+                            arguments: args.clone(),
+                            full_output: output.clone(),
                         });
                     }
                     _ => {}
@@ -109,9 +117,21 @@ impl AgentTurn {
             })
             .cloned();
 
+        // Turn duration ≈ wall time between the first and last message of the
+        // turn (messages are stamped on arrival).
+        let duration_ms = match (messages.first(), messages.last()) {
+            (Some(first), Some(last)) => last
+                .timestamp
+                .saturating_duration_since(first.timestamp)
+                .as_millis() as u64,
+            _ => 0,
+        };
+
         Self {
             header: TurnHeader {
-                duration_ms: 0,
+                duration_ms,
+                // ponytail: per-turn token usage needs a wire/session change
+                // (Usage events are session-scoped); keep 0 until then.
                 token_count: 0,
                 tool_count: tool_calls.len(),
             },
@@ -161,5 +181,78 @@ fn infer_tool_status(result: &str) -> ToolCallStatus {
         ToolCallStatus::Warning
     } else {
         ToolCallStatus::Success
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::types::Role;
+    use std::time::{Duration, Instant};
+
+    fn tool_result_message(
+        name: &str,
+        args: Option<&str>,
+        output: &str,
+        timestamp: Instant,
+    ) -> Message {
+        Message {
+            role: Role::Agent,
+            content: String::new(),
+            blocks: vec![ContentBlock::ToolResult {
+                name: name.to_string(),
+                args: args.map(str::to_string),
+                output: output.to_string(),
+                truncated: false,
+            }],
+            timestamp,
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+            lines: vec![],
+        }
+    }
+
+    #[test]
+    fn from_messages_captures_full_args_and_output() {
+        let now = Instant::now();
+        let messages = [tool_result_message(
+            "read_file",
+            Some("{\"path\":\"src/main.rs\"}"),
+            "fn main() {}\n".repeat(500).as_str(),
+            now,
+        )];
+        let turn = AgentTurn::from_messages(&messages);
+        assert_eq!(turn.tool_calls.len(), 1);
+        let row = &turn.tool_calls[0];
+        assert_eq!(row.arguments.as_deref(), Some("{\"path\":\"src/main.rs\"}"));
+        assert_eq!(row.full_output.len(), 500 * "fn main() {}\n".len());
+        assert!(
+            row.result_preview.len() < row.full_output.len(),
+            "preview stays truncated while full output is kept"
+        );
+        assert!(!row.expanded);
+    }
+
+    #[test]
+    fn from_messages_wires_tool_count_and_duration() {
+        let now = Instant::now();
+        let messages = [
+            tool_result_message("a", None, "ok", now - Duration::from_millis(1500)),
+            tool_result_message("b", None, "ok", now),
+        ];
+        let turn = AgentTurn::from_messages(&messages);
+        assert_eq!(turn.header.tool_count, 2);
+        assert!(
+            turn.header.duration_ms >= 1500,
+            "duration should cover the first→last message span, got {}",
+            turn.header.duration_ms
+        );
+        // ponytail: per-turn token usage is not wired yet (see TurnHeader docs).
+        assert_eq!(turn.header.token_count, 0);
     }
 }

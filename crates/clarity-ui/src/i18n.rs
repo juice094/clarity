@@ -161,6 +161,40 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Send message", "发送消息");
     m.insert("Stop generating (Ctrl+C)", "停止生成（Ctrl+C）");
 
+    // ── Chat: message actions / composer tooltips ──
+    m.insert("Copy", "复制");
+    m.insert("Copied to clipboard", "已复制到剪贴板");
+    m.insert("Edit", "编辑");
+    m.insert("Regenerate", "重新生成");
+    m.insert("Add attachment", "添加附件");
+    m.insert("Plugins (type /)", "插件（输入 /）");
+    m.insert("Stop generation", "停止生成");
+    m.insert("Send (Ctrl+Enter)", "发送（Ctrl+Enter）");
+    m.insert("Switch model", "切换模型");
+    m.insert("Agent mode", "Agent 模式");
+
+    // ── Chat: agent turn / tool calls ──
+    m.insert("Thinking", "思考过程");
+    m.insert("tokens", "tokens");
+    m.insert("tools", "个工具");
+    m.insert("files", "个文件");
+    m.insert("Arguments", "参数");
+    m.insert("Output", "输出");
+    m.insert("Truncated", "已截断");
+    m.insert("lines", "行");
+
+    // ── Dashboard ──
+    m.insert("Dashboard", "仪表盘");
+    m.insert("Session Messages", "会话消息数");
+    m.insert("Session Tokens", "会话 Token 数");
+    m.insert("Agent Status", "Agent 状态");
+    m.insert("Tool Calls (Session)", "工具调用（会话）");
+    m.insert("Running Subagents", "运行中的子代理");
+    m.insert("Parallel Batches", "并行批次");
+    m.insert("Active Teams", "活跃团队");
+    m.insert("Background Tasks", "后台任务");
+    m.insert("Gateway Status", "Gateway 状态");
+
     // ── Bot bar / Right rail ──
     m.insert("Share", "分享");
     m.insert("Console", "控制台");
