@@ -35,13 +35,12 @@ impl App {
         // Load persisted cron tasks into the scheduler and start the resident ticker.
         let bg_manager = Arc::clone(&state.bg_manager);
         let cron_cancel_token = state.cron_cancel_token.clone();
-        runtime.block_on(async {
+        let _cron_handle = runtime.block_on(async {
             if let Err(e) = bg_manager.load_cron_tasks().await {
                 tracing::warn!("Failed to load cron tasks: {}", e);
             }
+            bg_manager.start_cron_loop(std::time::Duration::from_secs(60), cron_cancel_token)
         });
-        let _cron_handle =
-            bg_manager.start_cron_loop(std::time::Duration::from_secs(60), cron_cancel_token);
         mark("load_cron_tasks");
 
         // Initialize long-term memory store lazily so it does not block window
