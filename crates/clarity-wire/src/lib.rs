@@ -299,6 +299,85 @@ pub enum WireMessage {
         /// Updated agent turn lifecycle state, if it changed.
         turn: Option<TurnState>,
     },
+
+    /// A subagent reached a new execution stage.
+    ///
+    /// Mirrors `SubagentProgressEvent::Stage` from `clarity-contract` so every
+    /// frontend (not just the local mpsc consumer) can track subagent runs.
+    SubagentStage {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Agent identifier.
+        agent_id: String,
+        /// Name of the stage reached.
+        name: String,
+    },
+
+    /// A subagent appended output text.
+    ///
+    /// Mirrors `SubagentProgressEvent::Output`.
+    SubagentOutput {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Agent identifier.
+        agent_id: String,
+        /// Output text appended by the subagent.
+        text: String,
+    },
+
+    /// A subagent's run status changed.
+    ///
+    /// Mirrors `SubagentProgressEvent::StatusChange`. `status` carries the
+    /// display string ("Idle" / "Running" / "Completed" / "Failed") used by
+    /// the existing frontend stores.
+    // ponytail: status is stringly-typed to avoid a wire→contract dependency;
+    // upgrade path: shared status enum once the contract layer owns one.
+    SubagentStatusChange {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Agent identifier.
+        agent_id: String,
+        /// Agent type (e.g. "coder", "explore").
+        agent_type: String,
+        /// New status display string.
+        status: String,
+    },
+
+    /// A subagent's step budget progressed.
+    ///
+    /// Mirrors `SubagentProgressEvent::Progress`.
+    SubagentProgress {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Agent identifier.
+        agent_id: String,
+        /// Steps taken so far.
+        steps: usize,
+        /// Maximum allowed steps.
+        max_steps: usize,
+    },
+
+    /// A background task's status changed.
+    ///
+    /// Emitted by `clarity_core::background::BackgroundTaskManager` at the
+    /// same points where completion notifications are published, so
+    /// frontends can track background tasks over the wire.
+    BackgroundTaskUpdate {
+        /// Identifier for the turn this message belongs to (usually empty;
+        /// background tasks are not turn-scoped).
+        #[serde(default)]
+        turn_id: String,
+        /// Task identifier.
+        task_id: String,
+        /// Human-readable task name.
+        task_name: String,
+        /// New status string (`TaskStatus::as_str()`).
+        status: String,
+    },
 }
 
 // ADR-006 Phase C.1 (2026-05-11): event.rs / Event / EventBus / EventMsg
@@ -333,6 +412,11 @@ impl WireMessage {
             | WireMessage::ThreadCreated { .. }
             | WireMessage::ThreadUpdated { .. } => {}
             WireMessage::ViewStateUpdate { turn_id: t, .. } => *t = turn_id,
+            WireMessage::SubagentStage { turn_id: t, .. }
+            | WireMessage::SubagentOutput { turn_id: t, .. }
+            | WireMessage::SubagentStatusChange { turn_id: t, .. }
+            | WireMessage::SubagentProgress { turn_id: t, .. }
+            | WireMessage::BackgroundTaskUpdate { turn_id: t, .. } => *t = turn_id,
         }
         self
     }
@@ -460,7 +544,7 @@ impl Default for WireEventBuffer {
 /// let soul = wire.soul_side();
 /// let mut ui = wire.ui_side(false);
 /// ```
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Wire {
     /// Sender for raw (unmerged) messages.
     raw_sender: broadcast::Sender<WireMessage>,
@@ -624,7 +708,7 @@ impl Default for Wire {
 /// in the event replay buffer.
 ///
 /// Uses interior mutability to allow sending from shared references.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct WireSoulSide {
     raw_sender: broadcast::Sender<WireMessage>,
     merged_sender: broadcast::Sender<WireMessage>,
@@ -1382,5 +1466,93 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: WireMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_subagent_and_task_variants_serde_roundtrip() {
+        for msg in [
+            WireMessage::SubagentStage {
+                turn_id: "t1".to_string(),
+                agent_id: "a1".to_string(),
+                name: "runner_started".to_string(),
+            },
+            WireMessage::SubagentOutput {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                text: "partial output".to_string(),
+            },
+            WireMessage::SubagentStatusChange {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                agent_type: "coder".to_string(),
+                status: "Running".to_string(),
+            },
+            WireMessage::SubagentProgress {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                steps: 3,
+                max_steps: 10,
+            },
+            WireMessage::BackgroundTaskUpdate {
+                turn_id: String::new(),
+                task_id: "task_1".to_string(),
+                task_name: "demo".to_string(),
+                status: "completed".to_string(),
+            },
+        ] {
+            let json = serde_json::to_string(&msg).unwrap();
+            let decoded: WireMessage = serde_json::from_str(&json).unwrap();
+            assert_eq!(msg, decoded);
+        }
+    }
+
+    #[test]
+    fn test_subagent_variants_parse_without_turn_id() {
+        // Backward compatibility: producers may omit turn_id entirely.
+        let msg: WireMessage = serde_json::from_str(
+            r#"{"type":"subagent_status_change","agent_id":"a1","agent_type":"explore","status":"Completed"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            msg,
+            WireMessage::SubagentStatusChange {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                agent_type: "explore".to_string(),
+                status: "Completed".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_with_turn_id_covers_subagent_and_task_variants() {
+        let stamped = WireMessage::SubagentProgress {
+            turn_id: String::new(),
+            agent_id: "a1".to_string(),
+            steps: 1,
+            max_steps: 5,
+        }
+        .with_turn_id("turn-9");
+        assert_eq!(
+            stamped,
+            WireMessage::SubagentProgress {
+                turn_id: "turn-9".to_string(),
+                agent_id: "a1".to_string(),
+                steps: 1,
+                max_steps: 5,
+            }
+        );
+
+        let stamped = WireMessage::BackgroundTaskUpdate {
+            turn_id: String::new(),
+            task_id: "task_1".to_string(),
+            task_name: "demo".to_string(),
+            status: "running".to_string(),
+        }
+        .with_turn_id("turn-9");
+        match stamped {
+            WireMessage::BackgroundTaskUpdate { turn_id, .. } => assert_eq!(turn_id, "turn-9"),
+            other => panic!("unexpected variant after with_turn_id: {:?}", other),
+        }
     }
 }

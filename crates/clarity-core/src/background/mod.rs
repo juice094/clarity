@@ -221,6 +221,9 @@ pub struct BackgroundTaskManager {
     cron_scheduler: Option<Arc<tokio::sync::Mutex<CronScheduler>>>,
     /// 完成通知收件箱（任务结束时写入摘要，由父 Agent 的 hook 注入对话）
     completion_inbox: Option<Arc<crate::agent::completion_inbox::CompletionInbox>>,
+    /// 可选 wire：任务状态变更时广播 `WireMessage::BackgroundTaskUpdate`，
+    /// 让 TUI / Gateway / mobile 等前端也能跟踪后台任务。
+    wire: Option<Arc<clarity_wire::Wire>>,
 }
 
 // Intentionally retained: BackgroundTaskManager exposes a stable internal API; some
@@ -246,6 +249,7 @@ impl BackgroundTaskManager {
             agent_executor: Arc::new(std::sync::RwLock::new(None)),
             cron_scheduler: None,
             completion_inbox: None,
+            wire: None,
         }
     }
 
@@ -295,6 +299,26 @@ impl BackgroundTaskManager {
         self
     }
 
+    /// 设置 wire：任务状态变更时同步广播 `WireMessage::BackgroundTaskUpdate`。
+    pub fn with_wire(mut self, wire: Arc<clarity_wire::Wire>) -> Self {
+        self.wire = Some(wire);
+        self
+    }
+
+    /// 在 wire 上广播任务状态变更（未配置 wire 时为 no-op）。
+    fn emit_wire_status(&self, task_id: &str, task_name: &str, status: &str) {
+        if let Some(ref wire) = self.wire {
+            let _ = wire
+                .soul_side()
+                .send(clarity_wire::WireMessage::BackgroundTaskUpdate {
+                    turn_id: String::new(),
+                    task_id: task_id.to_string(),
+                    task_name: task_name.to_string(),
+                    status: status.to_string(),
+                });
+        }
+    }
+
     /// 设置 Cron 任务调度器
     pub fn with_cron_scheduler(
         mut self,
@@ -330,6 +354,7 @@ impl BackgroundTaskManager {
             let notif = task_status_notification(task_id, task_name, status.as_str());
             manager.publish(notif);
         }
+        self.emit_wire_status(task_id, task_name, status.as_str());
     }
 
     /// 创建并启动后台任务
@@ -378,8 +403,22 @@ impl BackgroundTaskManager {
         let running_tasks = self.running_tasks.clone();
         let notification_manager = self.notification_manager.clone();
         let completion_inbox = self.completion_inbox.clone();
+        let wire = self.wire.clone();
 
         let handle = tokio::spawn(async move {
+            // 在 wire 上广播终态（与通知管理器并行的桥接点）。
+            let emit_wire = |status: &str| {
+                if let Some(ref wire) = wire {
+                    let _ =
+                        wire.soul_side()
+                            .send(clarity_wire::WireMessage::BackgroundTaskUpdate {
+                                turn_id: String::new(),
+                                task_id: task_id_clone.clone(),
+                                task_name: task_name.clone(),
+                                status: status.to_string(),
+                            });
+                }
+            };
             // 执行任务
             let start = std::time::Instant::now();
             let result = task_fn(spec).await;
@@ -409,6 +448,7 @@ impl BackgroundTaskManager {
                             task_status_notification(&task_id_clone, &task_name, "completed");
                         manager.publish(notif);
                     }
+                    emit_wire("completed");
 
                     // 写入完成收件箱（父 Agent 下一 turn 注入对话）
                     if let Some(ref inbox) = completion_inbox {
@@ -447,6 +487,7 @@ impl BackgroundTaskManager {
                         let notif = task_status_notification(&task_id_clone, &task_name, "failed");
                         manager.publish(notif);
                     }
+                    emit_wire("failed");
 
                     error!("Task {} failed: {}", task_id_clone, e);
                     error_result
@@ -954,6 +995,45 @@ mod tests {
         assert_eq!(drained.len(), 1);
         assert!(drained[0].starts_with("[background task completed] inbox_task"));
         assert!(drained[0].contains("all done"));
+    }
+
+    #[tokio::test]
+    async fn test_wire_receives_background_task_updates() {
+        let temp_dir = TempDir::new().unwrap();
+        let wire = Arc::new(clarity_wire::Wire::new());
+        let mut ui = wire.ui_side(false);
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        )
+        .with_wire(wire);
+
+        let spec = TaskSpec::new("wire_task", "test prompt");
+        let task_id = manager
+            .spawn(spec, |_spec| async { Ok(TaskResult::success("done")) })
+            .await
+            .unwrap();
+        manager.wait(&task_id).await.unwrap();
+
+        // 状态序列应覆盖 pending → running → completed，且都带 task_id 命名空间。
+        let mut statuses = Vec::new();
+        while let Some(msg) = ui.try_recv() {
+            match msg {
+                clarity_wire::WireMessage::BackgroundTaskUpdate {
+                    task_id: id,
+                    task_name,
+                    status,
+                    ..
+                } => {
+                    assert_eq!(id, task_id);
+                    assert_eq!(task_name, "wire_task");
+                    statuses.push(status);
+                }
+                other => panic!("unexpected wire message: {:?}", other),
+            }
+        }
+        assert_eq!(statuses, vec!["pending", "running", "completed"]);
     }
 
     #[tokio::test]

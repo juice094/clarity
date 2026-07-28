@@ -340,11 +340,19 @@ impl Agent {
         // Capture usage before finish_turn clears turn_context.
         let usage = self.get_session_usage();
 
-        self.finish_turn();
+        // On the error path there are no turn-scoped wire messages to stamp,
+        // so finish the turn immediately (preserves the pre-reorder behavior).
+        let (final_response, completed) = match loop_result {
+            Ok(result) => result,
+            Err(e) => {
+                self.finish_turn();
+                return Err(e);
+            }
+        };
 
-        let (final_response, completed) = loop_result?;
-
-        // Teardown
+        // Teardown. Emit turn-scoped wire messages BEFORE finish_turn() clears
+        // the turn context, so `send_wire_message` stamps the real turn_id and
+        // the Usage event carries this turn's token counts under its own turn_id.
         self.send_wire_message(WireMessage::ViewStateUpdate {
             turn_id: String::new(),
             turn: Some(clarity_wire::TurnState::Idle),
@@ -358,6 +366,7 @@ impl Agent {
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,
         });
+        self.finish_turn();
 
         let memory_content = if completed {
             format!("User: {}\nAssistant: {}", query_hint, final_response)

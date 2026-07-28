@@ -228,11 +228,22 @@ impl Agent {
         tool_names: &[String],
         usage: crate::agent::TokenUsage,
     ) -> Result<String, AgentError> {
-        self.finish_turn();
         let tier = crate::hooks::classify_delivery_tier(tool_names);
         if let Some(ref hooks) = self.hook_registry {
-            response = hooks.run_pre_delivery(&response, tier).await?;
+            // On hook failure there are no turn-scoped wire messages to stamp,
+            // so finish the turn before returning (preserves the pre-reorder
+            // behavior where finish_turn ran first).
+            match hooks.run_pre_delivery(&response, tier).await {
+                Ok(r) => response = r,
+                Err(e) => {
+                    self.finish_turn();
+                    return Err(e);
+                }
+            }
         }
+        // Emit turn-scoped wire messages BEFORE finish_turn() clears the turn
+        // context, so `send_wire_message` can stamp the real turn_id and the
+        // Usage event carries this turn's token counts under its own turn_id.
         self.send_wire_message(WireMessage::ViewStateUpdate {
             turn_id: String::new(),
             turn: Some(clarity_wire::TurnState::Idle),
@@ -246,6 +257,7 @@ impl Agent {
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,
         });
+        self.finish_turn();
         Ok(response)
     }
 

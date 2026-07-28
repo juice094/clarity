@@ -33,6 +33,56 @@ use tokio::fs;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
+/// Display string for a [`SubagentStatus`], matching the strings the
+/// frontends already render in their subagent stores.
+fn status_display(status: SubagentStatus) -> &'static str {
+    match status {
+        SubagentStatus::Idle => "Idle",
+        SubagentStatus::Running => "Running",
+        SubagentStatus::Completed => "Completed",
+        SubagentStatus::Failed => "Failed",
+    }
+}
+
+/// Bridge a [`SubagentProgressEvent`] onto the wire protocol.
+///
+/// This is the single mapping between the subagent progress channel and
+/// `WireMessage`; every emission point sends both forms of the same event.
+fn progress_event_to_wire(event: &SubagentProgressEvent) -> WireMessage {
+    match event {
+        SubagentProgressEvent::Stage { agent_id, name } => WireMessage::SubagentStage {
+            turn_id: String::new(),
+            agent_id: agent_id.clone(),
+            name: name.clone(),
+        },
+        SubagentProgressEvent::Output { agent_id, text } => WireMessage::SubagentOutput {
+            turn_id: String::new(),
+            agent_id: agent_id.clone(),
+            text: text.clone(),
+        },
+        SubagentProgressEvent::StatusChange {
+            agent_id,
+            agent_type,
+            status,
+        } => WireMessage::SubagentStatusChange {
+            turn_id: String::new(),
+            agent_id: agent_id.clone(),
+            agent_type: agent_type.clone(),
+            status: status_display(*status).to_string(),
+        },
+        SubagentProgressEvent::Progress {
+            agent_id,
+            steps,
+            max_steps,
+        } => WireMessage::SubagentProgress {
+            turn_id: String::new(),
+            agent_id: agent_id.clone(),
+            steps: *steps,
+            max_steps: *max_steps,
+        },
+    }
+}
+
 // =============================================================================
 // 上下文管理
 // =============================================================================
@@ -213,6 +263,9 @@ pub struct OutputCollector {
     stages: Vec<String>,
     content: Vec<String>,
     progress_tx: Option<mpsc::Sender<SubagentProgressEvent>>,
+    /// Optional wire producer; stage/output events are bridged onto the wire
+    /// so remote frontends (TUI / Gateway / mobile) can track the run.
+    wire: Option<clarity_wire::WireSoulSide>,
     agent_id: String,
 }
 
@@ -224,6 +277,7 @@ impl OutputCollector {
             stages: Vec::new(),
             content: Vec::new(),
             progress_tx: None,
+            wire: None,
             agent_id: agent_id.into(),
         }
     }
@@ -232,6 +286,22 @@ impl OutputCollector {
     pub fn with_progress_tx(mut self, tx: mpsc::Sender<SubagentProgressEvent>) -> Self {
         self.progress_tx = Some(tx);
         self
+    }
+
+    /// Attach a wire producer for cross-frontend progress events.
+    pub fn with_wire(mut self, wire: clarity_wire::WireSoulSide) -> Self {
+        self.wire = Some(wire);
+        self
+    }
+
+    /// Emit a progress event on both the mpsc channel and the wire.
+    fn emit(&self, event: SubagentProgressEvent) {
+        if let Some(ref tx) = self.progress_tx {
+            let _ = tx.try_send(event.clone());
+        }
+        if let Some(ref wire) = self.wire {
+            let _ = wire.send(progress_event_to_wire(&event));
+        }
     }
 
     /// 记录阶段
@@ -243,24 +313,20 @@ impl OutputCollector {
             .as_millis();
         self.stages.push(format!("[{}] {}", timestamp, stage));
         debug!("Subagent stage: {}", stage);
-        if let Some(ref tx) = self.progress_tx {
-            let _ = tx.try_send(SubagentProgressEvent::Stage {
-                agent_id: self.agent_id.clone(),
-                name: stage,
-            });
-        }
+        self.emit(SubagentProgressEvent::Stage {
+            agent_id: self.agent_id.clone(),
+            name: stage,
+        });
     }
 
     /// 追加内容
     pub fn append(&mut self, text: impl Into<String>) {
         let text = text.into();
         self.content.push(text.clone());
-        if let Some(ref tx) = self.progress_tx {
-            let _ = tx.try_send(SubagentProgressEvent::Output {
-                agent_id: self.agent_id.clone(),
-                text,
-            });
-        }
+        self.emit(SubagentProgressEvent::Output {
+            agent_id: self.agent_id.clone(),
+            text,
+        });
     }
 
     /// 写入 Wire 消息
@@ -412,6 +478,16 @@ impl SubagentRunner {
         self
     }
 
+    /// Emit a progress event on both the mpsc channel and the parent wire.
+    fn emit_progress(&self, event: SubagentProgressEvent, parent_wire: Option<&Wire>) {
+        if let Some(ref tx) = self.progress_tx {
+            let _ = tx.try_send(event.clone());
+        }
+        if let Some(wire) = parent_wire {
+            let _ = wire.soul_side().send(progress_event_to_wire(&event));
+        }
+    }
+
     /// 生成代理 ID
     fn generate_agent_id(&self) -> String {
         use rand::RngExt;
@@ -481,6 +557,9 @@ impl SubagentRunner {
         let mut collector = OutputCollector::new(context.output_path(), &agent_id);
         if let Some(ref tx) = self.progress_tx {
             collector = collector.with_progress_tx(tx.clone());
+        }
+        if let Some(wire) = parent_wire {
+            collector = collector.with_wire(wire.soul_side().clone());
         }
         if worktree_guard.is_some() {
             collector.stage("worktree_created");
@@ -582,18 +661,22 @@ impl SubagentRunner {
         // 7. 更新状态为运行中
         store.update_status(&agent_id, SubagentStatus::Running);
         let _ = store.save(&agent_id).await;
-        if let Some(ref tx) = self.progress_tx {
-            let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+        self.emit_progress(
+            SubagentProgressEvent::StatusChange {
                 agent_id: agent_id.clone(),
                 agent_type: agent_type.clone(),
                 status: SubagentStatus::Running,
-            });
-            let _ = tx.try_send(SubagentProgressEvent::Progress {
+            },
+            parent_wire,
+        );
+        self.emit_progress(
+            SubagentProgressEvent::Progress {
                 agent_id: agent_id.clone(),
                 steps: 0,
                 max_steps: max_iters,
-            });
-        }
+            },
+            parent_wire,
+        );
         collector.stage("status_updated_to_running");
 
         // 8. 执行代理循环
@@ -620,18 +703,22 @@ impl SubagentRunner {
                 collector.save_summary(&summary).await?;
                 store.update_status(&agent_id, SubagentStatus::Completed);
                 let _ = store.save(&agent_id).await;
-                if let Some(ref tx) = self.progress_tx {
-                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                self.emit_progress(
+                    SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Completed,
-                    });
-                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                    },
+                    parent_wire,
+                );
+                self.emit_progress(
+                    SubagentProgressEvent::Progress {
                         agent_id: agent_id.clone(),
                         steps: steps_taken,
                         max_steps: max_iters,
-                    });
-                }
+                    },
+                    parent_wire,
+                );
 
                 // Mark worktree for cleanup on success.
                 if let Some(ref mut guard) = worktree_guard {
@@ -656,18 +743,22 @@ impl SubagentRunner {
                 collector.stage("execution_cancelled");
                 store.update_status(&agent_id, SubagentStatus::Failed);
                 let _ = store.save(&agent_id).await;
-                if let Some(ref tx) = self.progress_tx {
-                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                self.emit_progress(
+                    SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Failed,
-                    });
-                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                    },
+                    parent_wire,
+                );
+                self.emit_progress(
+                    SubagentProgressEvent::Progress {
                         agent_id: agent_id.clone(),
                         steps: steps_taken,
                         max_steps: max_iters,
-                    });
-                }
+                    },
+                    parent_wire,
+                );
 
                 Err(SubagentError::Cancelled)
             }
@@ -675,18 +766,22 @@ impl SubagentRunner {
                 collector.stage(format!("execution_failed: {}", e));
                 store.update_status(&agent_id, SubagentStatus::Failed);
                 let _ = store.save(&agent_id).await;
-                if let Some(ref tx) = self.progress_tx {
-                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                self.emit_progress(
+                    SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Failed,
-                    });
-                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                    },
+                    parent_wire,
+                );
+                self.emit_progress(
+                    SubagentProgressEvent::Progress {
                         agent_id: agent_id.clone(),
                         steps: steps_taken,
                         max_steps: max_iters,
-                    });
-                }
+                    },
+                    parent_wire,
+                );
 
                 Err(e)
             }
@@ -1280,6 +1375,98 @@ mod tests {
             matches!(result2, Err(SubagentError::MaxStepsReached { .. })),
             "Second run should fail after budget exhausted: {:?}",
             result2
+        );
+    }
+
+    // ── Wire bridge tests ──
+
+    #[test]
+    fn test_progress_event_to_wire_mapping() {
+        let event = SubagentProgressEvent::StatusChange {
+            agent_id: "a1".to_string(),
+            agent_type: "coder".to_string(),
+            status: SubagentStatus::Running,
+        };
+        let msg = progress_event_to_wire(&event);
+        assert_eq!(
+            msg,
+            WireMessage::SubagentStatusChange {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                agent_type: "coder".to_string(),
+                status: "Running".to_string(),
+            }
+        );
+
+        let event = SubagentProgressEvent::Progress {
+            agent_id: "a1".to_string(),
+            steps: 2,
+            max_steps: 8,
+        };
+        assert_eq!(
+            progress_event_to_wire(&event),
+            WireMessage::SubagentProgress {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                steps: 2,
+                max_steps: 8,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_emits_subagent_events_on_parent_wire() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        let runner = SubagentRunner::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(std::sync::Arc::new(clarity_core::agent::MockLlm));
+
+        let wire = Wire::new();
+        let mut ui = wire.ui_side(false);
+
+        let mut store = SubagentStore::new(context_dir.path());
+        let spec = RunSpec::new("Wire test", "Do something")
+            .with_type("coder")
+            .without_git_context();
+
+        let result = runner.run(spec, &mut store, Some(&wire)).await;
+        assert!(result.is_ok(), "run should succeed: {:?}", result);
+        let agent_id = result.unwrap().agent_id;
+
+        // Drain the wire and assert the lifecycle reached the consumer:
+        // at least one stage event, a Running status, and a Completed status,
+        // all namespaced by the subagent's agent_id.
+        let mut saw_stage = false;
+        let mut statuses = Vec::new();
+        while let Some(msg) = ui.try_recv() {
+            match msg {
+                WireMessage::SubagentStage { agent_id: id, .. } => {
+                    assert_eq!(id, agent_id);
+                    saw_stage = true;
+                }
+                WireMessage::SubagentStatusChange {
+                    agent_id: id,
+                    status,
+                    ..
+                } => {
+                    assert_eq!(id, agent_id);
+                    statuses.push(status);
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_stage, "expected at least one SubagentStage on the wire");
+        assert!(
+            statuses.first().map(String::as_str) == Some("Running"),
+            "first status should be Running, got {:?}",
+            statuses
+        );
+        assert!(
+            statuses.last().map(String::as_str) == Some("Completed"),
+            "last status should be Completed, got {:?}",
+            statuses
         );
     }
 

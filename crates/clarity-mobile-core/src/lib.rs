@@ -1211,6 +1211,11 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
         | WireMessage::ThreadList { .. }
         | WireMessage::ThreadCreated { .. }
         | WireMessage::ThreadUpdated { .. }
+        | WireMessage::SubagentStage { .. }
+        | WireMessage::SubagentOutput { .. }
+        | WireMessage::SubagentStatusChange { .. }
+        | WireMessage::SubagentProgress { .. }
+        | WireMessage::BackgroundTaskUpdate { .. }
         | WireMessage::ViewStateUpdate { .. } => return None,
         _ => return None,
     })

@@ -462,6 +462,65 @@ async fn test_agent_run_with_wire() {
 }
 
 #[tokio::test]
+async fn test_agent_run_wire_usage_carries_turn_id() {
+    use clarity_wire::Wire;
+    use std::sync::Arc;
+    use tokio::time::{Duration, timeout};
+
+    let wire = Wire::new();
+    let mut ui_side = wire.ui_side(false);
+
+    let registry = ToolRegistry::new();
+    let config = AgentConfig::new();
+    let agent = Agent::with_config(registry, config)
+        .with_llm(Arc::new(MockLlm))
+        .with_wire(Arc::new(wire));
+
+    let handle = tokio::spawn(async move { agent.run("turn id test").await });
+
+    // Drain the full turn: every message must share one non-empty turn_id,
+    // including TurnEnd and Usage which are emitted at turn teardown.
+    let mut turn_id: Option<String> = None;
+    let mut saw_turn_end = false;
+    let mut saw_usage = false;
+    while !saw_usage {
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for turn messages")
+            .expect("channel closed before Usage");
+        let msg_turn_id = match &msg {
+            WireMessage::TurnBegin { turn_id, .. }
+            | WireMessage::ContentPart { turn_id, .. }
+            | WireMessage::ViewStateUpdate { turn_id, .. }
+            | WireMessage::TurnEnd { turn_id }
+            | WireMessage::Usage { turn_id, .. } => turn_id.clone(),
+            _ => continue,
+        };
+        assert!(
+            !msg_turn_id.is_empty(),
+            "turn-scoped message must carry a turn_id: {:?}",
+            msg
+        );
+        match &turn_id {
+            None => turn_id = Some(msg_turn_id),
+            Some(existing) => assert_eq!(
+                existing, &msg_turn_id,
+                "all messages in a turn must share one turn_id"
+            ),
+        }
+        saw_turn_end |= matches!(msg, WireMessage::TurnEnd { .. });
+        saw_usage = matches!(msg, WireMessage::Usage { .. });
+    }
+    assert!(saw_turn_end, "TurnEnd must precede Usage");
+
+    let result = timeout(Duration::from_millis(1000), handle)
+        .await
+        .expect("timeout waiting for agent")
+        .expect("join error");
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
 async fn test_agent_run_streaming_with_wire() {
     use clarity_wire::{DraftEvent, Wire};
     use std::sync::Arc;

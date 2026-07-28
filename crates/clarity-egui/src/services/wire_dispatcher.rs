@@ -196,6 +196,46 @@ pub fn dispatch_wire_message(
             completion_tokens,
             total_tokens,
         }),
+        clarity_wire::WireMessage::SubagentStage { agent_id, name, .. } => {
+            Some(UiEvent::SubagentStage { agent_id, name })
+        }
+        clarity_wire::WireMessage::SubagentOutput { agent_id, text, .. } => {
+            Some(UiEvent::SubagentOutput { agent_id, text })
+        }
+        clarity_wire::WireMessage::SubagentProgress {
+            agent_id,
+            steps,
+            max_steps,
+            ..
+        } => Some(UiEvent::SubagentProgress {
+            agent_id,
+            steps,
+            max_steps,
+        }),
+        clarity_wire::WireMessage::SubagentStatusChange {
+            agent_id,
+            agent_type,
+            status,
+            ..
+        } => {
+            // Mirror the legacy mpsc bridge: a terminal status additionally
+            // produces SubagentComplete so stores can stamp completion time.
+            let success = status == "Completed";
+            let terminal = success || status == "Failed";
+            let _ = tx.send(UiEvent::SubagentStatus {
+                agent_id: agent_id.clone(),
+                agent_type,
+                status,
+            });
+            if terminal {
+                let _ = tx.send(UiEvent::SubagentComplete { agent_id, success });
+            }
+            None
+        }
+        // ponytail: egui 的后台任务 UI 目前走 TaskStore 轮询，背景任务管理器
+        // 尚未挂长期 wire；此 variant 在 egui 侧显式忽略。升级路径：AppState
+        // 给 bg_manager 挂 app 级 wire 后在此映射到任务 store 刷新事件。
+        clarity_wire::WireMessage::BackgroundTaskUpdate { .. } => None,
     };
     if let Some(ev) = event {
         if let Err(e) = tx.send(ev) {
@@ -451,5 +491,78 @@ mod tests {
             }
             other => panic!("Expected DraftProgress, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn subagent_events_map_to_ui_events() {
+        let (tx, rx) = mpsc::channel();
+
+        let stage =
+            wire_msg(r#"{"type":"subagent_stage","agent_id":"a1","name":"runner_started"}"#);
+        dispatch_wire_message(stage, "sess-12", &tx);
+        match rx.try_recv().unwrap() {
+            UiEvent::SubagentStage { agent_id, name } => {
+                assert_eq!(agent_id, "a1");
+                assert_eq!(name, "runner_started");
+            }
+            other => panic!("Expected SubagentStage, got {:?}", other),
+        }
+
+        let progress =
+            wire_msg(r#"{"type":"subagent_progress","agent_id":"a1","steps":2,"max_steps":10}"#);
+        dispatch_wire_message(progress, "sess-12", &tx);
+        match rx.try_recv().unwrap() {
+            UiEvent::SubagentProgress {
+                agent_id,
+                steps,
+                max_steps,
+            } => {
+                assert_eq!(agent_id, "a1");
+                assert_eq!(steps, 2);
+                assert_eq!(max_steps, 10);
+            }
+            other => panic!("Expected SubagentProgress, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn subagent_terminal_status_emits_status_and_complete() {
+        let (tx, rx) = mpsc::channel();
+
+        let running = wire_msg(
+            r#"{"type":"subagent_status_change","agent_id":"a1","agent_type":"coder","status":"Running"}"#,
+        );
+        dispatch_wire_message(running, "sess-13", &tx);
+        match rx.try_recv().unwrap() {
+            UiEvent::SubagentStatus { status, .. } => assert_eq!(status, "Running"),
+            other => panic!("Expected SubagentStatus, got {:?}", other),
+        }
+        assert!(rx.try_recv().is_err(), "Running must not emit Complete");
+
+        let completed = wire_msg(
+            r#"{"type":"subagent_status_change","agent_id":"a1","agent_type":"coder","status":"Completed"}"#,
+        );
+        dispatch_wire_message(completed, "sess-13", &tx);
+        match rx.try_recv().unwrap() {
+            UiEvent::SubagentStatus { status, .. } => assert_eq!(status, "Completed"),
+            other => panic!("Expected SubagentStatus, got {:?}", other),
+        }
+        match rx.try_recv().unwrap() {
+            UiEvent::SubagentComplete { agent_id, success } => {
+                assert_eq!(agent_id, "a1");
+                assert!(success);
+            }
+            other => panic!("Expected SubagentComplete, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn background_task_update_is_ignored() {
+        let (tx, rx) = mpsc::channel();
+        let msg = wire_msg(
+            r#"{"type":"background_task_update","task_id":"t1","task_name":"demo","status":"completed"}"#,
+        );
+        dispatch_wire_message(msg, "sess-14", &tx);
+        assert!(rx.try_recv().is_err());
     }
 }

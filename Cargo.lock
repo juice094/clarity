@@ -1675,6 +1675,7 @@ dependencies = [
  "clarity-gateway",
  "clarity-mcp",
  "clarity-memory",
+ "clarity-subagents",
  "clarity-telemetry",
  "clarity-wire",
  "futures",

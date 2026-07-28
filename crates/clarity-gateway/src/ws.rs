@@ -1472,6 +1472,48 @@ mod tests {
     }
 
     #[test]
+    fn test_ws_response_passthrough_subagent_and_task_wire_variants() {
+        // The WireMessage envelope is variant-agnostic: new subagent/task
+        // variants must round-trip through serialization untouched.
+        for msg in [
+            clarity_wire::WireMessage::SubagentStatusChange {
+                turn_id: "t1".to_string(),
+                agent_id: "a1".to_string(),
+                agent_type: "coder".to_string(),
+                status: "Running".to_string(),
+            },
+            clarity_wire::WireMessage::SubagentProgress {
+                turn_id: String::new(),
+                agent_id: "a1".to_string(),
+                steps: 2,
+                max_steps: 10,
+            },
+            clarity_wire::WireMessage::BackgroundTaskUpdate {
+                turn_id: String::new(),
+                task_id: "task_1".to_string(),
+                task_name: "demo".to_string(),
+                status: "completed".to_string(),
+            },
+        ] {
+            let payload = serde_json::to_value(&msg).unwrap();
+            let resp = WsResponse::WireMessage {
+                payload: payload.clone(),
+            };
+            let text = serde_json::to_string(&resp).unwrap();
+            let decoded: WsResponse = serde_json::from_str(&text).unwrap();
+            match decoded {
+                WsResponse::WireMessage { payload: p } => {
+                    assert_eq!(p, payload);
+                    // And the payload still decodes as the original variant.
+                    let back: clarity_wire::WireMessage = serde_json::from_value(p).unwrap();
+                    assert_eq!(back, msg);
+                }
+                other => panic!("expected WireMessage variant, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
     fn test_ws_response_deserialization_wire_message() {
         let json = r#"{"type":"wire_message","payload":{"type":"turn_begin","turn_id":"t1","user_input":"hi"}}"#;
         let resp: WsResponse = serde_json::from_str(json).unwrap();

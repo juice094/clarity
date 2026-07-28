@@ -27,3 +27,5 @@ pub mod subagent_ws;
 pub mod telemetry_end_to_end;
 #[cfg(test)]
 pub mod thread_api;
+#[cfg(test)]
+pub mod wire_protocol;

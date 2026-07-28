@@ -367,75 +367,29 @@ impl App {
                     .map(|d| d.join("clarity").join("subagents"))
                     .unwrap_or_else(|| working_dir.join("subagents"));
 
-                // ── IS-1 Sprint 30: progress channel for live UI tracking ──
-                let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(128);
-                let ui_tx2 = tx.clone();
+                // ── Wire-based progress: the runner bridges its
+                // SubagentProgressEvent emissions onto this wire; the drain
+                // task maps them onto the same UiEvent::Subagent* events the
+                // legacy mpsc forwarder produced (single source: wire).
+                let wire = Arc::new(clarity_wire::Wire::new());
+                let wire_ui = wire.ui_side(false);
+                let tx_wire = tx.clone();
+                let wire_session_id = subagent_session_id.clone();
                 let _recv_handle = tokio::spawn(async move {
-                    use clarity_contract::subagent::SubagentProgressEvent;
-                    while let Some(event) = progress_rx.recv().await {
-                        match event {
-                            SubagentProgressEvent::Stage { agent_id, name } => {
-                                let _ = ui_tx2.send(UiEvent::SubagentStage { agent_id, name });
-                            }
-                            SubagentProgressEvent::Output { agent_id, text } => {
-                                let _ = ui_tx2.send(UiEvent::SubagentOutput { agent_id, text });
-                            }
-                            SubagentProgressEvent::StatusChange {
-                                agent_id,
-                                agent_type,
-                                status,
-                            } => {
-                                let status_str = match status {
-                                    clarity_contract::subagent::SubagentStatus::Idle => "Idle",
-                                    clarity_contract::subagent::SubagentStatus::Running => "Running",
-                                    clarity_contract::subagent::SubagentStatus::Completed => {
-                                        "Completed"
-                                    }
-                                    clarity_contract::subagent::SubagentStatus::Failed => "Failed",
-                                }
-                                .to_string();
-                                let _ = ui_tx2.send(UiEvent::SubagentStatus {
-                                    agent_id: agent_id.clone(),
-                                    agent_type,
-                                    status: status_str.clone(),
-                                });
-                                if status == clarity_contract::subagent::SubagentStatus::Completed
-                                    || status == clarity_contract::subagent::SubagentStatus::Failed
-                                {
-                                    let _ = ui_tx2.send(UiEvent::SubagentComplete {
-                                        agent_id,
-                                        success: status
-                                            == clarity_contract::subagent::SubagentStatus::Completed,
-                                    });
-                                }
-                            }
-                            SubagentProgressEvent::Progress {
-                                agent_id,
-                                steps,
-                                max_steps,
-                            } => {
-                                let _ = ui_tx2.send(UiEvent::SubagentProgress {
-                                    agent_id,
-                                    steps,
-                                    max_steps,
-                                });
-                            }
-                        }
+                    let mut wire_ui = wire_ui;
+                    while let Some(msg) = wire_ui.recv().await {
+                        dispatch_wire_message(msg, &wire_session_id, &tx_wire);
                     }
                 });
 
-                let runner = clarity_subagents::SubagentRunner::new(
-                    registry,
-                    &working_dir,
-                    &context_dir,
-                )
-                .with_llm(llm)
-                .with_progress_tx(progress_tx);
+                let runner =
+                    clarity_subagents::SubagentRunner::new(registry, &working_dir, &context_dir)
+                        .with_llm(llm);
                 let mut store = clarity_subagents::SubagentStore::new(&context_dir);
                 let spec =
                     clarity_contract::subagent::RunSpec::new(&subagent_prompt, &subagent_prompt)
                         .with_type(&agent_type_string);
-                match runner.run(spec, &mut store, None).await {
+                match runner.run(spec, &mut store, Some(&wire)).await {
                     Ok(result) => {
                         let content = format!(
                             "🤖 **{}** subagent result\n\n{}",

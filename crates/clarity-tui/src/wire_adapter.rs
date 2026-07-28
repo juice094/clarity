@@ -41,6 +41,27 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
                     status: ToolStatus::Running,
                 })),
                 WireMessage::StatusUpdate { message, .. } => Some(Event::StreamResponse(message)),
+                // Subagent lifecycle: surface status transitions as chat lines
+                // (same treatment as StatusUpdate); high-frequency stage/output/
+                // progress events fall through to the catch-all.
+                WireMessage::SubagentStatusChange {
+                    agent_id,
+                    agent_type,
+                    status,
+                    ..
+                } => Some(Event::StreamResponse(format!(
+                    "[subagent {}:{}] {}",
+                    agent_type, agent_id, status
+                ))),
+                WireMessage::BackgroundTaskUpdate {
+                    task_id,
+                    task_name,
+                    status,
+                    ..
+                } => Some(Event::StreamResponse(format!(
+                    "[task {}] {}: {}",
+                    task_id, task_name, status
+                ))),
                 WireMessage::TurnEnd { .. } => Some(Event::ResponseComplete),
                 WireMessage::Usage {
                     prompt_tokens,
@@ -154,6 +175,55 @@ mod tests {
         });
 
         // Should only receive TurnEnd, empty ContentPart is filtered
+        let ev: Event = rx.recv().await.unwrap();
+        assert!(matches!(ev, Event::ResponseComplete));
+    }
+
+    #[tokio::test]
+    async fn test_adapter_subagent_status_and_task_update() {
+        let wire = Wire::new();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
+        spawn_wire_adapter(wire.ui_side(false), tx);
+
+        let _ = wire.soul_side().send(WireMessage::SubagentStatusChange {
+            turn_id: String::new(),
+            agent_id: "a1".to_string(),
+            agent_type: "coder".to_string(),
+            status: "Running".to_string(),
+        });
+        let ev: Event = rx.recv().await.unwrap();
+        match ev {
+            Event::StreamResponse(text) => {
+                assert!(text.contains("a1"));
+                assert!(text.contains("Running"));
+            }
+            other => panic!("expected StreamResponse, got {:?}", other),
+        }
+
+        let _ = wire.soul_side().send(WireMessage::BackgroundTaskUpdate {
+            turn_id: String::new(),
+            task_id: "task_1".to_string(),
+            task_name: "demo".to_string(),
+            status: "completed".to_string(),
+        });
+        let ev: Event = rx.recv().await.unwrap();
+        match ev {
+            Event::StreamResponse(text) => {
+                assert!(text.contains("task_1"));
+                assert!(text.contains("completed"));
+            }
+            other => panic!("expected StreamResponse, got {:?}", other),
+        }
+
+        // High-frequency subagent events are ignored by the adapter.
+        let _ = wire.soul_side().send(WireMessage::SubagentOutput {
+            turn_id: String::new(),
+            agent_id: "a1".to_string(),
+            text: "chunk".to_string(),
+        });
+        let _ = wire.soul_side().send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         let ev: Event = rx.recv().await.unwrap();
         assert!(matches!(ev, Event::ResponseComplete));
     }
