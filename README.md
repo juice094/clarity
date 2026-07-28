@@ -33,6 +33,7 @@ ReAct 智能体 · MCP 工具生态 · BM25+向量记忆 · 多入口（TUI/桌�
 | 亮点 | 说明 |
 |:---|:---|
 | 🧠 **Agent 运行时** | ReAct/Plan 循环 + MCP 工具生态，Approval 四层（Interactive/Smart/Plan/Yolo） |
+| 🐝 **子代理编排** | LLM 可调 `agent` / `agent_swarm` 工具并行派发子代理（模板 + items、并发/超时可控），后台任务真实执行、完成自动回报父 Agent；wire 事件贯通 TUI/GUI/Web/移动端 |
 | 🖥️ **纯 Rust 多前端** | TUI (ratatui) · 桌面 GUI (eframe/egui) · Web IDE (Axum) · 无头 CLI · 系统托盘 · 移动端 FFI |
 | 🤖 **本地 LLM** | Candle 原生 GGUF 推理（Qwen2 / DeepSeek-R1-Distill），离线自动回退，零外部依赖 |
 | 🧩 **混合记忆** | SQLite + BM25 + 向量搜索，跨会话持久化 |
@@ -59,13 +60,13 @@ ReAct 智能体 · MCP 工具生态 · BM25+向量记忆 · 多入口（TUI/桌�
 ```
 crates/
 ├── clarity-contract        # 共享契约层：LlmProvider/Tool/AgentError trait、FederationMessage
-├── clarity-wire           # UI ↔ Agent 事件总线（SPMC）+ ViewCommand 协议通道
+├── clarity-wire           # UI ↔ Agent 事件总线（SPMC）+ ViewCommand 协议通道 + 子代理/后台任务事件
 ├── clarity-memory         # BM25 + 向量混合搜索，chunking，四级压缩归档
 ├── clarity-mcp            # MCP 客户端 — stdio / SSE / HTTP / WebSocket 四传输
 ├── clarity-llm            # LLM provider 抽象 + 内置 provider + Candle GGUF 本地推理
 ├── clarity-tools          # 内置工具库：file / shell / web / devkit / …
 ├── clarity-channels       # 外部通道抽象；当前实现 WeChat iLink；Webhook 默认可用
-├── clarity-subagents      # 子代理执行器 + 并行调度器，消费 clarity-core
+├── clarity-subagents      # 子代理执行器 + 并行调度器（agent/agent_swarm 工具后端），消费 clarity-core
 ├── clarity-thread-store   # Thread 持久化抽象；依赖 clarity-rollout
 ├── clarity-rollout        # JSONL rollout 持久化（设计受 Codex 启发）
 ├── clarity-secrets        # 凭证加密与本地安全存储
@@ -77,10 +78,10 @@ crates/
 ├── clarity-claw           # 统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制（Gateway WebSocket 客户端、OpenClaw/KimiClaw 兼容层、设备发现/身份/配对、角色上下文同步）
 ├── clarity-headless       # 无头 CLI（脚本 / CI 场景）
 ├── clarity-mobile-core    # 移动端 UniFFI FFI 核心（Android/iOS）
-├── clarity-slint          # 桌面 GUI 实验栈（Slint），不参与默认 CI
 ├── clarity-anthropic-proxy # Anthropic Messages API 网关（默认 DeepSeek device，协议转换在 clarity-llm）
-└── clarity-tauri          # 已归档 — 不参与默认 workspace 构建
 ```
+
+> 已归档 crate（`clarity-slint`、`clarity-tauri`）存放在 `.archive/`，不参与 workspace 构建。
 
 ### 架构依赖方向
 
@@ -128,8 +129,8 @@ cargo install --path crates/clarity-headless # 无头 CLI
 详见 [CONTRIBUTING.md](CONTRIBUTING.md) — 环境搭建、架构总览、编码规范。快速验证：
 
 ```bash
-cargo test --workspace --lib                                   # 2030+ 个测试
-cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+cargo test --workspace --lib                                   # 2000+ 个测试
+cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo audit --deny unsound --deny yanked
 ```
 

@@ -39,7 +39,7 @@ Clarity 采用**三层协议栈**实现后端到前端的通信解耦：
 │  TRANSPORT  LAYER  (传输契约)                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │  clarity-wire                                                       │  │
-│  │  - WireMessage (20 variants)  ← SPMC broadcast channel (tokio)      │  │
+│  │  - WireMessage (25 variants)  ← SPMC broadcast channel (tokio)      │  │
 │  │  - WireSoulSide (producer)  /  WireUISide (consumer)              │  │
 │  │  - Dual channel: raw (逐条) + merged (ContentPart 合并)             │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
@@ -101,6 +101,18 @@ Clarity 采用**三层协议栈**实现后端到前端的通信解耦：
 | `ThreadList { threads }` | `ThreadManager` | egui (丢弃) | Thread 列表刷新 | ⚠️ **未接入** |
 | `ThreadCreated { thread_id, title }` | `ThreadManager` | egui (丢弃) | 新 Thread 创建 | ⚠️ **未接入** |
 | `ThreadUpdated { thread_id, title, archived }` | `ThreadManager` | egui (丢弃) | Thread 元数据更新 | ⚠️ **未接入** |
+
+### 2.5 子代理与后台任务变体（2026-07-28 新增）
+
+| 变体 | 生产者 | 消费者 | 语义 | 当前接入状态 |
+|------|--------|--------|------|-------------|
+| `SubagentStage { turn_id, agent_id, name }` | `SubagentRunner::emit_progress` | egui `wire_dispatcher` → `UiEvent::SubagentStage`；TUI `_ => None` | 子代理生命周期阶段 | ✅ 已接入 |
+| `SubagentOutput { turn_id, agent_id, text }` | `OutputCollector::emit`（mpsc+wire 双发） | egui → `UiEvent::SubagentOutput`；TUI 忽略 | 子代理增量输出 | ✅ 已接入 |
+| `SubagentStatusChange { turn_id, agent_id, agent_type, status }` | `SubagentRunner::emit_progress` | egui → `UiEvent::SubagentStatus`（终态额外发 `SubagentComplete`）；TUI 状态行；Gateway WS 透传 | 子代理状态机变更（status 为 String，避免 wire→contract 依赖） | ✅ 已接入 |
+| `SubagentProgress { turn_id, agent_id, steps, max_steps }` | `SubagentRunner::emit_progress` | egui → `UiEvent::SubagentProgress` | 子代理步数进度 | ✅ 已接入 |
+| `BackgroundTaskUpdate { turn_id, task_id, task_name, status }` | `BackgroundTaskManager::emit_wire_status` | TUI 状态行；egui 显式忽略（任务 UI 走 TaskStore 轮询）；Gateway WS 透传 | 后台任务状态机（pending/running/completed/failed/cancelled） | ⚠️ 部分接入 — egui/gateway 长期 manager 未挂 app 级 wire |
+
+约束：五个变体均带 `#[serde(default)] turn_id`，只增不改保持 serde 向后兼容；`/coder` `/explore` 路径的私有 mpsc 转发已删除，egui 侧子代理事件收敛到 wire 单源。`agent` / `agent_swarm` 工具路径（orchestrator → `ParallelExecutor`）的子代理暂不发射上述事件（需穿透 `ToolContext`，待做）。
 
 ---
 

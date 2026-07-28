@@ -38,12 +38,12 @@
 
 ## 1. 项目概览
 
-Clarity 是一个 **Rust 原生、本地优先的个人 AI 运行时**。用同一套 Agent 引擎支撑多种入口（桌面 GUI、终端 TUI、Web IDE、无头 CLI、系统托盘、移动端 FFI），在本地完成 LLM 编排、工具调用、记忆持久化与审批流程。
+Clarity 是一个 **Rust 原生、本地优先的个人 AI 运行时**。同一套 Agent 引擎支撑多种入口（桌面 GUI、终端 TUI、Web IDE、无头 CLI、系统托盘、移动端 FFI），在本地完成 LLM 编排、工具调用、记忆持久化与审批流程。
 
 关键事实：
 
 - **单仓库 Workspace**，Rust 2024 edition，MSRV 1.85，许可证 AGPL-3.0-or-later。
-- **Workspace 共 31 个 package**：24 个 `clarity-*` crate、6 个 `syncthing-*` crate（`third_party/syncthing-rust`）、1 个集成测试 crate（`tests/integration`）。
+- **Workspace 共 32 个 package**：25 个位于 `crates/` 的 `clarity-*` 业务 crate、6 个 `syncthing-*` 相关 crate（`third_party/syncthing-rust`）、1 个集成测试 crate `clarity-integration-tests`（`tests/integration`）。
 - **已归档 crate**：`clarity-slint`、`clarity-tauri` 已从 workspace 移出，存放在 `.archive/` 中，不参与默认 CI。
 - **前端 GUI 正在 P1c/P1d 重构**：原 `clarity-egui` 单 crate 正在被拆分为 `clarity-ui` / `clarity-shell` / `clarity-apps` / `clarity-chrome` 四层；`clarity-egui` 逐渐退化为具体 host/装配 crate。
 - **前端 crate 之间禁止互相 import**，跨前端通信统一走 `clarity-wire`。
@@ -61,9 +61,9 @@ Clarity 是一个 **Rust 原生、本地优先的个人 AI 运行时**。用同�
 | `Cargo.toml` | Workspace 配置、共享依赖、lint、profile。`members = ["crates/*", "tests/integration"]`。 |
 | `.cargo/config.toml` | 增量编译、国内 crates.io 镜像（USTC）、已归档的 Slint 快捷命令。 |
 | `crates/*/Cargo.toml` | 各 crate 依赖、features、bin/lib 声明。 |
-| `.github/workflows/ci.yml` | 12-job CI：check / hermes-feature-check / test / integration / binary / doc-test / session-migration / clippy / fmt / audit / doc-guard / coverage。 |
+| `.github/workflows/ci.yml` | 12-job CI：check / hermes-feature-check / test / integration-test / binary-test / doc-test / session-migration-test / clippy / fmt / audit / doc-guard / coverage。 |
 | `.github/workflows/release.yml` | Tag 触发 release，产出 Windows `.msi`/`.exe`、Linux binary、SHA256 校验。 |
-| `scripts/verify.ps1` | PowerShell 一键验收：README+AGENTS 存在性、编译、测试、Clippy、格式化，并可生成 JSON 报告（`-Report`）。 |
+| `scripts/verify.ps1` | PowerShell 一键验收：README+AGENTS 存在性、编译、测试、Clippy、格式化，可生成 JSON 报告（`-Report`）。 |
 | `scripts/test_runner.py` | Python 测试编排：统一跑 lib/bin/doc/integration 四层并生成 Markdown/JSON 报告。 |
 | `scripts/doctor.py` | 环境健康检查（测试人员/新成员首选）。 |
 | `docs/development/setup.md` | 完整构建/测试/feature/CUDA 说明。 |
@@ -122,7 +122,7 @@ contract
 
 ### 3.2 第三方 syncthing-rust crate
 
-`third_party/syncthing-rust` 作为 workspace 成员直接参与构建，提供 Clarity 可靠性基础设施所需的生产模式：
+`third_party/syncthing-rust` 作为 path 依赖参与构建，提供 Clarity 可靠性基础设施所需的生产模式：
 
 | Crate | 职责 |
 |-------|------|
@@ -195,7 +195,7 @@ clarity/
 ├── .cargo/                 # cargo 配置、增量编译、镜像
 ├── .clarity/               # 本地运行时数据（sessions、tasks、编译产物等）
 ├── .github/workflows/      # CI / Release
-├── crates/                 # 24 个 clarity crate 目录
+├── crates/                 # 25 个 clarity crate 目录
 ├── docs/                   # 架构、开发、安全、规划文档
 ├── examples/               # 独立示例脚本
 ├── mobile/                 # 移动端原生工程（Android 优先）
@@ -211,11 +211,11 @@ clarity/
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| Agent 循环 | `src/agent/` | `Agent`、ReAct/Plan、controller、run/flow/jumpy 子模块、streaming、execution、compaction、snapshot、LSP |
-| 工具集成 | `src/tools/` | ToolRegistry、内置工具封装、MCP 工具映射；**具体工具实现位于 `clarity-tools` crate** |
+| Agent 循环 | `src/agent/` | `Agent`、ReAct/Plan、controller、run/flow/jumpy 子模块、streaming、execution、compaction、snapshot、LSP、`completion_inbox`（后台任务完成注入父 Agent 上下文） |
+| 工具集成 | `src/tools/` | ToolRegistry、内置工具封装、MCP 工具映射；含编排工具 `agent` / `agent_swarm` / `task_*` / `schedule_cron`（`src/tools/agent.rs`、`task.rs`、`cron.rs`，经 `with_orchestrator` / `with_task_manager` / `with_cron_manager` 注入运行时依赖）；**具体工具实现位于 `clarity-tools` crate** |
 | MCP | `src/mcp/` | 客户端集成、transport、config、devkit、enhanced |
 | LLM 消费 | `src/llm` 不存在 | LLM provider 抽象位于 `clarity-llm` crate；`clarity-core` 通过 `LlmProvider` trait 消费 |
-| 后台任务 | `src/background/` | `BackgroundTaskManager`、executor、scheduler、store |
+| 后台任务 | `src/background/` | `BackgroundTaskManager`、executor（支持 `set_agent_executor` 晚绑定）、scheduler、store；状态变更发射 `WireMessage::BackgroundTaskUpdate` |
 | 记忆 | `src/memory/` | `PersistentMemoryStore`、`MemoryCompiler`、`SharedMemoryTicker`（`clarity-memory` 的 core 侧封装） |
 | 审批 | `src/approval/` | Approval 模式、规则引擎 |
 | Skill | `src/skills/` | Markdown+YAML 技能加载、注册、发现 |
@@ -250,7 +250,7 @@ clarity-egui (host / 装配 / 具体渲染回调)
 - `main.rs::update()` 每帧调用 `design_system::install_theme()`。
 - `App::render_layout_shell()` 是 chrome / 主视图 / 浮层 / 模态框编排入口。
 - 根目录关键文件：`app_logic.rs`、`app_state.rs`、`design_system.rs`、`theme.rs`、`layout.rs`、`i18n.rs`、`pretext.rs`、`pretext_alignment.rs`、`window_manager.rs`。
-- `panels/` 按职责分组：`chat/`、`navigation_tree/`、`right_ide_panel/`、`settings/`、`modals/`、`system/`、`sidebar/`、`legacy/` 等。
+- `panels/` 按职责分组：`chat/`、`navigation_tree/`、`right_ide_panel/`、`settings/`、`modals/`、`system/`、`sidebar/` 等（`legacy/` 已在 S6 清理中删除）。`right_ide_panel/` 内含真实编排面板群：Task（任务列表/取消/查看结果）、Team（团队配置）、Dashboard（指标卡，`render_metrics` 与 `clarity-apps` 单源）、Subagents（egui-local tab，无 `RightRailPanel` 路由对应物，经 Bot 栏按钮开关）。
 - `components/` 存放按域分组的可复用组件（`chat/`、`settings/`）。
 - `widgets/` 存放可复用小部件；`theme.rs` 是 design token 单源。
 - `handlers/` 处理 Agent/Wire 事件；`shortcuts/` 处理键盘路由；`services/` 封装后端交互；`stores/` 按域子模块组织。
@@ -305,20 +305,7 @@ cargo doc --workspace --no-deps
 
 > **注意**：`clarity-slint` 与 `clarity-tauri` 已移入 `.archive/`，不再是 workspace 成员，所有命令都不再需要 `--exclude clarity-slint`。
 
-### 6.2 当前构建与测试状态（2026-07-06）
-
-> Workspace 已能一次性跑通完整 `lib` / `bin` / `doc` / `clippy`。下表为当前基线（2026-07-06）：
-
-| 测试类型 | 通过 | 失败 | 忽略 | 说明 |
-|----------|------|------|------|------|
-| `cargo test --workspace --lib` | 2037 | 0 | 13 | 完整 workspace lib target 全绿 |
-| `cargo test --workspace --bins` | 339 | 0 | 2 | binary target 全绿 |
-| `cargo test --workspace --doc` | 41 | 0 | 12 | 文档测试全绿 |
-| `cargo test -p clarity-integration-tests --lib` | 37 | 0 | 0 | 集成测试全绿 |
-| `cargo clippy --workspace --lib --bins --tests -- -D warnings` | 0 warning | 0 | - | Clippy 零警告 |
-| `cargo fmt --all -- --check` | pass | 0 | - | 格式化通过 |
-
-**推荐本地验证流程**：
+### 6.2 推荐本地验证流程
 
 ```bash
 # 1. 格式化
@@ -567,20 +554,14 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 ## 11. 当前工作与已知限制
 
-### 11.1 已稳定落地的关键能力
+> 本节只保留对 Agent 行为有影响的结构性事实；具体功能清单、里程碑和历史状态参见 [`docs/planning/PROJECT_STATUS.md`](docs/planning/PROJECT_STATUS.md)、[`ROADMAP.md`](ROADMAP.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。
 
-- **多入口前端矩阵**：egui 桌面 GUI（主入口）、ratatui TUI、Axum Gateway/Web IDE、headless CLI、claw 系统托盘节点均已可用。
-- **新 GUI 分层落地**：`clarity-ui` / `clarity-shell` / `clarity-apps` / `clarity-chrome` 已加入 workspace 并承担设计系统、应用宿主、子应用、chrome 框架职责。
-- **Pretext 文字测量与三栏布局**：egui 接入 `pretext-core` / `pretext-fontdb`，以 egui 字体栈作为 measurement backend；形成左 icon rail + 中主舞台 + 右工具 rail 的稳定布局。
-- **状态机与设计系统**：遗留 boolean modal / turn / expansion 标志统一迁移到 `clarity_core::ui::ViewState`；egui 全局 `#![allow(dead_code)]` 已移除。
-- **项目模型与上下文驱动**：`Session` 支持 `project_id` / `context` / `lifecycle` / `archived`；导航树按项目真实分组；归档会话可还原。
-- **Provider / Secret 体系**：`models.toml` per-alias 配置、`enc2:` 加密 key、`ReliableProvider` 链式 failover、`runtime_router` 别名路由、OAuth device flow 均已落地。
-- **Thread / Session 持久化**：`clarity-thread-store` + `clarity-rollout` 负责 Thread / Session 生命周期与 JSONL rollout 回放（API 设计受 Codex 启发）。
-- **移动端 FFI 核心**：`clarity-mobile-core` 通过 UniFFI 向 Kotlin / Swift 暴露 Runtime / 事件 / 配置 / 记忆接口；默认禁用 `local-llm` 以规避移动 ABI fullfp16 问题。
-- **Claw 协议统一**：Gateway WebSocket 为 Clarity 内部唯一协议；OpenClaw JSON-RPC 仅作为外部 KimiClaw / OpenClaw Gateway 互通的 fallback。详见 [`docs/architecture/claw-protocol.md`](docs/architecture/claw-protocol.md)。
-- **可靠性基础设施 — syncthing-rust 生产模式融合**：`RetryConfig`、`Supervisor`、`NetMonitor`、`ToolOrchestrator`、`ToolResultCache`、`CompactionCache`、`RacingProvider`、`WorkspaceDiff`、`RetentionPolicy`、版本向量冲突解决等已融合到 Clarity 各层。
-- **知识场（Knowledge Field）基础落地（2026-07-06）**：`clarity-knowledge` 引入 `KnowledgeGraph` 节点激活、沿边传播、横向抑制、时间衰减与休眠；`KnowledgeField` 封装混合检索与动态激活；`clarity-core` 在对话 turn 中自动提取 wikilink / `.md` 链接注入激活；`MemoryCompiler` 编译后的 `.md` 记忆产物自动索引到知识场；新增 `KnowledgeField::index_directory` / `Agent::index_vault`，支持把外部 Markdown vault（如 Obsidian）批量索引到知识场；新增 `KnowledgeField::apply_watcher_event` / `KnowledgeStore::start_watching_vault`，实现 vault 文件变更的增量更新；`clarity-tools` 提供 `knowledge_search` 工具供 Agent 主动查询；`clarity-egui` 右 rail Knowledge 面板已接入 `KnowledgeField`，支持搜索框查询、Top active 节点浏览、选中项详情展示、vault 索引与监听入口。
-- **前端架构审计与性能/交互优化（2026-07-06）**：完成跨维度审计并输出 `docs/planning/architecture-audit-2026-07-06.md`；落地路由去重、虚拟列表高度缓存、右 rail 同步硬化、语言持久化、Plugins 导航语义修正 5 项改造，全 workspace 测试/Clippy 通过。
+### 11.1 已稳定落地的关键能力（摘要）
+
+- 多入口前端矩阵：egui 桌面 GUI、ratatui TUI、Axum Gateway/Web IDE、headless CLI、claw 系统托盘节点。
+- 新 GUI 分层：`clarity-ui` / `clarity-shell` / `clarity-apps` / `clarity-chrome` 已承担设计系统、应用宿主、子应用、chrome 框架职责。
+- Pretext 文字测量与三栏布局；`clarity_core::ui::ViewState` 状态机统一；项目模型与上下文驱动；Provider / Secret 体系；Thread / Session 持久化；移动端 FFI 核心；Claw 协议统一；syncthing-rust 可靠性基础设施融合；Knowledge Field 基础；前端架构审计与性能/交互优化。
+- 子代理编排（2026-07-28）：LLM 可调 `agent` / `agent_swarm` 内置工具发起单/并行子代理（`{{item}}` 模板、默认超时 1800s）；`task_create` 创建的后台任务真实执行（manager 绑定 + executor 晚绑定）；完成通知经 `CompletionInbox` 注入父 Agent 上下文；wire 新增子代理/后台任务事件五 variant，egui 收敛 wire 单源、TUI/Gateway/mobile 各自消费；egui 右栏 Task/Team/Dashboard/Subagents 编排面板群落地。详见 [`docs/planning/plans/2026-07-28-egui-frontend-subagent-sprints.md`](docs/planning/plans/2026-07-28-egui-frontend-subagent-sprints.md)。
 
 ### 11.2 实验性 / 未完成方向
 
@@ -595,6 +576,11 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 - Discord / Telegram 默认禁用，等待上游 `rustls-webpki` 修复。
 - Gateway HTTP Chat Completions 默认无状态；完整 session 请用 WebSocket 或传 `session_id`。
 - `hermes` feature 依赖位于 `../../../hermes-memory/` 的本地仓库，CI 与未检出该仓库的环境需跳过 hermes 相关检查。
+- `agent` / `agent_swarm` 工具路径（orchestrator → `ParallelExecutor`）的子代理尚不发射 wire 事件，需把 wire 穿透 `ToolContext`（contract 变更，待做）。
+- egui turn header 的 `token_count` 未接线（wire Usage 已能携带 turn_id，剩 message→turn 聚合逻辑）。
+- egui/gateway 的长期 `BackgroundTaskManager` 未挂 app 级 wire，`BackgroundTaskUpdate` 在 egui 侧显式忽略（任务 UI 走 TaskStore 轮询）。
+- TUI/headless 的 task 工具仍走 legacy `~/.clarity/tasks` 路径（未调 `with_task_manager`），创建的任务无消费者。
+- Team 面板是配置列表；`team_create` 工具只写配置不执行（`TeamCoordinator` 无工具/REST 入口）。
 
 ---
 
@@ -638,6 +624,8 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 4. **禁止把个人开发环境的本地路径**（如 `dev/third_party/xxx`、`Desktop/xxx`、`AppData/...`）写入项目架构文档；外部项目仅说明名称和关系类别即可。
 5. **NOTICES.md 仅用于致谢思想/设计来源**，不用于声明代码派生关系；若不存在实际代码引用，不得保留源码归属性语言。
 6. **每 crate 必须同时存在 `README.md` 与 `AGENTS.md`**，以满足 CI `doc-guard` 检查；新增 crate 时应在首 commit 一并创建。
+
+> **当前缺口**：`clarity-ui`、`clarity-shell`、`clarity-apps`、`clarity-chrome` 四个 crate 目前同时缺失 `README.md` 与 `AGENTS.md`，违反本纪律第 6 条。应在完成 GUI 分层迁移时补齐，或在最近的 doc-guard 修复 commit 中优先处理。
 
 ---
 
@@ -730,4 +718,4 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 OKF bundle 由 [`scripts/generate_okf_worktree.py`](scripts/generate_okf_worktree.py) 生成。当新增/删除 crate 或变更依赖关系时，应更新该脚本并重新运行，以保持 bundle 与代码一致。
 
-*最后更新：2026-07-05*
+*最后更新：2026-07-26*

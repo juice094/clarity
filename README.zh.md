@@ -88,10 +88,10 @@ crates/
 ├── clarity-claw           # 统一客户端 Claw 节点：UI 无关库 + 系统托盘常驻二进制（Gateway WebSocket 客户端、OpenClaw/KimiClaw 兼容层、设备发现/身份/配对、角色上下文同步）
 ├── clarity-headless       # 脚本 / CI 用 Headless CLI
 ├── clarity-mobile-core    # 移动端 UniFFI FFI 核心（Android/iOS）
-├── clarity-slint          # 桌面 GUI 实验栈（Slint），不参与默认 CI
 ├── clarity-anthropic-proxy # Anthropic Messages API 网关（默认 DeepSeek device，协议转换在 clarity-llm）
-└── clarity-tauri          # 已归档 — 不参与默认 workspace 构建
 ```
+
+> 已归档 crate（`clarity-slint`、`clarity-tauri`）存放在 `.archive/`，不参与 workspace 构建。
 
 **依赖方向**
 
@@ -117,8 +117,8 @@ contract ← {wire, memory, mcp, llm, tools, channels, secrets, rollout}
 
 ```bash
 # 运行完整验证套件（CI 执行的）
-cargo test --workspace --lib --exclude clarity-slint      # 1550+ 测试，0 失败
-cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+cargo test --workspace --lib      # 2000+ 测试
+cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo fmt --all -- --check
 cargo audit --deny unsound --deny yanked
 

@@ -44,10 +44,10 @@ crates/
 ├── clarity-claw           # Unified client-side Claw node — UI-agnostic library + system-tray binary (Gateway WebSocket client, OpenClaw/KimiClaw compatibility, device discovery/identity/pairing, role-context sync)
 ├── clarity-headless       # Headless CLI for scripts/CI
 ├── clarity-mobile-core    # Mobile FFI core — UniFFI bridge for Android/iOS
-├── clarity-slint          # Experimental Slint desktop GUI — excluded from default CI
 ├── clarity-anthropic-proxy # Anthropic Messages API gateway (default DeepSeek device; protocol adapter in clarity-llm)
-└── clarity-tauri          # Archived — excluded from workspace build
 ```
+
+> Archived crates (`clarity-slint`, `clarity-tauri`) live in `.archive/` and are excluded from the workspace build.
 
 **Invariant**: `clarity-core` has zero dependencies on any frontend or network crate. `clarity-contract` has zero internal deps. Frontends never import each other — they cross-talk through `clarity-wire`.
 
@@ -75,9 +75,9 @@ No API key? Put a `.gguf` model in `~/models/` and select **Local (GGUF)** in se
 ## Development
 
 ```bash
-# 1550+ lib tests, 0 failures
-cargo test --workspace --lib --exclude clarity-slint
-cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+# 2000+ lib tests
+cargo test --workspace --lib
+cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo fmt --all -- --check
 ```
 
