@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
+use tokio_util::sync::CancellationToken;
 
 /// Default configuration for the egui-facing knowledge field.
 fn default_knowledge_field() -> Arc<clarity_knowledge::KnowledgeField> {
@@ -45,6 +46,8 @@ pub struct AppState {
     pub task_store: clarity_core::background::TaskStore,
     /// Background task manager (holds cron scheduler, worker pool, and task queue).
     pub bg_manager: Arc<clarity_core::background::BackgroundTaskManager>,
+    /// Token used to stop the background cron ticker on app shutdown.
+    pub cron_cancel_token: CancellationToken,
     /// Subagent orchestrator shared with the agent (LLM injected after load).
     pub subagent_manager: Arc<clarity_subagents::SubagentManager>,
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
@@ -200,6 +203,7 @@ impl Default for AppState {
             mode_aware_approval_runtime: mode_aware_rt,
             memory_store: OnceLock::new(),
             knowledge_field,
+            cron_cancel_token: CancellationToken::new(),
         }
     }
 }

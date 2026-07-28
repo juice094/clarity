@@ -57,7 +57,7 @@
 | N6 | B6 Settings 两栏布局（VSCode/Obsidian 式左 icon rail + 右内容区） | 规划文档 P2 #8，需先出 mock/ADR；`clarity-apps/src/settings.rs:107-160` | 大 |
 | ~~N7~~ | ~~TUI/headless 的 task 工具绑 manager~~ | ✅ TUI 已创建 `BackgroundTaskManager` 但未调 `with_task_manager`，已补绑定；headless `run` 命令新增本地 `BackgroundTaskManager` 并绑定 task/cron。关键文件：`tui/src/main.rs`、`headless/src/main.rs` | ~~小~~ |
 | N8 | Team 执行可视化 + `team_run` 工具 | `TeamCoordinator` 后端现成，`team_create` 工具只写配置不执行；Team 面板已留 ponytail 注释 | 中 |
-| N9 | Cron 持久化 + 常驻 ticker | `CronScheduler` 内存态重启丢失（`core/src/background/cron.rs:75`） | 小 |
+| ~~N9~~ | ~~Cron 持久化 + 常驻 ticker~~ | ✅ `BackgroundTaskManager` 持久化已存在；补全各宿主配置/加载/启动 ticker：egui 启动 `start_cron_loop` 并在 `on_exit` 取消；Gateway/TUI 创建 `CronScheduler` 并 attach，加载 persisted cron，启动 ticker。关键文件：`egui/src/app_state.rs`、`egui/src/app_logic.rs`、`egui/src/main.rs`、`gateway/src/main.rs`、`gateway/src/server.rs`、`tui/src/main.rs`、`tui/Cargo.toml` | ~~小~~ |
 | N10 | Resume 暴露（REST/工具/UI"继续此子代理"） | `RunSpec.resume` 后端完整，无暴露面 | 小 |
 
 **明确不做**（架构债，等 P1d 迁移稳定）：`Message` 表示归一化（P2 #9）、大文件拆分（P2 #10）、ChatRenderer/take_* seam 消除、clarity-chrome 实质化。

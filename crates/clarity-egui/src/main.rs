@@ -1837,6 +1837,7 @@ impl eframe::App for App {
 
     fn on_exit(&mut self) {
         self.context.save_current_session();
+        self.context.state.cron_cancel_token.cancel();
     }
 }
 

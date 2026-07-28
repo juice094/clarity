@@ -20,6 +20,7 @@ use channels::{
 };
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::BackgroundTaskManager;
+use clarity_core::background::CronScheduler;
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::mcp::{McpClientBuilder, McpRegistry, config::McpConfig, register_mcp_tools};
 use clarity_core::memory::{
@@ -542,12 +543,19 @@ async fn main() {
         let completion_inbox = clarity_core::agent::completion_inbox::CompletionInbox::new();
         agent.with_completion_inbox(completion_inbox.clone());
 
+        let cron_scheduler = Arc::new(tokio::sync::Mutex::new(CronScheduler::new()));
         Arc::new(
             BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
                 .with_agent_executor(executor)
-                .with_completion_inbox(completion_inbox),
+                .with_completion_inbox(completion_inbox)
+                .with_cron_scheduler(cron_scheduler),
         )
     };
+
+    // Load persisted cron tasks so schedules survive restarts.
+    if let Err(e) = task_manager.load_cron_tasks().await {
+        warn!("Failed to load persisted cron tasks: {}", e);
+    }
 
     // Bind cron tools to the background task manager
     agent.with_cron_manager(task_manager.clone());

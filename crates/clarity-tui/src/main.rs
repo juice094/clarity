@@ -27,6 +27,7 @@ use anyhow::Result;
 use app::App;
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::BackgroundTaskManager;
+use clarity_core::background::CronScheduler;
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{McpClientBuilder, McpRegistry, register_mcp_tools};
@@ -75,9 +76,11 @@ async fn main() -> Result<()> {
                     std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 ));
 
+                let cron_scheduler = Arc::new(tokio::sync::Mutex::new(CronScheduler::new()));
                 Some(Arc::new(
                     BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
-                        .with_agent_executor(executor),
+                        .with_agent_executor(executor)
+                        .with_cron_scheduler(cron_scheduler),
                 ))
             };
 
@@ -85,6 +88,15 @@ async fn main() -> Result<()> {
             if let Some(ref tm) = task_manager {
                 agent.with_task_manager(tm.clone());
                 agent.with_cron_manager(tm.clone());
+
+                // Load persisted cron tasks and start the resident ticker.
+                if let Err(e) = tm.load_cron_tasks().await {
+                    tracing::warn!("Failed to load persisted cron tasks: {}", e);
+                }
+                let _cron_handle = tm.start_cron_loop(
+                    std::time::Duration::from_secs(60),
+                    tokio_util::sync::CancellationToken::new(),
+                );
             }
 
             let mut app = App::new(agent, model_name, task_manager);

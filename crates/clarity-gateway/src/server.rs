@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::{RwLock, Semaphore};
+use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -283,6 +284,12 @@ pub async fn run(
     task_manager: Arc<BackgroundTaskManager>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState::new(agent, task_manager).await?);
+
+    // 启动 cron 常驻 ticker：每分钟检查一次到期的 cron 任务并 spawn。
+    // ponytail: 进程退出时 tokio runtime 会 abort 该任务；后续可加 graceful shutdown token。
+    let _cron_handle = state
+        .task_manager
+        .start_cron_loop(std::time::Duration::from_secs(60), CancellationToken::new());
 
     // 启动会话清理后台任务
     let cleanup_state = state.clone();
