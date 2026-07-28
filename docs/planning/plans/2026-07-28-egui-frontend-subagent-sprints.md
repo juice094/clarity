@@ -53,7 +53,7 @@
 | ~~N2~~ | ~~egui turn header 的 token 接线~~ | ✅ `Message` 新增 `turn_id`，`Session` 新增 `turn_usage`；`Usage`/`TurnStart` 透传 turn_id；`agent_turn.rs` 按 turn_id 查表填充 `token_count`；修复 `tests/session_roundtrip.rs`、`tests/memory_profile.rs` 构造。关键文件：`egui/src/ui/types.rs`、`egui/src/handlers/chat.rs`、`egui/src/components/agent_turn.rs`、`egui/src/panels/chat/message_list.rs`、`egui/tests/*.rs` | ~~小~~ |
 | ~~N3~~ | ~~Gateway 长期 bg manager 挂 wire~~ | ✅ `BackgroundTaskManager::wire` 改为 `Arc<Mutex<Option<Arc<Wire>>>>` + `set_wire`；gateway 创建 `event_wire` 后绑定；egui `BackgroundTaskUpdate` 映射为 `UiEvent::BackgroundTaskUpdate` 并刷新 `TaskStore`。关键文件：`core/src/background/mod.rs`、`gateway/src/server.rs`、`egui/src/services/wire_dispatcher.rs`、`egui/src/ui/types.rs`、`egui/src/handlers/task.rs` | ~~小~~ |
 | ~~N4~~ | ~~`POST /v1/tasks/:id/cancel`~~ | ✅ Gateway 端点实际已注册为 `DELETE /v1/tasks/:id`（`gateway/src/handlers/tasks.rs`）；补 `GatewayTaskClient::cancel_task`；Task 面板取消先调 Gateway、失败回落本地 `BackgroundTaskManager`。更新 ponytail 注释。关键文件：`egui/src/services/gateway_task_client.rs`、`egui/src/panels/right_ide_panel/task_panel.rs` | ~~小~~ |
-| N5 | B5 工具调用 Running 态 spinner/活感 | `turn_renderer.rs` 工具行 Running 态目前只有静态图标 | 小 |
+| ~~N5~~ | ~~B5 工具调用 Running 态 spinner/活感~~ | ✅ `turn_renderer.rs` Running 工具行改用 `egui::Spinner` 替代静态 hourglass 图标。关键文件：`egui/src/render/turn_renderer.rs` | ~~小~~ |
 | N6 | B6 Settings 两栏布局（VSCode/Obsidian 式左 icon rail + 右内容区） | 规划文档 P2 #8，需先出 mock/ADR；`clarity-apps/src/settings.rs:107-160` | 大 |
 | N7 | TUI/headless 的 task 工具绑 manager | 目前只有 egui/gateway 调了 `with_task_manager`，其余宿主走 legacy `~/.clarity/tasks` 无消费者路径 | 小 |
 | N8 | Team 执行可视化 + `team_run` 工具 | `TeamCoordinator` 后端现成，`team_create` 工具只写配置不执行；Team 面板已留 ponytail 注释 | 中 |

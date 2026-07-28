@@ -152,11 +152,11 @@ fn render_tool_call_row_cli(
     locale: Locale,
 ) {
     let stripe_color = status_color(tc.status, theme);
-    let icon = match tc.status {
-        ToolCallStatus::Running => crate::theme::ICON_HOURGLASS,
-        ToolCallStatus::Success => crate::theme::ICON_CHECK,
-        ToolCallStatus::Warning => crate::theme::ICON_WARNING,
-        ToolCallStatus::Error => crate::theme::ICON_X,
+    let (icon, is_spinner) = match tc.status {
+        ToolCallStatus::Running => (crate::theme::ICON_HOURGLASS, true),
+        ToolCallStatus::Success => (crate::theme::ICON_CHECK, false),
+        ToolCallStatus::Warning => (crate::theme::ICON_WARNING, false),
+        ToolCallStatus::Error => (crate::theme::ICON_X, false),
     };
 
     let row = ui
@@ -174,7 +174,11 @@ fn render_tool_call_row_cli(
                     .rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
             }
 
-            clarity_ui::design_system::icon(ui, icon, theme.text_sm);
+            if is_spinner {
+                ui.add(egui::Spinner::new().size(theme.text_sm));
+            } else {
+                clarity_ui::design_system::icon(ui, icon, theme.text_sm);
+            }
             clarity_ui::design_system::text_with_color(
                 ui,
                 &tc.name,
