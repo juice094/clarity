@@ -195,6 +195,10 @@ impl App {
         &mut self.dashboard_app_mut().subagent_store
     }
 
+    pub(crate) fn team_store(&self) -> &clarity_apps::TeamStore {
+        &self.dashboard_app().team_store
+    }
+
     pub(crate) fn team_store_mut(&mut self) -> &mut clarity_apps::TeamStore {
         &mut self.dashboard_app_mut().team_store
     }

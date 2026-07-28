@@ -3,10 +3,17 @@
 //! Surfaces data already flowing through `SubAgentStore`:
 //! - `parallel_batches` from Gateway `SubAgentBatch` events.
 //! - `running_agents` from per-agent stage / output / status / progress / complete events.
+//!
+//! Completed agents stay in `running_agents` (with `completed_at` set) for the
+//! app session, so they are rendered as a capped "recently completed" list
+//! instead of disappearing.
 
 use crate::App;
 use crate::design_system::{self, BadgeVariant, Space, TextStyle};
 use crate::ui::types::{SingleSubagentProgress, SubAgentProgress};
+
+/// Maximum number of finished agents kept in the "recently completed" list.
+const RECENT_COMPLETED_LIMIT: usize = 5;
 
 /// Render the subagents panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
@@ -18,32 +25,44 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
+    let (running, completed) = partition_agents(agents);
 
     egui::ScrollArea::vertical()
         .id_salt("subagents_panel")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            // ── Parallel batches ──
-            if batches.is_empty() && agents.is_empty() {
+            if batches.is_empty() && running.is_empty() && completed.is_empty() {
                 render_empty_state(app, ui, &theme);
                 return;
             }
 
+            // ── Parallel batches ──
             if !batches.is_empty() {
                 design_system::text(ui, app.t("Parallel Batches"), TextStyle::CaptionStrong);
                 design_system::gap(ui, Space::S1);
                 for batch in &batches {
-                    render_batch_card(ui, batch, &theme);
+                    render_batch_card(app, ui, batch, &theme);
                     design_system::gap(ui, Space::S2);
                 }
                 design_system::gap(ui, Space::S3);
             }
 
-            // ── Single agents ──
-            if !agents.is_empty() {
-                design_system::text(ui, app.t("Running Agents"), TextStyle::CaptionStrong);
+            // ── Running agents ──
+            if !running.is_empty() {
+                design_system::text(ui, app.t("Running Subagents"), TextStyle::CaptionStrong);
                 design_system::gap(ui, Space::S1);
-                for (agent_id, agent) in &agents {
+                for (agent_id, agent) in &running {
+                    render_agent_card(app, ui, agent_id, agent, &theme);
+                    design_system::gap(ui, Space::S2);
+                }
+            }
+
+            // ── Recently completed ──
+            if !completed.is_empty() {
+                design_system::gap(ui, Space::S3);
+                design_system::text(ui, app.t("Recently Completed"), TextStyle::CaptionStrong);
+                design_system::gap(ui, Space::S1);
+                for (agent_id, agent) in &completed {
                     render_agent_card(app, ui, agent_id, agent, &theme);
                     design_system::gap(ui, Space::S2);
                 }
@@ -64,11 +83,17 @@ fn render_empty_state(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
     });
 }
 
-fn render_batch_card(ui: &mut egui::Ui, batch: &SubAgentProgress, theme: &crate::theme::Theme) {
+fn render_batch_card(
+    app: &App,
+    ui: &mut egui::Ui,
+    batch: &SubAgentProgress,
+    theme: &crate::theme::Theme,
+) {
     let total = batch.total.max(1);
     let done = batch.completed + batch.failed;
     let ratio = (done as f32) / (total as f32);
     let status_badge = status_badge_for(&batch.status);
+    let status_label = status_label(app, &batch.status);
 
     design_system::card(ui, |ui| {
         ui.set_min_width(ui.available_width());
@@ -76,11 +101,11 @@ fn render_batch_card(ui: &mut egui::Ui, batch: &SubAgentProgress, theme: &crate:
             ui.horizontal(|ui| {
                 design_system::text(
                     ui,
-                    format!("Batch {}", truncate_id(&batch.batch_id, 8)),
+                    format!("{} {}", app.t("Batch"), truncate_id(&batch.batch_id, 8)),
                     TextStyle::Body,
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    design_system::badge(ui, &batch.status, status_badge);
+                    design_system::badge(ui, status_label, status_badge);
                 });
             });
 
@@ -94,7 +119,7 @@ fn render_batch_card(ui: &mut egui::Ui, batch: &SubAgentProgress, theme: &crate:
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         design_system::text(
                             ui,
-                            format!("{} failed", batch.failed),
+                            format!("{}: {}", app.t("Failed"), batch.failed),
                             TextStyle::Small,
                         );
                     });
@@ -105,13 +130,14 @@ fn render_batch_card(ui: &mut egui::Ui, batch: &SubAgentProgress, theme: &crate:
 }
 
 fn render_agent_card(
-    app: &mut App,
+    app: &App,
     ui: &mut egui::Ui,
     agent_id: &str,
     agent: &SingleSubagentProgress,
     theme: &crate::theme::Theme,
 ) {
     let status_badge = status_badge_for(&agent.status);
+    let status_label = status_label(app, &agent.status);
     let max_steps = agent.max_steps.max(1);
     let step_ratio = (agent.steps as f32) / (max_steps as f32);
 
@@ -131,9 +157,18 @@ fn render_agent_card(
                     TextStyle::Body,
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    design_system::badge(ui, &agent.status, status_badge);
+                    design_system::badge(ui, status_label, status_badge);
                 });
             });
+
+            if let Some(done_at) = agent.completed_at {
+                design_system::gap(ui, Space::S0);
+                design_system::text(
+                    ui,
+                    format!("{}s", done_at.duration_since(agent.started_at).as_secs()),
+                    TextStyle::Small,
+                );
+            }
 
             if agent.max_steps > 0 {
                 design_system::gap(ui, Space::S1);
@@ -141,7 +176,7 @@ fn render_agent_card(
                 design_system::gap(ui, Space::S0);
                 design_system::text(
                     ui,
-                    format!("Step {} / {}", agent.steps, agent.max_steps),
+                    format!("{} {} / {}", app.t("Step"), agent.steps, agent.max_steps),
                     TextStyle::Small,
                 );
             }
@@ -209,6 +244,48 @@ fn status_badge_for(status: &str) -> BadgeVariant {
     }
 }
 
+/// Map a backend status string to its i18n key.
+///
+/// Returns `None` for unknown states; the caller renders the raw status
+/// untranslated.
+// ponytail: extend the match when the backend gains new states.
+fn status_i18n_key(status: &str) -> Option<&'static str> {
+    match status.to_ascii_lowercase().as_str() {
+        "completed" | "done" | "success" => Some("Completed"),
+        "failed" | "error" => Some("Failed"),
+        "running" => Some("Running"),
+        "pending" => Some("Pending"),
+        "cancelled" => Some("Cancelled"),
+        _ => None,
+    }
+}
+
+/// Translated badge label for a backend status string.
+fn status_label<'a>(app: &App, status: &'a str) -> &'a str {
+    match status_i18n_key(status) {
+        Some(key) => app.t(key),
+        None => status,
+    }
+}
+
+/// One agent entry: `(agent_id, progress)`.
+type AgentEntry = (String, SingleSubagentProgress);
+
+/// Split agents into still-running and recently-completed lists.
+///
+/// `SubAgentStore` retains completed agents for the app session, so the
+/// completed half doubles as the recent-results summary: newest first, capped
+/// at [`RECENT_COMPLETED_LIMIT`]. Running agents are ordered by start time.
+fn partition_agents(agents: Vec<AgentEntry>) -> (Vec<AgentEntry>, Vec<AgentEntry>) {
+    let (mut running, mut completed): (Vec<_>, Vec<_>) = agents
+        .into_iter()
+        .partition(|(_, agent)| agent.completed_at.is_none());
+    running.sort_by_key(|(_, agent)| agent.started_at);
+    completed.sort_by_key(|(_, agent)| std::cmp::Reverse(agent.completed_at));
+    completed.truncate(RECENT_COMPLETED_LIMIT);
+    (running, completed)
+}
+
 fn truncate_id(id: &str, max_len: usize) -> String {
     if id.len() <= max_len {
         id.to_string()
@@ -246,6 +323,24 @@ impl crate::design_system::Panel for SubagentsPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
+
+    fn make_agent(
+        status: &str,
+        started_at: Instant,
+        completed_at: Option<Instant>,
+    ) -> SingleSubagentProgress {
+        SingleSubagentProgress {
+            agent_type: "coder".to_string(),
+            status: status.to_string(),
+            stages: vec![],
+            output_lines: vec![],
+            started_at,
+            completed_at,
+            steps: 0,
+            max_steps: 0,
+        }
+    }
 
     #[test]
     fn status_badge_maps_common_states() {
@@ -253,6 +348,52 @@ mod tests {
         assert!(matches!(status_badge_for("Failed"), BadgeVariant::Danger));
         assert!(matches!(status_badge_for("Running"), BadgeVariant::Accent));
         assert!(matches!(status_badge_for("Unknown"), BadgeVariant::Neutral));
+    }
+
+    #[test]
+    fn status_i18n_key_maps_known_states() {
+        assert_eq!(status_i18n_key("Completed"), Some("Completed"));
+        assert_eq!(status_i18n_key("done"), Some("Completed"));
+        assert_eq!(status_i18n_key("error"), Some("Failed"));
+        assert_eq!(status_i18n_key("running"), Some("Running"));
+        assert_eq!(status_i18n_key("Pending"), Some("Pending"));
+        assert_eq!(status_i18n_key("cancelled"), Some("Cancelled"));
+        assert_eq!(status_i18n_key("some-new-state"), None);
+    }
+
+    #[test]
+    fn partition_agents_splits_running_and_completed() {
+        let now = Instant::now();
+        let agents = vec![
+            ("running-1".to_string(), make_agent("Running", now, None)),
+            (
+                "done-1".to_string(),
+                make_agent("Completed", now, Some(now + Duration::from_secs(1))),
+            ),
+        ];
+        let (running, completed) = partition_agents(agents);
+        assert_eq!(running.len(), 1);
+        assert_eq!(running[0].0, "running-1");
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].0, "done-1");
+    }
+
+    #[test]
+    fn partition_agents_caps_completed_newest_first() {
+        let now = Instant::now();
+        let agents = (0..7)
+            .map(|i| {
+                (
+                    format!("done-{i}"),
+                    make_agent("Completed", now, Some(now + Duration::from_secs(i + 1))),
+                )
+            })
+            .collect();
+        let (running, completed) = partition_agents(agents);
+        assert!(running.is_empty());
+        assert_eq!(completed.len(), RECENT_COMPLETED_LIMIT);
+        assert_eq!(completed[0].0, "done-6");
+        assert_eq!(completed[4].0, "done-2");
     }
 
     #[test]

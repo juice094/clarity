@@ -195,6 +195,44 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Background Tasks", "后台任务");
     m.insert("Gateway Status", "Gateway 状态");
 
+    // ── Right rail: Task / Team panels ──
+    m.insert("Team", "团队");
+    m.insert("Teams", "团队");
+    m.insert("Task", "任务");
+    m.insert("New Team", "新建团队");
+    m.insert("Refresh", "刷新");
+    m.insert("View Result", "查看结果");
+    m.insert("Pending", "排队中");
+    m.insert("Running", "运行中");
+    m.insert("Completed", "已完成");
+    m.insert("Failed", "已失败");
+    m.insert("Cancelled", "已取消");
+    m.insert("Members", "成员");
+    m.insert("Max Concurrency", "最大并发");
+    m.insert("Timeout", "超时");
+    m.insert(
+        "Create a task to run it in the background",
+        "创建任务后将在后台运行",
+    );
+    m.insert("No teams yet", "暂无团队");
+    m.insert(
+        "Create a team to coordinate multiple agents",
+        "创建团队以协调多个 Agent",
+    );
+
+    // ── Right rail: Subagents panel ──
+    m.insert("Subagents", "子代理");
+    m.insert("Recently Completed", "最近完成");
+    m.insert("No subagent activity", "暂无子代理活动");
+    m.insert(
+        "Run /coder, /explore or a parallel batch to see progress here.",
+        "运行 /coder、/explore 或并行批次后，这里会显示进度",
+    );
+    m.insert("Batch", "批次");
+    m.insert("Step", "步骤");
+    m.insert("Stages", "阶段");
+    m.insert("Latest output", "最新输出");
+
     // ── Bot bar / Right rail ──
     m.insert("Share", "分享");
     m.insert("Console", "控制台");

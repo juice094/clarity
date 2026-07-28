@@ -4,7 +4,7 @@
 //! depend on `clarity-egui` panel code. They only use `clarity_ui` theme and
 //! design-system tokens.
 
-use clarity_shell::{ClarityApp, ClarityAppContext, ClarityAppResponse};
+use clarity_shell::{AppState, ClarityApp, ClarityAppContext, ClarityAppResponse};
 use clarity_ui::design_system::{self, Space, TextStyle};
 use clarity_ui::theme::Theme;
 use std::collections::HashMap;
@@ -200,102 +200,107 @@ impl ClarityApp for DashboardApp {
                 });
                 design_system::gap(ui, Space::S2);
 
-                // ── Session Stats ──
-                let msg_count = ctx.state.session_message_count();
-                let token_str = ctx
-                    .state
-                    .session_token_count()
-                    .map(|t| format!("{}", t))
-                    .unwrap_or_else(|| "—".to_string());
-
-                metric_card_pair(
-                    ui,
-                    &theme,
-                    ctx.state.t("Session Messages"),
-                    &format!("{}", msg_count),
-                    ctx.state.t("Session Tokens"),
-                    &token_str,
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Agent Status ──
-                let status_label = ctx.state.agent_status_label();
-                let status_color = ctx.state.agent_status_color();
-                status_card(
-                    ui,
-                    &theme,
-                    ctx.state.t("Agent Status"),
-                    status_label,
-                    status_color,
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Tool Calls ──
-                let tool_count = ctx.state.session_tool_call_count();
-                metric_card(
-                    ui,
-                    &theme,
-                    ctx.state.t("Tool Calls (Session)"),
-                    &format!("{}", tool_count),
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Subagents ──
-                let running = self.subagent_store.running_agents.len();
-                let batches = self.subagent_store.parallel_batches.len();
-                metric_card_pair(
-                    ui,
-                    &theme,
-                    ctx.state.t("Running Subagents"),
-                    &format!("{}", running),
-                    ctx.state.t("Parallel Batches"),
-                    &format!("{}", batches),
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Teams ──
-                metric_card(
-                    ui,
-                    &theme,
-                    ctx.state.t("Active Teams"),
-                    &format!("{}", self.team_store.teams.len()),
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Background Tasks ──
-                metric_card(
-                    ui,
-                    &theme,
-                    ctx.state.t("Background Tasks"),
-                    &format!("{}", self.task_store.tasks.len()),
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── Gateway Status ──
-                let gw_label = ctx.state.gateway_status_label();
-                let gw_color = ctx.state.gateway_status_color();
-                status_card(
-                    ui,
-                    &theme,
-                    ctx.state.t("Gateway Status"),
-                    gw_label,
-                    gw_color,
-                );
-
-                design_system::gap(ui, Space::S1);
-
-                // ── FPS ──
-                metric_card(ui, &theme, "FPS", &format!("{:.1}", ctx.state.fps()));
+                render_metrics(ctx.state, self, ui);
             });
 
         ClarityAppResponse::None
     }
+}
+
+/// Render the dashboard metric cards into an existing UI container.
+///
+/// Shared between [`DashboardApp`] (standalone right panel, which supplies the
+/// `egui::Panel` wrapper and title) and the egui right-rail dock tab, which
+/// supplies its own container. Read-only: all data comes from `state` and the
+/// stores owned by `dashboard`.
+pub fn render_metrics(state: &dyn AppState, dashboard: &DashboardApp, ui: &mut egui::Ui) {
+    let theme = state.theme().clone();
+
+    // ── Session Stats ──
+    let msg_count = state.session_message_count();
+    let token_str = state
+        .session_token_count()
+        .map(|t| format!("{}", t))
+        .unwrap_or_else(|| "—".to_string());
+
+    metric_card_pair(
+        ui,
+        &theme,
+        state.t("Session Messages"),
+        &format!("{}", msg_count),
+        state.t("Session Tokens"),
+        &token_str,
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Agent Status ──
+    let status_label = state.agent_status_label();
+    let status_color = state.agent_status_color();
+    status_card(
+        ui,
+        &theme,
+        state.t("Agent Status"),
+        status_label,
+        status_color,
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Tool Calls ──
+    let tool_count = state.session_tool_call_count();
+    metric_card(
+        ui,
+        &theme,
+        state.t("Tool Calls (Session)"),
+        &format!("{}", tool_count),
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Subagents ──
+    let running = dashboard.subagent_store.running_agents.len();
+    let batches = dashboard.subagent_store.parallel_batches.len();
+    metric_card_pair(
+        ui,
+        &theme,
+        state.t("Running Subagents"),
+        &format!("{}", running),
+        state.t("Parallel Batches"),
+        &format!("{}", batches),
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Teams ──
+    metric_card(
+        ui,
+        &theme,
+        state.t("Active Teams"),
+        &format!("{}", dashboard.team_store.teams.len()),
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Background Tasks ──
+    metric_card(
+        ui,
+        &theme,
+        state.t("Background Tasks"),
+        &format!("{}", dashboard.task_store.tasks.len()),
+    );
+
+    design_system::gap(ui, Space::S1);
+
+    // ── Gateway Status ──
+    let gw_label = state.gateway_status_label();
+    let gw_color = state.gateway_status_color();
+    status_card(ui, &theme, state.t("Gateway Status"), gw_label, gw_color);
+
+    design_system::gap(ui, Space::S1);
+
+    // ── FPS ──
+    metric_card(ui, &theme, "FPS", &format!("{:.1}", state.fps()));
 }
 
 // ---------------------------------------------------------------------------

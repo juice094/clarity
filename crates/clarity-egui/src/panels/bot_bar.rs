@@ -135,6 +135,7 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
     let initial = bot_name.chars().next().unwrap_or('C').to_string();
     // Translate tooltips before entering the closure so `app` is not borrowed twice.
     let tooltips: Vec<&'static str> = buttons.iter().map(|btn| app.t(btn.tooltip)).collect();
+    let subagents_tooltip = app.t("Subagents");
 
     clarity_ui::design_system::Elevation::Base
         .frame(&theme)
@@ -195,6 +196,50 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                     );
 
                     ui.add_space(theme.space_8);
+
+                    // Subagents is an egui-local tab (no `RightRailPanel`
+                    // variant yet), so its button is handled outside the
+                    // panel-driven list above. Shown where subagents can run.
+                    if matches!(
+                        ctx,
+                        crate::ui::types::SessionContext::Chat
+                            | crate::ui::types::SessionContext::Work { .. }
+                    ) {
+                        let subagents_active = app
+                            .context
+                            .ui_store
+                            .right_rail_dock
+                            .find_active_focused()
+                            .map(|(_, tab)| {
+                                matches!(
+                                    tab,
+                                    crate::panels::right_ide_panel::RightRailTab::Subagents
+                                )
+                            })
+                            .unwrap_or(false);
+                        let fill = if subagents_active {
+                            theme.accent.linear_multiply(0.2)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        if crate::widgets::icon_button(
+                            ui,
+                            crate::theme::ICON_BOT,
+                            theme.text_md,
+                            fill,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            &theme,
+                        )
+                        .on_hover_text(subagents_tooltip)
+                        .clicked()
+                        {
+                            if subagents_active {
+                                app.collapse_right_rail();
+                            } else {
+                                app.open_or_focus_subagents_tab();
+                            }
+                        }
+                    }
 
                     for (btn, tooltip) in buttons.iter().zip(tooltips.iter()) {
                         let is_active = app.is_right_rail_visible()

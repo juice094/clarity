@@ -1195,6 +1195,24 @@ impl App {
         }
     }
 
+    /// Open or focus the egui-local Subagents tab.
+    ///
+    /// `Subagents` has no `RightRailPanel` core variant yet, so the router is
+    /// left untouched; `render_right_ide_panel` keeps the rail visible while
+    /// the dock holds a local tab.
+    pub(crate) fn open_or_focus_subagents_tab(&mut self) {
+        use crate::panels::right_ide_panel::RightRailTab;
+        let tab = RightRailTab::Subagents;
+        let dock = &mut self.context.ui_store.right_rail_dock;
+        if let Some(path) = dock.find_tab(&tab) {
+            if let Err(e) = dock.set_active_tab(path) {
+                tracing::debug!("Failed to focus right-rail tab: {:?}", e);
+            }
+        } else {
+            dock.push_to_focused_leaf(tab);
+        }
+    }
+
     /// Close the right-rail tab matching `panel` if it is open.
     ///
     /// If the closed tab was active or the last remaining tab, the rail is

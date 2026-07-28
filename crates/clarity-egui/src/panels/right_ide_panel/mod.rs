@@ -14,23 +14,24 @@ pub mod claw_terminal_panel;
 pub mod claw_webbridge_panel;
 pub mod claw_workspace_panel;
 pub mod console_panel;
+pub mod dashboard_panel;
 pub mod files_panel;
 pub mod knowledge_panel;
 pub mod share_panel;
+pub mod subagents_panel;
+pub mod task_panel;
+pub mod team_panel;
 pub mod template_panel;
-
-// ponytail: `subagents_panel.rs` is implemented but not wired. It needs a
-// `RightRailPanel::Subagents` variant plus a UI trigger (Bot bar button or
-// shortcut) before users can open it. Until then the module is intentionally
-// excluded from `pub mod` to avoid dead-code warnings.
-// TODO(P2 follow-up): wire Subagents into `RightRailPanel`, `RightRailTab`,
-// `ActivePanel`, and the Bot bar/shortcut surface.
 
 /// Dockable tab identifier for the right IDE rail.
 ///
 /// Mirrors [`RightRailPanel`] so that every functional panel has a 1:1 tab
-/// counterpart. The legacy/migrated variants (`Team`, `Task`, `Dashboard`,
-/// `None`) render placeholder content until their full panels are implemented.
+/// counterpart. The `None` variant renders placeholder content because opening
+/// a tab for "no panel" is meaningless.
+///
+/// `Subagents` is an egui-local tab: it has no `RightRailPanel` counterpart
+/// yet (the enum lives in `clarity-core`), so it is driven by the dock alone
+/// and leaves the right-rail router untouched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RightRailTab {
     /// Share / export panel.
@@ -51,12 +52,14 @@ pub enum RightRailTab {
     KnowledgeBase,
     /// Template / preset injection panel.
     Templates,
-    /// Team collaboration panel (placeholder; migrated from legacy views).
+    /// Team configuration panel.
     Team,
-    /// Task details panel (placeholder; migrated from legacy views).
+    /// Background task list panel.
     Task,
-    /// Dashboard aggregate view (placeholder; migrated from legacy views).
+    /// Dashboard aggregate metrics panel.
     Dashboard,
+    /// Subagent progress panel (egui-local; see the enum-level doc).
+    Subagents,
 }
 
 impl RightRailTab {
@@ -83,8 +86,11 @@ impl RightRailTab {
     }
 
     /// Map the dockable tab back to the core right-rail panel kind.
-    pub const fn to_panel(self) -> RightRailPanel {
-        match self {
+    ///
+    /// Returns `None` for egui-local tabs (currently only `Subagents`) that
+    /// have no [`RightRailPanel`] counterpart yet.
+    pub const fn to_panel(self) -> Option<RightRailPanel> {
+        Some(match self {
             Self::Share => RightRailPanel::Share,
             Self::Console => RightRailPanel::Console,
             Self::Files => RightRailPanel::Files,
@@ -97,7 +103,8 @@ impl RightRailTab {
             Self::Team => RightRailPanel::Team,
             Self::Task => RightRailPanel::Task,
             Self::Dashboard => RightRailPanel::Dashboard,
-        }
+            Self::Subagents => return None,
+        })
     }
 }
 
@@ -114,8 +121,11 @@ enum ActivePanel {
     ClawWebBridge(claw_webbridge_panel::ClawWebBridgePanel),
     KnowledgeBase(knowledge_panel::KnowledgePanel),
     Templates(template_panel::TemplatesPanel),
-    /// Panels that have not been migrated from legacy views yet. They render a
-    /// friendly placeholder instead of a raw migration message.
+    Team(team_panel::TeamPanel),
+    Task(task_panel::TaskPanel),
+    Dashboard(dashboard_panel::DashboardPanel),
+    Subagents(subagents_panel::SubagentsPanel),
+    /// Fallback for `RightRailPanel::None`, which has no functional panel.
     Placeholder {
         title_key: &'static str,
         hint_key: &'static str,
@@ -123,6 +133,17 @@ enum ActivePanel {
 }
 
 impl ActivePanel {
+    /// Materialise the panel for a dock tab.
+    ///
+    /// Egui-local tabs (no [`RightRailPanel`] counterpart) are matched first;
+    /// everything else delegates to [`Self::from_kind`].
+    fn from_tab(tab: RightRailTab) -> Self {
+        match tab {
+            RightRailTab::Subagents => Self::Subagents(subagents_panel::SubagentsPanel),
+            other => Self::from_kind(other.to_panel().unwrap_or(RightRailPanel::None)),
+        }
+    }
+
     fn from_kind(kind: RightRailPanel) -> Self {
         match kind {
             RightRailPanel::Share => Self::Share(share_panel::SharePanel),
@@ -142,18 +163,9 @@ impl ActivePanel {
             }
             RightRailPanel::KnowledgeBase => Self::KnowledgeBase(knowledge_panel::KnowledgePanel),
             RightRailPanel::Templates => Self::Templates(template_panel::TemplatesPanel),
-            RightRailPanel::Team => Self::Placeholder {
-                title_key: "Team",
-                hint_key: "Team collaboration coming soon",
-            },
-            RightRailPanel::Task => Self::Placeholder {
-                title_key: "Task",
-                hint_key: "Task details coming soon",
-            },
-            RightRailPanel::Dashboard => Self::Placeholder {
-                title_key: "Dashboard",
-                hint_key: "Dashboard coming soon",
-            },
+            RightRailPanel::Team => Self::Team(team_panel::TeamPanel),
+            RightRailPanel::Task => Self::Task(task_panel::TaskPanel),
+            RightRailPanel::Dashboard => Self::Dashboard(dashboard_panel::DashboardPanel),
             RightRailPanel::None => Self::Placeholder {
                 title_key: "Panel",
                 hint_key: "Select a panel from the Bot bar",
@@ -174,6 +186,10 @@ impl Panel for ActivePanel {
             Self::ClawWebBridge(_) => app.t("WebBridge"),
             Self::KnowledgeBase(_) => app.t("Knowledge"),
             Self::Templates(_) => app.t("Templates"),
+            Self::Team(_) => app.t("Team"),
+            Self::Task(_) => app.t("Task"),
+            Self::Dashboard(_) => app.t("Dashboard"),
+            Self::Subagents(_) => app.t("Subagents"),
             Self::Placeholder { title_key, .. } => app.t(title_key),
         }
     }
@@ -189,6 +205,10 @@ impl Panel for ActivePanel {
             Self::ClawWebBridge(p) => p.render(app, ui),
             Self::KnowledgeBase(p) => p.render(app, ui),
             Self::Templates(p) => p.render(app, ui),
+            Self::Team(p) => p.render(app, ui),
+            Self::Task(p) => p.render(app, ui),
+            Self::Dashboard(p) => p.render(app, ui),
+            Self::Subagents(p) => p.render(app, ui),
             Self::Placeholder { hint_key, .. } => {
                 render_empty_state(ui, app.t(hint_key), &app.context.ui_store.theme);
             }
@@ -206,32 +226,44 @@ impl<'a> egui_dock::TabViewer for RightRailTabViewer<'a> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         let app = &*self.app;
-        let panel = ActivePanel::from_kind(tab.to_panel());
+        let panel = ActivePanel::from_tab(*tab);
         egui::WidgetText::from(panel.title(app))
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        let panel_kind = tab.to_panel();
-        let show_hints = panel_kind == RightRailPanel::Console
-            && crate::panels::chat::is_empty_state(&*self.app);
+        let show_hints =
+            matches!(tab, RightRailTab::Console) && crate::panels::chat::is_empty_state(&*self.app);
         if show_hints {
             render_quick_start_hints(self.app, ui);
             crate::design_system::gap(ui, crate::design_system::Space::S3);
         }
 
-        let mut panel = ActivePanel::from_kind(panel_kind);
+        let mut panel = ActivePanel::from_tab(*tab);
         panel.render(self.app, ui);
     }
 
     fn on_close(&mut self, tab: &mut Self::Tab) -> egui_dock::tab_viewer::OnCloseResponse {
         // Hide the rail when the currently active tab is closed. This also
         // covers the "last tab" case because the last remaining tab is active.
-        if self
-            .app
-            .current_right_rail()
-            .map(|p| tab.to_panel() == *p)
-            .unwrap_or(false)
-        {
+        // Core-backed tabs are tracked via the router; egui-local tabs (no
+        // `RightRailPanel` counterpart) are compared against the dock's
+        // active tab directly.
+        let is_current = match tab.to_panel() {
+            Some(kind) => self
+                .app
+                .current_right_rail()
+                .map(|p| kind == *p)
+                .unwrap_or(false),
+            None => self
+                .app
+                .context
+                .ui_store
+                .right_rail_dock
+                .find_active_focused()
+                .map(|(_, active)| active == tab)
+                .unwrap_or(false),
+        };
+        if is_current {
             self.app
                 .context
                 .ui_store
@@ -284,8 +316,15 @@ pub fn render_right_ide_panel(app: &mut App, ui: &mut egui::Ui) {
     // ── Animated width ──
     // Visibility is driven by the router; egui's built-in animation helper
     // interpolates the width so the chat area doesn't jump while the rail
-    // opens or closes.
-    let is_visible = panel_at_start != RightRailPanel::None;
+    // opens or closes. Egui-local tabs (e.g. Subagents) have no router entry,
+    // so the rail also stays visible while the dock holds one.
+    let has_local_tabs = app
+        .context
+        .ui_store
+        .right_rail_dock
+        .iter_all_tabs()
+        .any(|(_, tab)| tab.to_panel().is_none());
+    let is_visible = panel_at_start != RightRailPanel::None || has_local_tabs;
     let factor = theme.animate_bool_normal(ui.ctx(), egui::Id::new("right_rail_width"), is_visible);
     if factor <= 0.0 && !is_visible {
         app.panel_animation.prev_panel = Some(RightRailPanel::None);
@@ -321,21 +360,12 @@ pub fn render_right_ide_panel(app: &mut App, ui: &mut egui::Ui) {
             }
             ui.set_min_width(ui.available_width());
 
-            // Take the dock out of `app` for the duration of `show_inside` so
-            // that the viewer can hold a mutable borrow of `app` without
-            // conflicting with the dock's own mutable borrow.
-            //
-            // ponytail: `std::mem::replace` followed by a normal-path restore
-            // loses the dock if `show_inside` panics. The caller wraps this
-            // panel in `render_safe`, so the app survives but the right rail
-            // becomes empty until the user reopens a panel. A panic-safe guard
-            // (drop impl or `catch_unwind` around `show_inside`) can be added
-            // if this becomes observable in practice.
-            // TODO(P2 follow-up): make dock take/restore panic-safe.
-            let mut dock = std::mem::replace(
-                &mut app.context.ui_store.right_rail_dock,
-                egui_dock::DockState::new(vec![]),
-            );
+            // Clone the dock for rendering and write it back afterwards: the
+            // viewer needs a mutable borrow of `app`, which conflicts with a
+            // mutable borrow of the dock stored inside `app`. Cloning (instead
+            // of `std::mem::replace` + restore) keeps the stored dock intact if
+            // `show_inside` panics, so the right rail keeps its tabs.
+            let mut dock = app.context.ui_store.right_rail_dock.clone();
             egui_dock::DockArea::new(&mut dock)
                 .style(egui_dock::Style::from_egui(ui.style()))
                 .show_add_buttons(false)
@@ -358,9 +388,11 @@ pub fn render_right_ide_panel(app: &mut App, ui: &mut egui::Ui) {
     {
         // Keep the router as the single source of truth: reflect the active
         // dock tab without discarding the existing stack (replace is
-        // idempotent when the panel is already current).
-        let panel = active_tab.to_panel();
-        app.right_rail_router.replace(panel);
+        // idempotent when the panel is already current). Egui-local tabs have
+        // no router entry and leave it untouched.
+        if let Some(panel) = active_tab.to_panel() {
+            app.right_rail_router.replace(panel);
+        }
     } else if app
         .context
         .ui_store
