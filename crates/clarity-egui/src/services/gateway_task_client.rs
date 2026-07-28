@@ -140,6 +140,21 @@ impl GatewayTaskClient {
         let body: CreateTaskResponse = resp.json().await.map_err(|e| e.to_string())?;
         Ok(body.task_id)
     }
+
+    /// `DELETE /v1/tasks/:id`
+    pub async fn cancel_task(&self, task_id: &str) -> Result<(), String> {
+        let url = format!("{}/v1/tasks/{}", self.base_url, task_id);
+        let resp = self
+            .client
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            return Err(format!("Gateway returned {}", resp.status()));
+        }
+        Ok(())
+    }
 }
 
 impl Default for GatewayTaskClient {

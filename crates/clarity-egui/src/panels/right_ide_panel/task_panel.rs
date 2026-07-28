@@ -180,18 +180,31 @@ fn view_task_result(app: &mut App, task_id: String) {
 
 /// Cancel a pending/running task and refresh the list.
 ///
-/// ponytail: cancellation goes through the local `BackgroundTaskManager`;
-/// `GatewayTaskClient` has no cancel endpoint, so Gateway-side tasks are only
-/// marked cancelled in the shared store. Upgrade path: add a
-/// `POST /v1/tasks/:id/cancel` route and client method.
+/// ponytail: cancellation tries the Gateway first; if it is offline, falls back
+/// to the local `BackgroundTaskManager`. The Gateway exposes this as
+/// `DELETE /v1/tasks/:id`.
 fn cancel_task(app: &mut App, task_id: String) {
+    let gateway_client = crate::services::gateway_task_client::GatewayTaskClient::new();
     let bg_manager = std::sync::Arc::clone(&app.context.state.bg_manager);
+    let local_store = app.context.state.task_store.clone();
     let tx = app.context.ui_tx.clone();
     app.context.runtime.spawn(async move {
-        if let Err(e) = bg_manager.cancel(&task_id).await {
-            tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+        match gateway_client.cancel_task(&task_id).await {
+            Ok(()) => tracing::info!("Cancelled task {} via Gateway", task_id),
+            Err(e) => {
+                tracing::debug!(
+                    "Gateway cancel_task failed ({}), falling back to local manager",
+                    e
+                );
+                if let Err(e) = bg_manager.cancel(&task_id).await {
+                    tracing::warn!("Failed to cancel task {} locally: {}", task_id, e);
+                }
+            }
         }
-        match bg_manager.list().await {
+
+        // Refresh from local store so the UI reflects the cancellation promptly
+        // even when the Gateway was used (the next Gateway refresh will converge).
+        match local_store.list_all().await {
             Ok(tasks) => {
                 if let Err(e) = tx.send(UiEvent::TaskList(tasks)) {
                     tracing::warn!("Failed to send TaskList after cancel: {}", e);
