@@ -215,10 +215,12 @@ pub struct BackgroundTaskManager {
     notification_manager: Option<Arc<NotificationManager>>,
     /// 任务调度器
     scheduler: Option<Arc<TaskScheduler>>,
-    /// Agent 任务执行器
-    agent_executor: Option<Arc<dyn AgentTaskExecutor>>,
+    /// Agent 任务执行器（运行时可替换，便于 LLM 晚绑定的前端在加载完成后注入）
+    agent_executor: Arc<std::sync::RwLock<Option<Arc<dyn AgentTaskExecutor>>>>,
     /// Cron 任务调度器
     cron_scheduler: Option<Arc<tokio::sync::Mutex<CronScheduler>>>,
+    /// 完成通知收件箱（任务结束时写入摘要，由父 Agent 的 hook 注入对话）
+    completion_inbox: Option<Arc<crate::agent::completion_inbox::CompletionInbox>>,
 }
 
 // Intentionally retained: BackgroundTaskManager exposes a stable internal API; some
@@ -241,8 +243,9 @@ impl BackgroundTaskManager {
             semaphore: Arc::new(tokio::sync::Semaphore::new(max_concurrency)),
             notification_manager: None,
             scheduler: None,
-            agent_executor: None,
+            agent_executor: Arc::new(std::sync::RwLock::new(None)),
             cron_scheduler: None,
+            completion_inbox: None,
         }
     }
 
@@ -266,8 +269,29 @@ impl BackgroundTaskManager {
     }
 
     /// 设置 Agent 任务执行器
-    pub fn with_agent_executor(mut self, executor: Arc<dyn AgentTaskExecutor>) -> Self {
-        self.agent_executor = Some(executor);
+    pub fn with_agent_executor(self, executor: Arc<dyn AgentTaskExecutor>) -> Self {
+        if let Ok(mut guard) = self.agent_executor.write() {
+            *guard = Some(executor);
+        }
+        self
+    }
+
+    /// Replace the Agent task executor at runtime.
+    ///
+    /// Used by hosts that bind their LLM late (e.g. the egui frontend) to
+    /// inject a fully-configured executor once the LLM is loaded.
+    pub fn set_agent_executor(&self, executor: Arc<dyn AgentTaskExecutor>) {
+        if let Ok(mut guard) = self.agent_executor.write() {
+            *guard = Some(executor);
+        }
+    }
+
+    /// 设置完成通知收件箱
+    pub fn with_completion_inbox(
+        mut self,
+        inbox: Arc<crate::agent::completion_inbox::CompletionInbox>,
+    ) -> Self {
+        self.completion_inbox = Some(inbox);
         self
     }
 
@@ -292,7 +316,7 @@ impl BackgroundTaskManager {
 
     /// 获取 Agent 任务执行器
     pub fn agent_executor(&self) -> Option<Arc<dyn AgentTaskExecutor>> {
-        self.agent_executor.clone()
+        self.agent_executor.read().ok().and_then(|g| g.clone())
     }
 
     /// 获取 Cron 任务调度器
@@ -353,6 +377,7 @@ impl BackgroundTaskManager {
         let store = self.store.clone();
         let running_tasks = self.running_tasks.clone();
         let notification_manager = self.notification_manager.clone();
+        let completion_inbox = self.completion_inbox.clone();
 
         let handle = tokio::spawn(async move {
             // 执行任务
@@ -385,10 +410,27 @@ impl BackgroundTaskManager {
                         manager.publish(notif);
                     }
 
+                    // 写入完成收件箱（父 Agent 下一 turn 注入对话）
+                    if let Some(ref inbox) = completion_inbox {
+                        let output: String = r.output.chars().take(500).collect();
+                        inbox.push(format!(
+                            "[background task completed] {} (task {}): {}",
+                            task_name, task_id_clone, output
+                        ));
+                    }
+
                     info!("Task {} completed in {:?}", task_id_clone, elapsed);
                     r
                 }
                 Err(e) => {
+                    // 写入完成收件箱（父 Agent 下一 turn 注入对话）
+                    if let Some(ref inbox) = completion_inbox {
+                        inbox.push(format!(
+                            "[background task failed] {} (task {}): {}",
+                            task_name, task_id_clone, e
+                        ));
+                    }
+
                     let error_result = TaskResult {
                         status: TaskStatus::Failed,
                         output: format!("Error: {}", e),
@@ -442,15 +484,9 @@ impl BackgroundTaskManager {
         task_id: TaskId,
         spec: TaskSpec,
     ) -> anyhow::Result<TaskId> {
-        let executor = self
-            .agent_executor
-            .as_ref()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "AgentTaskExecutor not configured. Use with_agent_executor() first."
-                )
-            })?
-            .clone();
+        let executor = self.agent_executor().ok_or_else(|| {
+            anyhow::anyhow!("AgentTaskExecutor not configured. Use with_agent_executor() first.")
+        })?;
 
         self.spawn_with_id(task_id, spec, move |spec| async move {
             match executor.execute(&spec).await {
@@ -893,6 +929,62 @@ mod tests {
         let result = manager.wait(&task_id).await.unwrap();
         assert_eq!(result.status, TaskStatus::Completed);
         assert_eq!(result.output, "done");
+    }
+
+    #[tokio::test]
+    async fn test_completion_inbox_receives_task_summary() {
+        let temp_dir = TempDir::new().unwrap();
+        let inbox = crate::agent::completion_inbox::CompletionInbox::new();
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        )
+        .with_completion_inbox(inbox.clone());
+
+        let spec = TaskSpec::new("inbox_task", "test prompt");
+        let task_id = manager
+            .spawn(spec, |_spec| async { Ok(TaskResult::success("all done")) })
+            .await
+            .unwrap();
+
+        manager.wait(&task_id).await.unwrap();
+
+        let drained = inbox.drain();
+        assert_eq!(drained.len(), 1);
+        assert!(drained[0].starts_with("[background task completed] inbox_task"));
+        assert!(drained[0].contains("all done"));
+    }
+
+    #[tokio::test]
+    async fn test_set_agent_executor_replaces_executor() {
+        #[derive(Debug)]
+        struct NoopExecutor;
+
+        #[async_trait]
+        impl AgentTaskExecutor for NoopExecutor {
+            async fn execute(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)> {
+                Ok((format!("ran {}", spec.name), 1))
+            }
+        }
+
+        let temp_dir = TempDir::new().unwrap();
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        );
+        assert!(manager.agent_executor().is_none());
+
+        manager.set_agent_executor(Arc::new(NoopExecutor));
+        assert!(manager.agent_executor().is_some());
+
+        let task_id = manager
+            .spawn_agent(TaskSpec::new("late_bound", "p"))
+            .await
+            .unwrap();
+        let result = manager.wait(&task_id).await.unwrap();
+        assert_eq!(result.output, "ran late_bound");
     }
 
     #[tokio::test]

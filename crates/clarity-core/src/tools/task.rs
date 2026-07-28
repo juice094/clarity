@@ -1,9 +1,11 @@
-//! Task management tools: TaskList, TaskOutput, TaskStop
+//! Task management tools: TaskCreate, TaskList, TaskOutput, TaskStop
 
 use async_trait::async_trait;
 use serde_json::Value;
 use serde_json::json;
+use std::sync::Arc;
 
+use crate::background::BackgroundTaskManager;
 use crate::background::store::{TaskSpec, TaskStatus, TaskStore};
 use crate::error::ToolError;
 use crate::tools::helpers;
@@ -13,13 +15,32 @@ fn task_store_path() -> ToolResult<std::path::PathBuf> {
     super::clarity_data_dir().map(|p| p.join("tasks"))
 }
 
+/// Resolve the task store: the shared [`BackgroundTaskManager`] store when
+/// bound (keeps tools, REST API, and the worker pool on one directory),
+/// otherwise the legacy `~/.clarity/tasks` directory.
+fn resolve_store(manager: &Option<Arc<BackgroundTaskManager>>) -> ToolResult<TaskStore> {
+    match manager {
+        Some(m) => Ok(m.store().clone()),
+        None => Ok(TaskStore::new(task_store_path()?)),
+    }
+}
+
 /// Tool for listing background tasks
-pub struct TaskListTool;
+pub struct TaskListTool {
+    manager: Option<Arc<BackgroundTaskManager>>,
+}
 
 impl TaskListTool {
-    /// Create a new TaskListTool instance
+    /// Create a new TaskListTool instance using the legacy store directory.
     pub fn new() -> Self {
-        Self
+        Self { manager: None }
+    }
+
+    /// Create a tool bound to a specific [`BackgroundTaskManager`] store.
+    pub fn with_manager(manager: Arc<BackgroundTaskManager>) -> Self {
+        Self {
+            manager: Some(manager),
+        }
     }
 }
 
@@ -55,7 +76,7 @@ impl Tool for TaskListTool {
     }
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
-        let store = TaskStore::new(task_store_path()?);
+        let store = resolve_store(&self.manager)?;
 
         let filter = helpers::optional_str(&args, "status_filter").unwrap_or("all");
 
@@ -86,12 +107,21 @@ impl Tool for TaskListTool {
 }
 
 /// Tool for getting task output/result
-pub struct TaskOutputTool;
+pub struct TaskOutputTool {
+    manager: Option<Arc<BackgroundTaskManager>>,
+}
 
 impl TaskOutputTool {
-    /// Create a new TaskOutputTool instance
+    /// Create a new TaskOutputTool instance using the legacy store directory.
     pub fn new() -> Self {
-        Self
+        Self { manager: None }
+    }
+
+    /// Create a tool bound to a specific [`BackgroundTaskManager`] store.
+    pub fn with_manager(manager: Arc<BackgroundTaskManager>) -> Self {
+        Self {
+            manager: Some(manager),
+        }
     }
 }
 
@@ -127,7 +157,7 @@ impl Tool for TaskOutputTool {
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let task_id = helpers::required_str(&args, "task_id")?;
-        let store = TaskStore::new(task_store_path()?);
+        let store = resolve_store(&self.manager)?;
 
         let result_opt = store.get_result_opt(task_id).await.map_err(|e| {
             ToolError::execution_failed(format!("Failed to read task result: {}", e))
@@ -161,12 +191,28 @@ impl Tool for TaskOutputTool {
 ///
 /// Use this when the user wants to defer work to run asynchronously,
 /// schedule a recurring analysis, or spawn a long-running sub-agent.
-pub struct TaskCreateTool;
+pub struct TaskCreateTool {
+    manager: Option<Arc<BackgroundTaskManager>>,
+}
 
 impl TaskCreateTool {
-    /// Create a new TaskCreateTool instance
+    /// Create a new TaskCreateTool instance using the legacy store directory.
+    ///
+    /// Tasks created this way are persisted as `pending` but have no consumer;
+    /// hosts should prefer [`Self::with_manager`] so created tasks are spawned.
     pub fn new() -> Self {
-        Self
+        Self { manager: None }
+    }
+
+    /// Create a tool bound to a specific [`BackgroundTaskManager`].
+    ///
+    /// When the manager has an [`AgentTaskExecutor`](crate::background::AgentTaskExecutor)
+    /// configured, newly created tasks are spawned immediately instead of
+    /// dead-lettering as `pending`.
+    pub fn with_manager(manager: Arc<BackgroundTaskManager>) -> Self {
+        Self {
+            manager: Some(manager),
+        }
     }
 }
 
@@ -264,30 +310,71 @@ impl Tool for TaskCreateTool {
         spec = spec.with_priority(priority_enum);
 
         let task_id = uuid::Uuid::new_v4().to_string();
-        let store = TaskStore::new(task_store_path()?);
+
+        // Bound to a BackgroundTaskManager with an executor: spawn immediately
+        // (persists + runs under the manager's concurrency limit).
+        if let Some(manager) = &self.manager {
+            if manager.agent_executor().is_some() {
+                manager
+                    .spawn_agent_with_id(task_id.clone(), spec)
+                    .await
+                    .map_err(|e| {
+                        ToolError::execution_failed(format!("Failed to spawn task: {}", e))
+                    })?;
+
+                return Ok(json!({
+                    "success": true,
+                    "task_id": task_id,
+                    "name": name,
+                    "status": "running",
+                    "message": format!("Task '{}' created and spawned with ID {}", name, task_id)
+                }));
+            }
+        }
+
+        // No manager (legacy path) or no executor configured: persist as
+        // pending in the resolved store.
+        // ponytail: without an executor there is no pending→spawn consumer;
+        // upgrade path is a store-scanning scheduler loop in BackgroundTaskManager.
+        let store = resolve_store(&self.manager)?;
 
         store
             .create(&task_id, spec)
             .await
             .map_err(|e| ToolError::execution_failed(format!("Failed to create task: {}", e)))?;
 
+        let status_note = if self.manager.is_some() {
+            " (no agent executor configured; task will remain pending)"
+        } else {
+            ""
+        };
+
         Ok(json!({
             "success": true,
             "task_id": task_id,
             "name": name,
             "status": "pending",
-            "message": format!("Task '{}' created with ID {}", name, task_id)
+            "message": format!("Task '{}' created with ID {}{}", name, task_id, status_note)
         }))
     }
 }
 
 /// Tool for stopping/cancelling a background task
-pub struct TaskStopTool;
+pub struct TaskStopTool {
+    manager: Option<Arc<BackgroundTaskManager>>,
+}
 
 impl TaskStopTool {
-    /// Create a new TaskStopTool instance
+    /// Create a new TaskStopTool instance using the legacy store directory.
     pub fn new() -> Self {
-        Self
+        Self { manager: None }
+    }
+
+    /// Create a tool bound to a specific [`BackgroundTaskManager`] store.
+    pub fn with_manager(manager: Arc<BackgroundTaskManager>) -> Self {
+        Self {
+            manager: Some(manager),
+        }
     }
 }
 
@@ -323,7 +410,7 @@ impl Tool for TaskStopTool {
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let task_id = helpers::required_str(&args, "task_id")?;
-        let store = TaskStore::new(task_store_path()?);
+        let store = resolve_store(&self.manager)?;
 
         store
             .update_status(task_id, TaskStatus::Cancelled)
@@ -440,9 +527,105 @@ mod tests {
         assert!(tool.execute(json!({}), ctx()).await.is_err());
     }
 
-    // NOTE: TaskCreateTool::execute writes to the hard-coded Clarity data directory
-    // (via super::clarity_data_dir()). On Windows this resolves to the user's profile
-    // via a Windows API call and cannot be redirected with an environment variable in
-    // a unit test, so the successful-creation path is not exercised here without
-    // refactoring the production code to accept an injected store/path.
+    // NOTE: TaskCreateTool::execute without a manager writes to the hard-coded
+    // Clarity data directory (via super::clarity_data_dir()). On Windows this
+    // resolves to the user's profile via a Windows API call and cannot be
+    // redirected with an environment variable in a unit test, so the legacy
+    // successful-creation path is not exercised here. The manager-bound paths
+    // below use tempdirs and cover create→spawn end to end.
+
+    use crate::background::AgentTaskExecutor;
+    use tempfile::TempDir;
+
+    #[derive(Debug)]
+    struct MockExecutor;
+
+    #[async_trait]
+    impl AgentTaskExecutor for MockExecutor {
+        async fn execute(
+            &self,
+            spec: &crate::background::TaskSpec,
+        ) -> anyhow::Result<(String, usize)> {
+            Ok((format!("done: {}", spec.name), 1))
+        }
+    }
+
+    fn manager_with_executor(temp: &TempDir) -> BackgroundTaskManager {
+        BackgroundTaskManager::new(
+            temp.path().join("store"),
+            temp.path().join("work"),
+            temp.path().join("context"),
+        )
+        .with_agent_executor(Arc::new(MockExecutor))
+    }
+
+    #[tokio::test]
+    async fn task_create_with_manager_spawns_and_executes() {
+        let temp = TempDir::new().unwrap();
+        let manager = Arc::new(manager_with_executor(&temp));
+        let tool = TaskCreateTool::with_manager(manager.clone());
+
+        let result = tool
+            .execute(json!({"name": "demo", "prompt": "do the thing"}), ctx())
+            .await
+            .unwrap();
+        assert_eq!(result["status"], "running");
+        let task_id = result["task_id"].as_str().unwrap().to_string();
+
+        // The created task must actually run to completion (no dead-letter).
+        let task_result = manager.wait(&task_id).await.unwrap();
+        assert_eq!(task_result.status, TaskStatus::Completed);
+        assert_eq!(task_result.output, "done: demo");
+    }
+
+    #[tokio::test]
+    async fn task_create_with_manager_without_executor_stays_pending() {
+        let temp = TempDir::new().unwrap();
+        let manager = Arc::new(BackgroundTaskManager::new(
+            temp.path().join("store"),
+            temp.path().join("work"),
+            temp.path().join("context"),
+        ));
+        let tool = TaskCreateTool::with_manager(manager.clone());
+
+        let result = tool
+            .execute(json!({"name": "demo", "prompt": "do the thing"}), ctx())
+            .await
+            .unwrap();
+        assert_eq!(result["status"], "pending");
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("no agent executor")
+        );
+
+        // Pending task is visible through the same store the manager uses.
+        let listed = TaskListTool::with_manager(manager.clone())
+            .execute(json!({"status_filter": "pending"}), ctx())
+            .await
+            .unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn task_tools_bound_to_manager_share_store() {
+        let temp = TempDir::new().unwrap();
+        let manager = Arc::new(manager_with_executor(&temp));
+
+        let created = TaskCreateTool::with_manager(manager.clone())
+            .execute(json!({"name": "shared", "prompt": "p"}), ctx())
+            .await
+            .unwrap();
+        let task_id = created["task_id"].as_str().unwrap().to_string();
+        manager.wait(&task_id).await.unwrap();
+
+        // task_output reads the result saved by the manager's worker.
+        let output = TaskOutputTool::with_manager(manager.clone())
+            .execute(json!({"task_id": task_id}), ctx())
+            .await
+            .unwrap();
+        assert_eq!(output["status"], "completed");
+        assert_eq!(output["output"], "done: shared");
+    }
 }

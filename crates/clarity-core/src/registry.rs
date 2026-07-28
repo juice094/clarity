@@ -147,6 +147,11 @@ impl ToolRegistry {
         let _ = self.register(TaskOutputTool::new());
         let _ = self.register(TaskStopTool::new());
 
+        // Subagent orchestration (bound to an orchestrator via
+        // `with_subagent_orchestrator` at host startup)
+        let _ = self.register(crate::tools::AgentTool::new());
+        let _ = self.register(crate::tools::AgentSwarmTool::new());
+
         // Notifications & todos
         let _ = self.register(NotifyTool::new());
         let _ = self.register(TodoTool::new());
@@ -237,6 +242,44 @@ impl ToolRegistry {
         let _ = self.register(ScheduleCronTool::with_manager(manager.clone()));
         let _ = self.register(ListCronTool::with_manager(manager.clone()));
         let _ = self.register(CancelCronTool::with_manager(manager));
+    }
+
+    /// Bind a [`BackgroundTaskManager`](crate::background::BackgroundTaskManager) to the
+    /// task management tools (`task_create` / `task_list` / `task_output` / `task_stop`).
+    ///
+    /// This unifies the tools onto the manager's store and lets `task_create`
+    /// spawn tasks through the manager's agent executor instead of
+    /// dead-lettering them as `pending` in the legacy store directory.
+    pub fn with_task_manager(&self, manager: Arc<crate::background::BackgroundTaskManager>) {
+        use crate::tools::{TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool};
+
+        let _ = self.unregister("task_create");
+        let _ = self.unregister("task_list");
+        let _ = self.unregister("task_output");
+        let _ = self.unregister("task_stop");
+
+        let _ = self.register(TaskCreateTool::with_manager(manager.clone()));
+        let _ = self.register(TaskListTool::with_manager(manager.clone()));
+        let _ = self.register(TaskOutputTool::with_manager(manager.clone()));
+        let _ = self.register(TaskStopTool::with_manager(manager));
+    }
+
+    /// Bind a subagent orchestrator to the `agent` / `agent_swarm` tools.
+    ///
+    /// This unregisters the existing tools (if any) and re-registers them
+    /// bound to the provided orchestrator. Called automatically by
+    /// [`Agent::with_orchestrator`](crate::agent::Agent::with_orchestrator).
+    pub fn with_subagent_orchestrator(
+        &self,
+        orchestrator: Arc<dyn clarity_contract::subagent::SubagentOrchestrator>,
+    ) {
+        use crate::tools::{AgentSwarmTool, AgentTool};
+
+        let _ = self.unregister("agent");
+        let _ = self.unregister("agent_swarm");
+
+        let _ = self.register(AgentTool::with_orchestrator(orchestrator.clone()));
+        let _ = self.register(AgentSwarmTool::with_orchestrator(orchestrator));
     }
 
     /// Unregister a tool by name

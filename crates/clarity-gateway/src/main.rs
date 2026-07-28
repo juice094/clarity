@@ -320,11 +320,14 @@ You are a methodological query assistant. When answering:
     // 注入 SubagentOrchestrator（SubagentManager）
     let subagent_ctx = clarity_dir.join("subagent_context");
     let _ = tokio::fs::create_dir_all(&subagent_ctx).await;
-    let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
-        agent.registry().clone(),
-        &clarity_dir,
-        &subagent_ctx,
-    ));
+    let orchestrator = Arc::new(
+        clarity_subagents::SubagentManager::new(
+            agent.registry().clone(),
+            &clarity_dir,
+            &subagent_ctx,
+        )
+        .with_llm(llm.clone()),
+    );
     agent = agent.with_orchestrator(orchestrator);
 
     // 设置 MemoryCompiler callback（OpenHanako 四级编译管道）
@@ -535,14 +538,21 @@ async fn main() {
         }
         let executor = Arc::new(executor);
 
+        // 完成通知收件箱：后台任务完成后由 hook 注入父 Agent 对话
+        let completion_inbox = clarity_core::agent::completion_inbox::CompletionInbox::new();
+        agent.with_completion_inbox(completion_inbox.clone());
+
         Arc::new(
             BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
-                .with_agent_executor(executor),
+                .with_agent_executor(executor)
+                .with_completion_inbox(completion_inbox),
         )
     };
 
     // Bind cron tools to the background task manager
     agent.with_cron_manager(task_manager.clone());
+    // Bind task management tools so LLM-created tasks are spawned, not dead-lettered
+    agent.with_task_manager(task_manager.clone());
     info!("🔗 Bound cron tools to BackgroundTaskManager");
 
     // 加载渠道配置

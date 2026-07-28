@@ -13,6 +13,7 @@
 
 pub mod compaction_cache;
 pub mod compaction_service;
+pub mod completion_inbox;
 pub mod config;
 pub mod controller;
 pub mod cost_channel;

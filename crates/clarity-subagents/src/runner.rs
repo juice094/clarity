@@ -311,8 +311,8 @@ pub struct SubagentRunner {
     working_dir: PathBuf,
     /// 上下文目录
     context_dir: PathBuf,
-    /// LLM 提供者（默认）
-    llm: Option<Arc<dyn LlmProvider>>,
+    /// LLM 提供者（默认；Arc 共享以便宿主在 LLM 晚绑定后注入）
+    llm: Arc<std::sync::RwLock<Option<Arc<dyn LlmProvider>>>>,
     /// 模型注册表（用于 model_override 动态选择）
     registry: Option<ModelRegistry>,
     /// 审批运行时
@@ -354,7 +354,7 @@ impl SubagentRunner {
             tool_registry,
             working_dir: working_dir.as_ref().to_path_buf(),
             context_dir: context_dir.as_ref().to_path_buf(),
-            llm: None,
+            llm: Arc::new(std::sync::RwLock::new(None)),
             registry: None,
             approval_runtime: None,
             approval_mode: ApprovalMode::Interactive,
@@ -364,9 +364,19 @@ impl SubagentRunner {
     }
 
     /// 设置 LLM 提供者（默认）
-    pub fn with_llm(mut self, llm: Arc<dyn LlmProvider>) -> Self {
-        self.llm = Some(llm);
+    pub fn with_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
+        self.set_llm(llm);
         self
+    }
+
+    /// Replace the default LLM provider at runtime.
+    ///
+    /// Used by hosts that bind their LLM after the orchestrator is already
+    /// shared (e.g. the egui frontend loads the provider asynchronously).
+    pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
+        if let Ok(mut guard) = self.llm.write() {
+            *guard = Some(llm);
+        }
     }
 
     /// 设置模型注册表（用于 model_override 动态选择）
@@ -768,8 +778,9 @@ impl SubagentRunner {
         let _max_iterations = max_iterations_override.unwrap_or(type_def.max_iterations);
 
         // 如果有 LLM，设置 LLM
-        let agent = if let Some(llm) = &self.llm {
-            agent.with_llm(llm.clone())
+        let default_llm = self.llm.read().ok().and_then(|g| g.clone());
+        let agent = if let Some(llm) = default_llm {
+            agent.with_llm(llm)
         } else {
             agent
         };

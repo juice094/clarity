@@ -114,10 +114,15 @@ impl Agent {
     }
 
     /// Set the subagent orchestrator (builder pattern).
+    ///
+    /// Also binds the `agent` / `agent_swarm` tools in the registry to this
+    /// orchestrator so the LLM can spawn subagents through them.
     pub fn with_orchestrator(
         mut self,
         orchestrator: Arc<dyn clarity_contract::subagent::SubagentOrchestrator>,
     ) -> Self {
+        self.registry
+            .with_subagent_orchestrator(orchestrator.clone());
         self.orchestrator = Some(orchestrator);
         self
     }
@@ -719,6 +724,46 @@ impl Agent {
     /// starts processing requests that may invoke cron tools.
     pub fn with_cron_manager(&self, manager: Arc<crate::background::BackgroundTaskManager>) {
         self.registry.with_cron_manager(manager);
+    }
+
+    /// Bind a [`BackgroundTaskManager`](crate::background::BackgroundTaskManager) to the
+    /// task management tools (`task_create` / `task_list` / `task_output` / `task_stop`).
+    ///
+    /// Must be called after the task manager is created. Once bound, tasks the
+    /// LLM creates via `task_create` are spawned by the manager (when it has an
+    /// agent executor) instead of dead-lettering as `pending`.
+    pub fn with_task_manager(&self, manager: Arc<crate::background::BackgroundTaskManager>) {
+        self.registry.with_task_manager(manager);
+    }
+
+    /// Register a [`CompletionInboxHook`](super::completion_inbox::CompletionInboxHook)
+    /// so background completion summaries in the inbox are injected into the
+    /// conversation as system messages before the next LLM call.
+    ///
+    /// Synchronous variant of the lazy LSP hook registration: at startup the
+    /// hook registry is uncontended, so a `try_write` is sufficient.
+    pub fn with_completion_inbox(
+        &self,
+        inbox: std::sync::Arc<super::completion_inbox::CompletionInbox>,
+    ) {
+        use super::completion_inbox::CompletionInboxHook;
+
+        let hook = CompletionInboxHook::new(inbox);
+        let existing = self.inner.read().hook_registry.clone();
+        match existing {
+            Some(registry) => match registry.try_write() {
+                Ok(mut guard) => guard.register(Box::new(hook)),
+                Err(_) => {
+                    tracing::warn!("Hook registry busy; completion inbox hook not registered");
+                }
+            },
+            None => {
+                let mut registry = super::hooks::HookRegistry::new();
+                registry.register(Box::new(hook));
+                self.inner.write().hook_registry =
+                    Some(std::sync::Arc::new(tokio::sync::RwLock::new(registry)));
+            }
+        }
     }
 
     /// Get the LLM provider (if configured)

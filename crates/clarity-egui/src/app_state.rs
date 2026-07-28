@@ -45,6 +45,8 @@ pub struct AppState {
     pub task_store: clarity_core::background::TaskStore,
     /// Background task manager (holds cron scheduler, worker pool, and task queue).
     pub bg_manager: Arc<clarity_core::background::BackgroundTaskManager>,
+    /// Subagent orchestrator shared with the agent (LLM injected after load).
+    pub subagent_manager: Arc<clarity_subagents::SubagentManager>,
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
     pub mode_aware_approval_runtime: Arc<
         clarity_core::approval::ModeAwareApprovalRuntime<
@@ -152,11 +154,17 @@ impl Default for AppState {
         let cron_scheduler = Arc::new(tokio::sync::Mutex::new(
             clarity_core::background::CronScheduler::new(),
         ));
+        // 完成通知收件箱：后台任务完成后由 hook 注入父 Agent 对话
+        let completion_inbox = clarity_core::agent::completion_inbox::CompletionInbox::new();
+        agent.with_completion_inbox(completion_inbox.clone());
         let bg_manager = Arc::new(
             clarity_core::background::BackgroundTaskManager::new(&task_dir, &work_dir, &work_dir)
-                .with_cron_scheduler(cron_scheduler),
+                .with_cron_scheduler(cron_scheduler)
+                .with_completion_inbox(completion_inbox),
         );
         agent.with_cron_manager(Arc::clone(&bg_manager));
+        // 绑定 task 工具：LLM 通过 task_create 创建的任务由 manager 统一存储并 spawn
+        agent.with_task_manager(Arc::clone(&bg_manager));
 
         // 注入 SubagentOrchestrator（SubagentManager）
         let subagent_ctx = work_dir.join("subagent_context");
@@ -167,12 +175,12 @@ impl Default for AppState {
                 e
             );
         }
-        let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
+        let subagent_manager = Arc::new(clarity_subagents::SubagentManager::new(
             agent.registry().clone(),
             &work_dir,
             &subagent_ctx,
         ));
-        agent = agent.with_orchestrator(orchestrator);
+        agent = agent.with_orchestrator(subagent_manager.clone());
 
         // Load skill registry from well-known directories.
         if let Some(skill_registry) = load_skill_registry() {
@@ -188,6 +196,7 @@ impl Default for AppState {
             prewarm_error: Mutex::new(None),
             task_store: clarity_core::background::TaskStore::new(task_dir),
             bg_manager,
+            subagent_manager,
             mode_aware_approval_runtime: mode_aware_rt,
             memory_store: OnceLock::new(),
             knowledge_field,
@@ -315,9 +324,19 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     // Layer 3 — Binder: attach to Agent.
     bind_llm(
         &state.agent,
-        llm,
+        llm.clone(),
         &format!("{}:{}", desired_provider, desired_model),
     );
+
+    // Late-bind the freshly loaded LLM into the subagent orchestrator and the
+    // background task executor (both are created before the LLM is available).
+    state.subagent_manager.set_llm(llm.clone());
+    let executor = clarity_core::background::agent_executor::DefaultAgentTaskExecutor::new(
+        llm,
+        state.agent.registry().clone(),
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+    );
+    state.bg_manager.set_agent_executor(Arc::new(executor));
 
     if let Some(b) = binding {
         let mut guard = state.llm_binding.lock();

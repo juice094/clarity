@@ -83,6 +83,12 @@ impl SubagentManager {
         self
     }
 
+    /// Replace the default LLM at runtime (for hosts that bind the LLM after
+    /// the manager is already shared via `Arc`).
+    pub fn set_llm(&self, llm: Arc<dyn clarity_llm::api::LlmProvider>) {
+        self.runner.set_llm(llm);
+    }
+
     /// 设置模型注册表（支持 model_override 动态选择）
     pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
         self.runner = self.runner.with_registry(registry);
