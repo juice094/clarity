@@ -109,6 +109,7 @@ mod tests {
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,
+            turn_usage: HashMap::new(),
         }
     }
 

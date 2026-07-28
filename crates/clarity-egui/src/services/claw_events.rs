@@ -356,6 +356,7 @@ impl App {
                                 cached_height: None,
                                 is_error: false,
                                 lines: Vec::new(),
+                                turn_id: String::new(),
                             };
                             msg.prepare();
                             session.messages.push(msg);
@@ -420,6 +421,7 @@ impl App {
                                             cached_height: None,
                                             is_error: false,
                                             lines: Vec::new(),
+                                            turn_id: String::new(),
                                         };
                                         msg.prepare();
                                         session.messages.push(msg);

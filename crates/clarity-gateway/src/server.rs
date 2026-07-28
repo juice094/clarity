@@ -201,6 +201,9 @@ impl AppState {
         };
 
         let event_wire = Arc::new(clarity_wire::Wire::new());
+        // 把 app 级 event_wire 绑定到 BackgroundTaskManager，让任务状态变更进入
+        // WebSocket 回放环，egui/TUI 等前端就能实时收到 BackgroundTaskUpdate。
+        task_manager.set_wire(event_wire.clone());
         let metrics = Arc::new(clarity_contract::ConnectionMetrics::default());
 
         let subagent_manager = {

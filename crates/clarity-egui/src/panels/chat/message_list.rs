@@ -85,6 +85,7 @@ fn measure_unit(
     metrics: &crate::pretext::EguiFontMetrics,
     turn_heights: &mut [Option<f32>],
     turn_cache: &mut [Option<crate::components::agent_turn::AgentTurn>],
+    turn_usage: &std::collections::HashMap<String, u32>,
 ) -> f32 {
     // Keep this in sync with the rendered layout so the virtual window and
     // the ScrollArea stick-to-bottom math agree.
@@ -104,7 +105,10 @@ fn measure_unit(
         let cached = turn_heights.get(idx).copied().flatten();
         cached.unwrap_or_else(|| {
             let turn = turn_cache[idx].get_or_insert_with(|| {
-                crate::components::agent_turn::AgentTurn::from_messages(&messages[u.start..u.end])
+                crate::components::agent_turn::AgentTurn::from_messages(
+                    &messages[u.start..u.end],
+                    turn_usage,
+                )
             });
             turn.estimate_height(max_w, theme, metrics)
         }) + action_gap_h
@@ -137,6 +141,7 @@ fn refresh_height_cache(
     turn_active: bool,
     revision: u64,
     height_cache: &mut Option<crate::ui::types::UnitHeightCache>,
+    turn_usage: &std::collections::HashMap<String, u32>,
 ) {
     let bucket = width_bucket(max_w);
     if let Some(c) = height_cache.as_ref() {
@@ -176,6 +181,7 @@ fn refresh_height_cache(
             metrics,
             turn_heights,
             turn_cache,
+            turn_usage,
         );
         unit_heights.push(h);
         units_total += h;
@@ -295,6 +301,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui, theme: &Theme) {
                 turn_active,
                 revision,
                 &mut session.height_cache,
+                &session.turn_usage,
             );
             session.estimate_buffer.clear();
             if let Some(c) = &session.height_cache {
@@ -464,6 +471,7 @@ pub fn estimate_total_height(app: &mut crate::App, content_max_width: f32, theme
         turn_active,
         revision,
         &mut session.height_cache,
+        &session.turn_usage,
     );
     let units_total = session.height_cache.as_ref().map_or(0.0, |c| c.units_total);
     units_total + typing_tail
@@ -592,9 +600,11 @@ fn render_unit(
         }
     } else {
         let bubble_h = {
+            let turn_usage = &session.turn_usage;
             let turn = turn_cache[unit_index].get_or_insert_with(|| {
                 crate::components::agent_turn::AgentTurn::from_messages(
                     &session.messages[unit.start..unit.end],
+                    turn_usage,
                 )
             });
             crate::render::turn_renderer::render_agent_turn(ui, turn, theme, unit_index, locale)
@@ -819,6 +829,7 @@ mod tests {
             cached_height: None,
             is_error: false,
             lines: vec![],
+            turn_id: String::new(),
         };
         msg.prepare();
         msg

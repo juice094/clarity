@@ -245,6 +245,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: vec![],
+                turn_id: String::new(),
             };
             msg.prepare();
             session.messages.push(msg);

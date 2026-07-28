@@ -87,6 +87,7 @@ pub enum UiEvent {
     /// A new agent turn has begun. Carries the user input for confirmation / telemetry.
     TurnStart {
         session_id: String,
+        turn_id: String,
         user_input: String,
     },
     /// The current agent turn has ended. Replaces the legacy `Done` event over time.
@@ -148,8 +149,15 @@ pub enum UiEvent {
         reason: String,
     },
     TaskList(Vec<TaskInfo>),
+    /// 后台任务状态变更通知（Gateway 经 wire 推送）。
+    BackgroundTaskUpdate {
+        task_id: String,
+        task_name: String,
+        status: String,
+    },
     Usage {
         session_id: String,
+        turn_id: String,
         prompt_tokens: u32,
         completion_tokens: u32,
         total_tokens: u32,
@@ -369,6 +377,9 @@ pub struct Session {
     pub in_flight: bool,
     /// Diff stats computed after the last completed turn.
     pub diff_stats: Option<DiffStats>,
+    /// Per-turn token usage (turn_id -> total_tokens). Filled from wire
+    /// `Usage` events and consulted when rendering `AgentTurn` headers.
+    pub turn_usage: HashMap<String, u32>,
 }
 
 impl std::fmt::Debug for Session {
@@ -440,6 +451,25 @@ pub struct Message {
     /// S6 Phase-2C line-atoms representation (parallel to `parsed`).
     /// Populated by `prepare()` via `markdown_to_lines`.
     pub lines: Vec<clarity_core::ui::RenderLine>,
+    /// Backend turn id this message belongs to. Empty for messages created
+    /// before turn attribution was introduced or for non-turn content.
+    pub turn_id: String,
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            role: Role::Agent,
+            content: String::new(),
+            blocks: Vec::new(),
+            timestamp: Instant::now(),
+            parsed: Vec::new(),
+            cached_height: None,
+            is_error: false,
+            lines: Vec::new(),
+            turn_id: String::new(),
+        }
+    }
 }
 
 impl Message {

@@ -111,8 +111,13 @@ pub fn dispatch_wire_message(
                 step_id,
             })
         }
-        clarity_wire::WireMessage::TurnBegin { user_input, .. } => Some(UiEvent::TurnStart {
+        clarity_wire::WireMessage::TurnBegin {
+            turn_id,
+            user_input,
+            ..
+        } => Some(UiEvent::TurnStart {
             session_id: sid,
+            turn_id,
             user_input,
         }),
         clarity_wire::WireMessage::TurnEnd { .. } => Some(UiEvent::TurnEnd { session_id: sid }),
@@ -148,6 +153,7 @@ pub fn dispatch_wire_message(
                     provider_state: HashMap::new(),
                     in_flight: false,
                     diff_stats: None,
+                    turn_usage: HashMap::new(),
                 })
                 .collect();
             Some(UiEvent::ThreadList { threads: sessions })
@@ -173,6 +179,7 @@ pub fn dispatch_wire_message(
                 provider_state: HashMap::new(),
                 in_flight: false,
                 diff_stats: None,
+                turn_usage: HashMap::new(),
             },
         }),
         clarity_wire::WireMessage::ThreadUpdated {
@@ -186,12 +193,14 @@ pub fn dispatch_wire_message(
             archived,
         }),
         clarity_wire::WireMessage::Usage {
+            turn_id,
             prompt_tokens,
             completion_tokens,
             total_tokens,
             ..
         } => Some(UiEvent::Usage {
             session_id: sid,
+            turn_id,
             prompt_tokens,
             completion_tokens,
             total_tokens,
@@ -232,10 +241,18 @@ pub fn dispatch_wire_message(
             }
             None
         }
-        // ponytail: egui 的后台任务 UI 目前走 TaskStore 轮询，背景任务管理器
-        // 尚未挂长期 wire；此 variant 在 egui 侧显式忽略。升级路径：AppState
-        // 给 bg_manager 挂 app 级 wire 后在此映射到任务 store 刷新事件。
-        clarity_wire::WireMessage::BackgroundTaskUpdate { .. } => None,
+        // Gateway 已将 BackgroundTaskManager 绑定到 app 级 event_wire，
+        // 收到任务状态变更后通知 UI 刷新任务列表。
+        clarity_wire::WireMessage::BackgroundTaskUpdate {
+            task_id,
+            task_name,
+            status,
+            ..
+        } => Some(UiEvent::BackgroundTaskUpdate {
+            task_id,
+            task_name,
+            status,
+        }),
     };
     if let Some(ev) = event {
         if let Err(e) = tx.send(ev) {
@@ -338,9 +355,11 @@ mod tests {
         match rx.try_recv().unwrap() {
             UiEvent::TurnStart {
                 session_id,
+                turn_id,
                 user_input,
             } => {
                 assert_eq!(session_id, "sess-5");
+                assert_eq!(turn_id, "");
                 assert_eq!(user_input, "hi");
             }
             other => panic!("Expected TurnStart, got {:?}", other),
@@ -381,11 +400,13 @@ mod tests {
         match event {
             UiEvent::Usage {
                 session_id,
+                turn_id,
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
             } => {
                 assert_eq!(session_id, "sess-7");
+                assert_eq!(turn_id, "");
                 assert_eq!(prompt_tokens, 100);
                 assert_eq!(completion_tokens, 50);
                 assert_eq!(total_tokens, 150);
@@ -557,12 +578,23 @@ mod tests {
     }
 
     #[test]
-    fn background_task_update_is_ignored() {
+    fn background_task_update_maps_to_ui_event() {
         let (tx, rx) = mpsc::channel();
         let msg = wire_msg(
             r#"{"type":"background_task_update","task_id":"t1","task_name":"demo","status":"completed"}"#,
         );
         dispatch_wire_message(msg, "sess-14", &tx);
-        assert!(rx.try_recv().is_err());
+        match rx.try_recv().unwrap() {
+            UiEvent::BackgroundTaskUpdate {
+                task_id,
+                task_name,
+                status,
+            } => {
+                assert_eq!(task_id, "t1");
+                assert_eq!(task_name, "demo");
+                assert_eq!(status, "completed");
+            }
+            other => panic!("Expected BackgroundTaskUpdate, got {:?}", other),
+        }
     }
 }

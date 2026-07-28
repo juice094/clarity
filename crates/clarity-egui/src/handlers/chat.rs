@@ -116,6 +116,7 @@ pub fn on_reasoning_chunk(
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: chat_store.current_turn_id.clone().unwrap_or_default(),
         };
         session.messages.push(msg);
         session.updated_at = crate::session::now_millis();
@@ -124,13 +125,17 @@ pub fn on_reasoning_chunk(
 
 /// Handles the turn start event.
 pub fn on_turn_start(
-    _session_store: &SessionStore,
-    _chat_store: &mut ChatStore,
-    _session_id: &str,
+    session_store: &SessionStore,
+    chat_store: &mut ChatStore,
+    session_id: &str,
+    turn_id: String,
     _user_input: String,
 ) {
-    // Reserved for telemetry, turn attribution, or marking the start of a new
-    // streamed response. The user message has already been inserted locally.
+    // Stamp the current turn id so that all subsequent agent messages created
+    // during this turn can be attributed to it (used for per-turn token usage).
+    if is_active(session_store, session_id) {
+        chat_store.current_turn_id = Some(turn_id);
+    }
 }
 
 /// Handles the turn end event.
@@ -185,6 +190,7 @@ pub fn on_done(app: &mut crate::App, session_id: &str) {
     app.chat_store_mut().draft_status = DraftStatus::None;
     app.chat_store_mut().status_message = None;
     app.chat_store_mut().chunks_since_save = 0;
+    app.chat_store_mut().current_turn_id = None;
     app.context.state.agent.reset();
 
     // Trigger deferred markdown parse now that streaming is complete.
@@ -245,6 +251,7 @@ pub fn on_error(app: &mut crate::App, session_id: &str, msg: String) {
         }
     }
 
+    let turn_id = app.chat_store().current_turn_id.clone().unwrap_or_default();
     if let Some(session) = app.context.session_store.session_mut(session_id) {
         let mut m = Message {
             role: Role::Agent,
@@ -255,6 +262,7 @@ pub fn on_error(app: &mut crate::App, session_id: &str, msg: String) {
             cached_height: None,
             is_error: true,
             lines: Vec::new(),
+            turn_id,
         };
         m.prepare();
         session.messages.push(m);
@@ -310,6 +318,7 @@ pub fn on_chunk(
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: chat_store.current_turn_id.clone().unwrap_or_default(),
         };
         session.messages.push(msg);
         session.updated_at = crate::session::now_millis();
@@ -361,6 +370,7 @@ pub fn on_tool_start(
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: chat_store.current_turn_id.clone().unwrap_or_default(),
         };
         session.messages.push(msg);
         session.updated_at = crate::session::now_millis();
@@ -466,6 +476,7 @@ pub fn on_tool_result(
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: chat_store.current_turn_id.clone().unwrap_or_default(),
         };
         session.messages.push(msg);
         session.updated_at = crate::session::now_millis();
@@ -496,9 +507,10 @@ pub fn on_compaction_end(
 
 /// Handles the usage event.
 pub fn on_usage(
-    session_store: &SessionStore,
+    session_store: &mut SessionStore,
     chat_store: &mut ChatStore,
     session_id: &str,
+    turn_id: String,
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
@@ -512,6 +524,13 @@ pub fn on_usage(
             last_updated: std::time::Instant::now(),
             ..chat_store.token_usage.clone()
         };
+    }
+    // Per-turn attribution: write total tokens into the target session so that
+    // the rendered AgentTurn header can show the count for this turn.
+    if !turn_id.is_empty() {
+        if let Some(session) = session_store.session_mut(session_id) {
+            session.turn_usage.insert(turn_id, total_tokens);
+        }
     }
 }
 
@@ -611,6 +630,7 @@ pub fn on_shell_result(
         output.trim_end(),
         exit_marker
     );
+    let turn_id = app.chat_store().current_turn_id.clone().unwrap_or_default();
     if let Some(session) = app.context.session_store.session_mut(session_id) {
         let mut msg = Message {
             role: Role::Agent,
@@ -621,6 +641,7 @@ pub fn on_shell_result(
             cached_height: None,
             is_error: exit_code != 0,
             lines: Vec::new(),
+            turn_id,
         };
         msg.prepare();
         session.messages.push(msg);
@@ -717,6 +738,7 @@ mod tests {
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,
+            turn_usage: HashMap::new(),
         }
     }
 
@@ -781,6 +803,7 @@ mod tests {
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: String::new(),
         });
 
         // on_done needs an App; build a minimal one through the test harness is
@@ -1011,13 +1034,25 @@ mod tests {
     fn on_usage_updates_token_counters() {
         let mut chat_store = ChatStore::default();
         let session_a = make_session("a");
-        let store = make_store(vec![session_a], "a");
+        let mut store = make_store(vec![session_a], "a");
 
-        on_usage(&store, &mut chat_store, "a", 500, 300, 800);
+        on_usage(
+            &mut store,
+            &mut chat_store,
+            "a",
+            "turn-1".into(),
+            500,
+            300,
+            800,
+        );
         assert_eq!(chat_store.last_usage, Some((500, 300, 800)));
         assert_eq!(chat_store.token_usage.prompt_tokens, 500);
         assert_eq!(chat_store.token_usage.completion_tokens, 300);
         assert_eq!(chat_store.token_usage.total_tokens, 800);
+        assert_eq!(
+            store.session_mut("a").unwrap().turn_usage.get("turn-1"),
+            Some(&800)
+        );
     }
 
     #[test]
@@ -1042,6 +1077,7 @@ mod tests {
             provider_state: HashMap::new(),
             in_flight: false,
             diff_stats: None,
+            turn_usage: HashMap::new(),
         };
 
         // A tool result with a _diff_preview.
@@ -1060,6 +1096,7 @@ mod tests {
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: String::new(),
         };
         session.messages.push(msg);
 
@@ -1085,6 +1122,7 @@ mod tests {
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: String::new(),
         });
 
         compute_session_diff_stats(&mut session);

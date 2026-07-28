@@ -223,7 +223,10 @@ pub struct BackgroundTaskManager {
     completion_inbox: Option<Arc<crate::agent::completion_inbox::CompletionInbox>>,
     /// 可选 wire：任务状态变更时广播 `WireMessage::BackgroundTaskUpdate`，
     /// 让 TUI / Gateway / mobile 等前端也能跟踪后台任务。
-    wire: Option<Arc<clarity_wire::Wire>>,
+    ///
+    /// 用 `Arc<Mutex<...>>` 包装，支持在 `Arc<BackgroundTaskManager>` 创建后
+    /// 通过 `set_wire` 再绑定（Gateway 的 app 级 event_wire 就是这样注入的）。
+    wire: Arc<std::sync::Mutex<Option<Arc<clarity_wire::Wire>>>>,
 }
 
 // Intentionally retained: BackgroundTaskManager exposes a stable internal API; some
@@ -249,7 +252,7 @@ impl BackgroundTaskManager {
             agent_executor: Arc::new(std::sync::RwLock::new(None)),
             cron_scheduler: None,
             completion_inbox: None,
-            wire: None,
+            wire: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -300,14 +303,27 @@ impl BackgroundTaskManager {
     }
 
     /// 设置 wire：任务状态变更时同步广播 `WireMessage::BackgroundTaskUpdate`。
-    pub fn with_wire(mut self, wire: Arc<clarity_wire::Wire>) -> Self {
-        self.wire = Some(wire);
+    pub fn with_wire(self, wire: Arc<clarity_wire::Wire>) -> Self {
+        if let Ok(mut guard) = self.wire.lock() {
+            *guard = Some(wire);
+        }
         self
+    }
+
+    /// 在 `Arc<BackgroundTaskManager>` 创建后再绑定 wire。
+    ///
+    /// 用于 Gateway 等宿主：app 级 `event_wire` 在 `BackgroundTaskManager`
+    /// 已经被多个组件共享之后才能拿到。
+    pub fn set_wire(&self, wire: Arc<clarity_wire::Wire>) {
+        if let Ok(mut guard) = self.wire.lock() {
+            *guard = Some(wire);
+        }
     }
 
     /// 在 wire 上广播任务状态变更（未配置 wire 时为 no-op）。
     fn emit_wire_status(&self, task_id: &str, task_name: &str, status: &str) {
-        if let Some(ref wire) = self.wire {
+        let wire = self.wire.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if let Some(wire) = wire {
             let _ = wire
                 .soul_side()
                 .send(clarity_wire::WireMessage::BackgroundTaskUpdate {
@@ -408,7 +424,8 @@ impl BackgroundTaskManager {
         let handle = tokio::spawn(async move {
             // 在 wire 上广播终态（与通知管理器并行的桥接点）。
             let emit_wire = |status: &str| {
-                if let Some(ref wire) = wire {
+                let wire = wire.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                if let Some(wire) = wire {
                     let _ =
                         wire.soul_side()
                             .send(clarity_wire::WireMessage::BackgroundTaskUpdate {

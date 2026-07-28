@@ -382,6 +382,7 @@ impl App {
                 chunks_since_save: 0,
                 context_items: Vec::new(),
                 token_usage: clarity_apps::chat::TokenUsage::default(),
+                current_turn_id: None,
             };
             chat_app
         };

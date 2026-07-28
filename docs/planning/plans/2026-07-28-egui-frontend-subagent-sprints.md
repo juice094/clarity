@@ -1,7 +1,7 @@
 # egui 前端美化 + 子代理编排 Sprint 交接文档
 
 > **日期**：2026-07-28
-> **状态**：Sprint 1 / Sprint 2 已落地并提交（4 个 commit），下一批任务待启动
+> **状态**：Sprint 1 / Sprint 2 已落地并提交；N2（turn token 接线）/ N3（Gateway bg manager 挂 wire）已完成待提交
 > **用途**：跨会话工作交接 + 任务告知。新会话读本文件即可接续，无需重新审计。
 > **关联**：`AGENTS.md` §7、§7.3、§7.5；`docs/architecture/protocol-layer.md` §2.5
 
@@ -50,8 +50,8 @@
 | # | 任务 | 上下文与入口 | 预估 |
 |---|---|---|---|
 | N1 | `agent`/`agent_swarm` 工具路径的子代理 wire 事件 | 工具路径走 orchestrator→`ParallelExecutor`（`subagents/src/parallel.rs:154` 传 `None`）。需把 wire 穿透 `ToolContext` 或 `SubagentOrchestrator` trait——**contract 变更**，按 §7.3 检查单过四前端 | 中 |
-| N2 | egui turn header 的 token 接线 | turn_id 已能穿透 wire（A4 已修时序）；剩 message→turn 聚合逻辑不记 turn_id（`egui/src/components/agent_turn.rs` 的 `token_count` 死字段 + ponytail 注释） | 小 |
-| N3 | Gateway 长期 bg manager 挂 wire | gateway 有现成 app 级 `event_wire`（`gateway/src/server.rs:203`）；接好后 egui `BackgroundTaskUpdate` 的显式忽略分支（`wire_dispatcher.rs:238`）可改为 store 刷新 | 小 |
+| ~~N2~~ | ~~egui turn header 的 token 接线~~ | ✅ `Message` 新增 `turn_id`，`Session` 新增 `turn_usage`；`Usage`/`TurnStart` 透传 turn_id；`agent_turn.rs` 按 turn_id 查表填充 `token_count`；修复 `tests/session_roundtrip.rs`、`tests/memory_profile.rs` 构造。关键文件：`egui/src/ui/types.rs`、`egui/src/handlers/chat.rs`、`egui/src/components/agent_turn.rs`、`egui/src/panels/chat/message_list.rs`、`egui/tests/*.rs` | ~~小~~ |
+| ~~N3~~ | ~~Gateway 长期 bg manager 挂 wire~~ | ✅ `BackgroundTaskManager::wire` 改为 `Arc<Mutex<Option<Arc<Wire>>>>` + `set_wire`；gateway 创建 `event_wire` 后绑定；egui `BackgroundTaskUpdate` 映射为 `UiEvent::BackgroundTaskUpdate` 并刷新 `TaskStore`。关键文件：`core/src/background/mod.rs`、`gateway/src/server.rs`、`egui/src/services/wire_dispatcher.rs`、`egui/src/ui/types.rs`、`egui/src/handlers/task.rs` | ~~小~~ |
 | N4 | `POST /v1/tasks/:id/cancel` | Task 面板的取消目前只走本地 manager（`task_panel.rs` 有 ponytail 注释标明升级路径） | 小 |
 | N5 | B5 工具调用 Running 态 spinner/活感 | `turn_renderer.rs` 工具行 Running 态目前只有静态图标 | 小 |
 | N6 | B6 Settings 两栏布局（VSCode/Obsidian 式左 icon rail + 右内容区） | 规划文档 P2 #8，需先出 mock/ADR；`clarity-apps/src/settings.rs:107-160` | 大 |

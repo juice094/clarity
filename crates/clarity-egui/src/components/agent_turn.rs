@@ -32,9 +32,9 @@ pub struct TurnHeader {
     pub duration_ms: u64,
     /// Token usage attributed to this turn.
     ///
-    /// ponytail: always 0 today — the wire `Usage` event is session-scoped
-    /// (see `handlers/chat.rs::on_usage`), so per-turn attribution needs a
-    /// protocol/session change. The header omits the token piece while 0.
+    /// Filled from the wire `Usage` event via `Message::turn_id` and
+    /// `Session::turn_usage`. If the turn predates attribution or no Usage
+    /// event arrived, this stays 0 and the header omits the token piece.
     pub token_count: usize,
     /// Number of tool calls in this turn.
     pub tool_count: usize,
@@ -67,7 +67,13 @@ pub struct ToolCallRow {
 
 impl AgentTurn {
     /// Build an `AgentTurn` from a contiguous slice of Agent messages.
-    pub fn from_messages(messages: &[Message]) -> Self {
+    ///
+    /// `turn_usage` maps backend turn ids to total token counts; it is used to
+    /// attribute per-turn usage to the rendered header.
+    pub fn from_messages(
+        messages: &[Message],
+        turn_usage: &std::collections::HashMap<String, u32>,
+    ) -> Self {
         let mut thinking = None;
         let mut tool_calls = Vec::new();
 
@@ -127,12 +133,18 @@ impl AgentTurn {
             _ => 0,
         };
 
+        // Per-turn token attribution: any message in the turn carries the
+        // backend turn id; look up the total token count reported by Usage.
+        let token_count = messages
+            .iter()
+            .find(|m| !m.turn_id.is_empty())
+            .and_then(|m| turn_usage.get(&m.turn_id).copied())
+            .unwrap_or(0) as usize;
+
         Self {
             header: TurnHeader {
                 duration_ms,
-                // ponytail: per-turn token usage needs a wire/session change
-                // (Usage events are session-scoped); keep 0 until then.
-                token_count: 0,
+                token_count,
                 tool_count: tool_calls.len(),
             },
             thinking,
@@ -214,6 +226,7 @@ mod tests {
             cached_height: None,
             is_error: false,
             lines: vec![],
+            turn_id: String::new(),
         }
     }
 
@@ -226,7 +239,7 @@ mod tests {
             "fn main() {}\n".repeat(500).as_str(),
             now,
         )];
-        let turn = AgentTurn::from_messages(&messages);
+        let turn = AgentTurn::from_messages(&messages, &std::collections::HashMap::new());
         assert_eq!(turn.tool_calls.len(), 1);
         let row = &turn.tool_calls[0];
         assert_eq!(row.arguments.as_deref(), Some("{\"path\":\"src/main.rs\"}"));
@@ -245,7 +258,7 @@ mod tests {
             tool_result_message("a", None, "ok", now - Duration::from_millis(1500)),
             tool_result_message("b", None, "ok", now),
         ];
-        let turn = AgentTurn::from_messages(&messages);
+        let turn = AgentTurn::from_messages(&messages, &std::collections::HashMap::new());
         assert_eq!(turn.header.tool_count, 2);
         assert!(
             turn.header.duration_ms >= 1500,

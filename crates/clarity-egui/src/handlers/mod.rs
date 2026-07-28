@@ -160,11 +160,18 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::TurnStart {
                 session_id,
+                turn_id,
                 user_input,
             } => {
                 {
                     let (session_store, chat_store) = app.chat_session_mut();
-                    chat::on_turn_start(session_store, chat_store, &session_id, user_input.clone());
+                    chat::on_turn_start(
+                        session_store,
+                        chat_store,
+                        &session_id,
+                        turn_id,
+                        user_input.clone(),
+                    );
                 }
                 app.context.console_store.push(ConsoleEntry {
                     timestamp: std::time::Instant::now(),
@@ -241,20 +248,29 @@ pub fn process_events(app: &mut App) {
                 system::on_fallback(&mut app.context.ui_store, fallback, reason);
             }
             UiEvent::TaskList(tasks) => task::on_task_list(app.task_store_mut(), tasks),
+            UiEvent::BackgroundTaskUpdate {
+                task_id,
+                task_name,
+                status,
+            } => {
+                task::on_background_task_update(app, task_id, task_name, status);
+            }
             UiEvent::SubAgentBatch(batch_id, status) => {
                 subagent::on_subagent_batch(app.subagent_store_mut(), batch_id, status);
             }
             UiEvent::Usage {
                 session_id,
+                turn_id,
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
             } => {
-                let (session_store, chat_store) = app.chat_session_mut();
+                let (session_store, chat_store) = app.chat_session_both_mut();
                 chat::on_usage(
                     session_store,
                     chat_store,
                     &session_id,
+                    turn_id,
                     prompt_tokens,
                     completion_tokens,
                     total_tokens,

@@ -49,6 +49,7 @@ fn sample_message(content: &str) -> Message {
         cached_height: None,
         is_error: false,
         lines: Vec::new(),
+        turn_id: String::new(),
     };
     msg.prepare();
     msg

@@ -280,6 +280,9 @@ pub struct ChatStore {
     /// When the active turn's `in_flight` flag was set. Used to detect
     /// stuck turns that never receive a Done or Error event.
     pub in_flight_since: Option<std::time::Instant>,
+    /// Turn id of the currently streaming agent turn. New agent messages
+    /// stamp this value so per-turn token usage can be attributed later.
+    pub current_turn_id: Option<String>,
 }
 
 impl Default for ChatStore {
@@ -312,6 +315,7 @@ impl Default for ChatStore {
             find_current: 0,
             find_last_query: String::new(),
             in_flight_since: None,
+            current_turn_id: None,
         }
     }
 }

@@ -50,6 +50,7 @@ pub fn load_sessions() -> Vec<Session> {
                                     cached_height: None,
                                     is_error: false,
                                     lines: Vec::new(),
+                                    turn_id: String::new(),
                                 };
                                 msg.prepare();
                                 msg
@@ -79,6 +80,7 @@ pub fn load_sessions() -> Vec<Session> {
                             provider_state: data.provider_state,
                             in_flight: false,
                             diff_stats: None,
+                            turn_usage: HashMap::new(),
                         });
                     }
                 }
@@ -174,6 +176,7 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         provider_state: HashMap::new(),
         in_flight: false,
         diff_stats: None,
+        turn_usage: HashMap::new(),
     }
 }
 
@@ -406,6 +409,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: vec![],
+                turn_id: String::new(),
             };
             msg.prepare();
             session.messages.push(msg);
@@ -421,6 +425,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: vec![],
+                turn_id: String::new(),
             };
             msg2.prepare();
             session.messages.push(msg2);
@@ -497,6 +502,7 @@ mod tests {
                     cached_height: None,
                     is_error: false,
                     lines: vec![],
+                    turn_id: String::new(),
                 };
                 msg.prepare();
                 session.messages.push(msg);
@@ -569,6 +575,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: vec![],
+                turn_id: String::new(),
             };
             msg.prepare();
             session.messages.push(msg);
@@ -603,6 +610,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: vec![],
+                turn_id: String::new(),
             };
             msg.prepare();
             session.messages.push(msg);

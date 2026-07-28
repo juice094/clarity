@@ -62,6 +62,7 @@ fn session_memory_profile() {
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: String::new(),
         };
         msg.prepare();
         session.messages.push(msg);

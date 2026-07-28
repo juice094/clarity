@@ -109,6 +109,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: Vec::new(),
+                turn_id: String::new(),
             },
             Message {
                 role: Role::User,
@@ -124,6 +125,7 @@ mod tests {
                 cached_height: None,
                 is_error: false,
                 lines: Vec::new(),
+                turn_id: String::new(),
             },
         ];
         let calls = rebuild_tool_calls(&messages);

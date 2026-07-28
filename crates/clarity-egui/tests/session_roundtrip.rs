@@ -32,6 +32,7 @@ fn integration_session_save_and_reread_json() {
             cached_height: None,
             is_error: false,
             lines: Vec::new(),
+            turn_id: String::new(),
         };
         msg.prepare();
         session.messages.push(msg);
@@ -165,6 +166,7 @@ fn add_text_message(session: &mut clarity_egui::types::Session, role: Role, cont
         cached_height: None,
         is_error: false,
         lines: Vec::new(),
+        turn_id: String::new(),
     };
     msg.prepare();
     session.messages.push(msg);
