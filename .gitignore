@@ -43,3 +43,15 @@ coverage_summary.json
 /mobile/android/app/src/main/java/uniffi/
 /mobile/android/gradle-8.9/
 /mobile/android/gradle-8.9-bin.zip
+
+# QA / manual test artifacts generated at repo root
+after_*.png
+claw_*.{png,txt}
+debug_screenshot*.png
+layout_check.png
+mobile_*.png
+mobile_screen*.png
+stop_button*.png
+window_dump.xml
+nul..lock
+test_*.txt
